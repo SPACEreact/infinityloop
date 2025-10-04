@@ -270,28 +270,36 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
       aria-labelledby={dialogTitleId}
       aria-describedby={dialogDescriptionId}
     >
-      <div className="relative mx-4 w-full max-w-5xl rounded-3xl border border-border bg-card/90 shadow-[0_45px_120px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
-          <div className="space-y-1">
-            <h2 id={dialogTitleId} className="text-xl font-semibold text-foreground">
-              Creative Reference Library
-            </h2>
-            <p id={dialogDescriptionId} className="text-sm text-muted-foreground">
-              Browse curated notes from the knowledge base without leaving your workspace flow.
-            </p>
+      <div className="relative mx-4 w-full max-w-5xl rounded-3xl border-2 border-border bg-card/95 shadow-[0_45px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary/10 via-secondary/10 to-accent/10 opacity-50"></div>
+        <div className="relative">
+          <div className="flex items-start justify-between gap-4 border-b-2 border-border px-6 py-5">
+            <div className="space-y-1">
+              <h2 id={dialogTitleId} className="text-xl font-semibold text-foreground">
+                Creative Reference Library
+              </h2>
+              <p id={dialogDescriptionId} className="text-sm text-muted-foreground">
+                Browse curated notes from the knowledge base without leaving your workspace flow.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border-2 border-border bg-card/5 p-2 text-muted-foreground transition hover:bg-card/10 cta-button shadow-lg transform hover:scale-110"
+              style={{
+                background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+                boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+                border: '2px solid #ccc'
+              }}
+              aria-label="Close reference viewer"
+            >
+              <XMarkIcon className="h-5 w-5" title="Close" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-border bg-card/5 p-2 text-muted-foreground transition hover:bg-card/10"
-            aria-label="Close reference viewer"
-          >
-            <XMarkIcon className="h-5 w-5" title="Close" />
-          </button>
         </div>
 
         <div className="flex flex-col gap-5 px-6 py-5">
-          <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card/80 p-4 shadow-inner">
+          <div className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card/80 p-4 shadow-inner backdrop-blur-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-xs uppercase tracking-[0.35em] text-primary/80">
                 Reference Filters
@@ -306,11 +314,16 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
               <button
                 type="button"
                 onClick={() => setActiveCategory('all')}
-                className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 rounded-full border-2 px-4 py-1.5 text-xs font-semibold transition cta-button shadow-lg transform hover:scale-105 ${
                   activeCategory === 'all'
                     ? 'border-primary/60 bg-primary/20 text-primary-foreground'
                     : 'border-border bg-card/5 text-muted-foreground hover:border-primary/40 hover:text-primary-foreground'
                 }`}
+                style={{
+                  background: activeCategory === 'all' ? 'linear-gradient(145deg, hsl(var(--primary) / 0.9), hsl(var(--accent) / 0.8))' : 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)',
+                  border: '2px solid #ccc'
+                }}
               >
                 All
                 <span className="rounded-full bg-card/40 px-2 py-0.5 text-[0.65rem] font-medium">
@@ -322,11 +335,16 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
                   key={category.id}
                   type="button"
                   onClick={() => setActiveCategory(category.id)}
-                  className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                  className={`flex items-center gap-2 rounded-full border-2 px-4 py-1.5 text-xs font-semibold transition cta-button shadow-lg transform hover:scale-105 ${
                     activeCategory === category.id
                       ? 'border-primary/60 bg-primary/20 text-primary-foreground'
                       : 'border-border bg-card/5 text-muted-foreground hover:border-primary/40 hover:text-primary-foreground'
                   }`}
+                  style={{
+                    background: activeCategory === category.id ? 'linear-gradient(145deg, hsl(var(--primary) / 0.9), hsl(var(--accent) / 0.8))' : 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+                    boxShadow: '0 4px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    border: '2px solid #ccc'
+                  }}
                 >
                   {category.label}
                   <span className="rounded-full bg-card/40 px-2 py-0.5 text-[0.65rem] font-medium">

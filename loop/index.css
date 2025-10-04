@@ -70,7 +70,7 @@
     position: relative;
   }
 
-  /* Comic book halftone dots background */
+  /* Comic book halftone dots background - Enhanced contrast */
   body::before {
     content: '';
     position: fixed;
@@ -79,13 +79,25 @@
     width: 100%;
     height: 100%;
     background-image:
-      radial-gradient(circle, hsl(var(--primary) / 0.75) 1px, transparent 1px),
-      radial-gradient(circle, hsl(var(--secondary) / 0.75) 1px, transparent 1px);
-    background-size: 50px 50px, 70px 70px;
-    background-position: 0 0, 25px 25px;
-    opacity: 0.25;
+      radial-gradient(circle, hsl(var(--primary) / 1.0) 2.5px, transparent 2.5px),
+      radial-gradient(circle, hsl(var(--secondary) / 0.9) 2px, transparent 2px),
+      radial-gradient(circle, hsl(var(--accent) / 0.8) 1.5px, transparent 1.5px),
+      radial-gradient(circle, hsl(var(--primary) / 0.3) 3px, transparent 3px);
+    background-size: 35px 35px, 55px 55px, 75px 75px, 95px 95px;
+    background-position: 0 0, 18px 18px, 35px 35px, 50px 50px;
+    opacity: 0.6;
     z-index: 0;
     pointer-events: none;
+    animation: drift 20s ease-in-out infinite alternate;
+  }
+
+  @keyframes drift {
+    0% {
+      background-position: 0 0, 20px 20px, 40px 40px;
+    }
+    100% {
+      background-position: 10px 10px, 30px 30px, 50px 50px;
+    }
   }
 
   /* Subtle texture overlay */
@@ -854,28 +866,147 @@
   filter: drop-shadow(0 0 20px hsl(var(--primary) / 0.5));
 }
 
-/* Text enhancements - Pastel gradients */
-.text-gradient {
-  background: linear-gradient(
-    135deg,
-    hsl(var(--foreground) / 0.85) 0%,
-    hsl(var(--ink) / 0.85) 100%
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Enhanced 3D Clay Button Styles for Timeline Actions */
+.timeline-action, .cta-button {
+  position: relative;
+  border-radius: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  overflow: hidden;
+  
+  /* Enhanced 3D Clay effect with increased contrast */
+  background: linear-gradient(145deg, #ffffff, #e6e6e6);
+  border: 3px solid #bbb;
+  box-shadow: 
+    0 10px 20px rgba(0,0,0,0.3),
+    inset 0 2px 0 rgba(255,255,255,0.9),
+    inset 0 -2px 0 rgba(0,0,0,0.15),
+    0 0 0 1px rgba(255,255,255,0.8);
+  
+  /* Comic book style enhancement with higher contrast */
+  filter: 
+    drop-shadow(4px 4px 0 rgba(0,0,0,0.4))
+    contrast(1.2)
+    saturate(1.2)
+    brightness(1.05);
 }
 
-.text-gradient-accent {
+.timeline-action:before, .cta-button:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
-    135deg,
-    hsl(var(--primary) / 0.85) 0%,
-    hsl(var(--secondary) / 0.85) 50%,
-    hsl(var(--accent) / 0.85) 100%
+    90deg, 
+    transparent, 
+    rgba(255,255,255,0.6), 
+    transparent
   );
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  transition: left 0.6s ease;
+}
+
+.timeline-action:hover:before, .cta-button:hover:before {
+  left: 100%;
+}
+
+.timeline-action:hover, .cta-button:hover {
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: 
+    0 15px 30px rgba(0,0,0,0.35),
+    inset 0 2px 0 rgba(255,255,255,0.95),
+    inset 0 -2px 0 rgba(0,0,0,0.2),
+    0 0 0 2px rgba(255,255,255,0.9);
+  filter: 
+    drop-shadow(5px 5px 0 rgba(0,0,0,0.5))
+    contrast(1.25)
+    saturate(1.25)
+    brightness(1.1);
+}
+
+.timeline-action:active, .cta-button:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: 
+    0 4px 8px rgba(0,0,0,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.7),
+    inset 0 -1px 0 rgba(0,0,0,0.2);
+}
+
+/* Glass morphism buttons (non-clay) */
+.glass-nav-button {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-nav-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Enhanced timeline cards with comic styling */
+.timeline-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid hsl(var(--border));
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  
+  /* Comic book edge effect */
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.timeline-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(circle, hsl(var(--primary) / 0.15) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.timeline-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+  border-color: hsl(var(--primary) / 0.5);
+}
+
+.timeline-card:hover::before {
+  opacity: 1;
+}
+
+/* Panel input with comic styling */
+.panel-input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid hsl(var(--border));
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.panel-input:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.1),
+    0 0 0 3px hsl(var(--primary) / 0.2);
+  outline: none;
 }
 
 /* Comic book decorative lines */
