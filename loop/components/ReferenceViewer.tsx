@@ -1,0 +1,444 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { knowledgeBase } from '../services/knowledgeService';
+import {
+  DocumentTextIcon,
+  FilmIcon,
+  SparklesIcon,
+  VideoCameraIcon,
+  XMarkIcon,
+} from './IconComponents';
+
+interface ReferenceViewerProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+type KnowledgeCategoryId =
+  | 'cameraMovements'
+  | 'filmTechniques'
+  | 'storyStructures'
+  | 'sceneWritingTechniques'
+  | 'screenplayArchetypes';
+
+interface KnowledgeCategory {
+  id: KnowledgeCategoryId;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  items: string[];
+}
+
+interface ContextSection {
+  title: string;
+  content: string;
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState<'all' | KnowledgeCategoryId>('all');
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const dialogTitleId = React.useId();
+  const dialogDescriptionId = React.useId();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm('');
+      setActiveCategory('all');
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    const timeout = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 120);
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.clearTimeout(timeout);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  const categories = useMemo<KnowledgeCategory[]>(
+    () => [
+      {
+        id: 'cameraMovements',
+        label: 'Camera Movements',
+        description: 'Signature moves and techniques for dynamic shots.',
+        icon: <VideoCameraIcon className="w-5 h-5 text-primary" title="Camera" />,
+        items: knowledgeBase.cameraMovements,
+      },
+      {
+        id: 'filmTechniques',
+        label: 'Film Techniques',
+        description: 'Cinematic devices to shape tone, pacing, and emotion.',
+        icon: <FilmIcon className="w-5 h-5 text-primary" title="Film" />,
+        items: knowledgeBase.filmTechniques,
+      },
+      {
+        id: 'storyStructures',
+        label: 'Story Structures',
+        description: 'Narrative frameworks to organize your story arc.',
+        icon: <DocumentTextIcon className="w-5 h-5 text-primary" title="Story" />,
+        items: knowledgeBase.storyStructures,
+      },
+      {
+        id: 'sceneWritingTechniques',
+        label: 'Scene Writing',
+        description: 'Hooks, beats, and tactics for compelling scenes.',
+        icon: <SparklesIcon className="w-5 h-5 text-primary" title="Scene" />,
+        items: knowledgeBase.sceneWritingTechniques,
+      },
+      {
+        id: 'screenplayArchetypes',
+        label: 'Screenplay Archetypes',
+        description: 'Archetypal roles and conventions from screenwriting.',
+        icon: <DocumentTextIcon className="w-5 h-5 text-primary" title="Archetypes" />,
+        items: knowledgeBase.screenplayArchetypes,
+      },
+    ],
+    []
+  );
+
+  const structuredContext = useMemo<ContextSection[]>(() => {
+    const rawSections = knowledgeBase.fullContext.split('\n## ');
+    const sections: ContextSection[] = [];
+
+    rawSections.forEach((section, index) => {
+      const trimmed = section.trim();
+      if (!trimmed) return;
+
+      const lines = trimmed.split('\n');
+      if (!lines.length) return;
+
+      if (index === 0) {
+        const titleLine = lines[0].replace(/^#\s*/, '').trim();
+        const content = lines.slice(1).join('\n').trim();
+        if (titleLine) {
+          sections.push({ title: titleLine, content });
+        }
+        return;
+      }
+
+      const titleLine = lines[0].trim();
+      const content = lines.slice(1).join('\n').trim();
+      if (titleLine) {
+        sections.push({ title: titleLine, content });
+      }
+    });
+
+    return sections;
+  }, []);
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const searchPattern = useMemo(() => {
+    if (!normalizedSearch) return null;
+    return new RegExp(`(${escapeRegExp(normalizedSearch)})`, 'ig');
+  }, [normalizedSearch]);
+
+  const visibleCategories = useMemo(() => {
+    if (activeCategory === 'all') return categories;
+    return categories.filter((category) => category.id === activeCategory);
+  }, [activeCategory, categories]);
+
+  const filteredCategories = useMemo(() => {
+    if (!normalizedSearch) {
+      return visibleCategories;
+    }
+
+    return visibleCategories
+      .map((category) => {
+        const filteredItems = category.items.filter((item) =>
+          item.toLowerCase().includes(normalizedSearch)
+        );
+        return { ...category, items: filteredItems };
+      })
+      .filter((category) => category.items.length > 0);
+  }, [normalizedSearch, visibleCategories]);
+
+  const hasResults = filteredCategories.length > 0;
+
+  const totalItems = useMemo(
+    () => categories.reduce((sum, category) => sum + category.items.length, 0),
+    [categories]
+  );
+
+  const activeTotal = useMemo(() => {
+    if (activeCategory === 'all') return totalItems;
+    const category = categories.find((entry) => entry.id === activeCategory);
+    return category ? category.items.length : 0;
+  }, [activeCategory, categories, totalItems]);
+
+  const highlightMatches = useCallback(
+    (text: string) => {
+      if (!searchPattern) return text;
+      const segments = text.split(searchPattern);
+      return segments.map((segment, index) =>
+        index % 2 === 1 ? (
+          <mark
+            key={`${segment}-${index}`}
+            className="rounded-sm bg-primary/30 px-1 text-primary-foreground"
+          >
+            {segment}
+          </mark>
+        ) : (
+          <React.Fragment key={`${segment}-${index}`}>{segment}</React.Fragment>
+        )
+      );
+    },
+    [searchPattern]
+  );
+
+  const contextMatches = useMemo(() => {
+    if (!normalizedSearch) return [] as ContextSection[];
+
+    return structuredContext.filter((section) => {
+      const haystack = `${section.title}\n${section.content}`.toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [normalizedSearch, structuredContext]);
+
+  const renderContextSnippet = useCallback(
+    (content: string) => {
+      if (!normalizedSearch) {
+        return content;
+      }
+
+      const lowerContent = content.toLowerCase();
+      const matchIndex = lowerContent.indexOf(normalizedSearch);
+      if (matchIndex === -1) {
+        return content;
+      }
+
+      const start = Math.max(0, matchIndex - 80);
+      const end = Math.min(content.length, matchIndex + normalizedSearch.length + 120);
+      const snippet = `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
+
+      if (!searchPattern) {
+        return snippet;
+      }
+
+      const segments = snippet.split(searchPattern);
+      return segments.map((segment, index) =>
+        index % 2 === 1 ? (
+          <mark
+            key={`context-${segment}-${index}`}
+            className="rounded-sm bg-primary/30 px-1 text-primary-foreground"
+          >
+            {segment}
+          </mark>
+        ) : (
+          <React.Fragment key={`context-${segment}-${index}`}>{segment}</React.Fragment>
+        )
+      );
+    },
+    [normalizedSearch, searchPattern]
+  );
+
+  const handleOverlayClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === overlayRef.current) {
+      onClose();
+    }
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      onMouseDown={handleOverlayClick}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/70 backdrop-blur"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={dialogTitleId}
+      aria-describedby={dialogDescriptionId}
+    >
+      <div className="relative mx-4 w-full max-w-5xl rounded-3xl border border-border bg-card/90 shadow-[0_45px_120px_rgba(0,0,0,0.45)]">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+          <div className="space-y-1">
+            <h2 id={dialogTitleId} className="text-xl font-semibold text-foreground">
+              Creative Reference Library
+            </h2>
+            <p id={dialogDescriptionId} className="text-sm text-muted-foreground">
+              Browse curated notes from the knowledge base without leaving your workspace flow.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-border bg-card/5 p-2 text-muted-foreground transition hover:bg-card/10"
+            aria-label="Close reference viewer"
+          >
+            <XMarkIcon className="h-5 w-5" title="Close" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-5 px-6 py-5">
+          <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card/80 p-4 shadow-inner">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="text-xs uppercase tracking-[0.35em] text-primary/80">
+                Reference Filters
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Showing <span className="text-primary">{hasResults ? filteredCategories.reduce((sum, cat) => sum + cat.items.length, 0) : 0}</span> of{' '}
+                <span className="text-primary">{activeTotal}</span> entries
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveCategory('all')}
+                className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                  activeCategory === 'all'
+                    ? 'border-primary/60 bg-primary/20 text-primary-foreground'
+                    : 'border-border bg-card/5 text-muted-foreground hover:border-primary/40 hover:text-primary-foreground'
+                }`}
+              >
+                All
+                <span className="rounded-full bg-card/40 px-2 py-0.5 text-[0.65rem] font-medium">
+                  {totalItems}
+                </span>
+              </button>
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setActiveCategory(category.id)}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                    activeCategory === category.id
+                      ? 'border-primary/60 bg-primary/20 text-primary-foreground'
+                      : 'border-border bg-card/5 text-muted-foreground hover:border-primary/40 hover:text-primary-foreground'
+                  }`}
+                >
+                  {category.label}
+                  <span className="rounded-full bg-card/40 px-2 py-0.5 text-[0.65rem] font-medium">
+                    {category.items.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <label className="relative flex items-center gap-2 rounded-xl border border-border bg-card/40 px-4 py-2 text-sm text-foreground focus-within:border-primary/60">
+              <span className="text-muted-foreground">🔍</span>
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search camera moves, archetypes, structures..."
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                aria-label="Filter reference library"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="rounded-full bg-card/10 px-2 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-foreground transition hover:bg-card/20"
+                >
+                  Clear
+                </button>
+              )}
+            </label>
+          </div>
+
+          {normalizedSearch && contextMatches.length > 0 && (
+            <div className="rounded-2xl border border-primary/40 bg-primary/30 p-4">
+              <h3 className="text-sm font-semibold text-primary-foreground">
+                In-depth notes matching "{searchTerm}"
+              </h3>
+              <div className="mt-3 space-y-3">
+                {contextMatches.map((section) => (
+                  <div
+                    key={section.title}
+                    className="rounded-xl border border-border bg-card/40 p-3 text-sm text-foreground"
+                  >
+                    <div className="text-xs uppercase tracking-[0.3em] text-primary/80">
+                      {section.title}
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                      {renderContextSnippet(section.content)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {!hasResults ? (
+              <div className="col-span-full rounded-2xl border border-border bg-card/80 p-10 text-center text-sm text-muted-foreground">
+                No quick-reference results. Try a different term or view the full notes below.
+              </div>
+            ) : (
+              filteredCategories.map((category) => (
+                <section
+                  key={category.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-border bg-card/80 p-4"
+                >
+                  <header className="flex items-start gap-3">
+                    <div className="mt-1 shrink-0">{category.icon}</div>
+                    <div className="space-y-1">
+                      <h3 className="text-base font-semibold text-foreground">{category.label}</h3>
+                      <p className="text-xs text-muted-foreground">{category.description}</p>
+                    </div>
+                  </header>
+                  <ul className="space-y-2 text-sm text-foreground">
+                    {category.items.map((item) => (
+                      <li
+                        key={item}
+                        className="rounded-xl border border-border bg-card/5 px-3 py-2"
+                      >
+                        {highlightMatches(item)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))
+            )}
+          </div>
+
+          <details className="group rounded-2xl border border-border bg-card/80 p-4 text-sm text-foreground">
+            <summary className="flex cursor-pointer items-center justify-between gap-2 text-sm font-semibold text-foreground">
+              <span>View full knowledge notes</span>
+              <span className="text-xs uppercase tracking-[0.3em] text-primary/70 transition group-open:text-primary-foreground">
+                Expand
+              </span>
+            </summary>
+            <div className="mt-4 max-h-80 space-y-4 overflow-y-auto pr-2 text-sm text-foreground">
+              {structuredContext.map((section) => (
+                <article key={section.title} className="space-y-2 rounded-xl border border-border bg-card/40 p-3">
+                  <h4 className="text-xs uppercase tracking-[0.3em] text-primary/80">
+                    {section.title}
+                  </h4>
+                  <div className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {section.content}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ReferenceViewer;

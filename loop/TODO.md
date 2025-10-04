@@ -1,0 +1,6 @@
+- [ ] Add state for modal and selections in Workspace.tsx
+- [ ] Add handlers for creating multi-shot and batch style
+- [ ] Add MultiShotCreationModal component
+- [ ] Add button in primary timeline to open modal
+- [ ] Add button in secondary timeline to create shots from master assets
+- [ ] Test the functionality

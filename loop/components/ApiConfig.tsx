@@ -1,0 +1,275 @@
+import React, { useState, useEffect } from 'react';
+import { apiConfig } from '../services/config';
+import { XMarkIcon, Cog6ToothIcon, PlusIcon, PencilIcon, TrashIcon } from './IconComponents';
+
+interface ApiServiceConfig {
+  name: string;
+  baseUrl: string;
+  apiKey?: string;
+  description?: string;
+}
+
+interface ApiConfigProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+interface EditingConfig extends ApiServiceConfig {
+  isNew?: boolean;
+}
+
+export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
+  const [configs, setConfigs] = useState<ApiServiceConfig[]>([]);
+  const [editingConfig, setEditingConfig] = useState<EditingConfig | null>(null);
+  const [testingService, setTestingService] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setConfigs(apiConfig.getConfigs());
+      setTestResults({});
+      setEditingConfig(null);
+    }
+  }, [isOpen]);
+
+  const handleSaveConfig = () => {
+    if (!editingConfig) return;
+
+    if (editingConfig.isNew) {
+      try {
+        apiConfig.addConfig({
+          name: editingConfig.name.trim(),
+          baseUrl: editingConfig.baseUrl.trim(),
+          apiKey: editingConfig.apiKey?.trim() || undefined,
+          description: editingConfig.description?.trim(),
+        });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to add config');
+        return;
+      }
+    } else {
+      apiConfig.updateConfigByName(editingConfig.name, {
+        baseUrl: editingConfig.baseUrl.trim(),
+        apiKey: editingConfig.apiKey?.trim() || undefined,
+        description: editingConfig.description?.trim(),
+      });
+    }
+
+    setConfigs(apiConfig.getConfigs());
+    setEditingConfig(null);
+  };
+
+  const handleDeleteConfig = (name: string) => {
+    if (confirm(`Delete API configuration for '${name}'?`)) {
+      apiConfig.removeConfigByName(name);
+      setConfigs(apiConfig.getConfigs());
+    }
+  };
+
+  const handleTestConnection = async (config: ApiServiceConfig) => {
+    setTestingService(config.name);
+    setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: 'Testing...' } }));
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (config.apiKey) {
+        headers['Authorization'] = `Bearer ${config.apiKey}`;
+      }
+
+      const response = await fetch(`${config.baseUrl}/`, {
+        method: 'GET',
+        headers,
+      });
+
+      if (response.ok) {
+        setTestResults(prev => ({ ...prev, [config.name]: { success: true, message: 'Connection successful!' } }));
+      } else {
+        setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${response.status} ${response.statusText}` } }));
+      }
+    } catch (error) {
+      setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` } }));
+    } finally {
+      setTestingService(null);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+      <div className="glass-card w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[hsl(var(--border))]">
+          <div className="flex items-center gap-3">
+            <Cog6ToothIcon className="w-8 h-8" title="API configuration" />
+            <h2 className="text-2xl font-bold ink-strong">API Configuration</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--ink))] transition-colors"
+            aria-label="Close API configuration"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto custom-scrollbar">
+          {editingConfig ? (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold ink-strong">
+                {editingConfig.isNew ? 'Add New API Service' : `Edit ${editingConfig.name}`}
+              </h3>
+
+              <div>
+                <label className="block text-sm font-medium ink-strong mb-1">
+                  Service Name
+                </label>
+                <input
+                  type="text"
+                  value={editingConfig.name}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, name: e.target.value })}
+                  placeholder="e.g., chromadb, gemini, openai"
+                  className="panel-input w-full px-3 py-2"
+                  disabled={!editingConfig.isNew}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium ink-strong mb-1">
+                  Base URL
+                </label>
+                <input
+                  type="url"
+                  value={editingConfig.baseUrl}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, baseUrl: e.target.value })}
+                  placeholder="https://your-api-endpoint.com"
+                  className="panel-input w-full px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium ink-strong mb-1">
+                  API Key (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={editingConfig.apiKey || ''}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, apiKey: e.target.value })}
+                  placeholder="Enter your API key"
+                  className="panel-input w-full px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium ink-strong mb-1">
+                  Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={editingConfig.description || ''}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, description: e.target.value })}
+                  placeholder="Brief description of the service"
+                  className="panel-input w-full px-3 py-2"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => setEditingConfig(null)}
+                  className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={!editingConfig.name.trim() || !editingConfig.baseUrl.trim()}
+                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold ink-strong">Configured API Services</h3>
+                <button
+                  onClick={() => setEditingConfig({ name: '', baseUrl: '', apiKey: '', description: '', isNew: true })}
+                  className="flex items-center gap-2 bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  Add Service
+                </button>
+              </div>
+
+              {configs.length === 0 ? (
+                <p className="text-center ink-subtle py-8">No API services configured yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {configs.map((config) => (
+                    <div key={config.name} className="border border-[hsl(var(--border))] rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h4 className="font-medium ink-strong">{config.name}</h4>
+                          {config.description && <p className="text-sm ink-subtle">{config.description}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingConfig({ ...config })}
+                            className="text-blue-500 hover:text-blue-700"
+                            title="Edit"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteConfig(config.name)}
+                            className="text-red-500 hover:text-red-700"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-sm ink-subtle mb-2">
+                        <p>URL: {config.baseUrl}</p>
+                        <p>Key: {config.apiKey ? '••••••••' : 'None'}</p>
+                      </div>
+
+                      {testResults[config.name] && (
+                        <div className={`p-2 rounded-md text-sm mb-2 ${testResults[config.name].success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {testResults[config.name].message}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => handleTestConnection(config)}
+                        disabled={testingService === config.name}
+                        className="bg-gray-500 text-white py-1 px-3 rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        {testingService === config.name ? 'Testing...' : 'Test Connection'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 text-sm ink-subtle space-y-2">
+            <p><strong>Note:</strong> Configure multiple AI API services for different features. Each service requires its own endpoint and API key.</p>
+            <p>
+              Common services include ChromaDB for vector storage, Gemini for AI generation, and OpenAI for chat completions.
+              API keys are service-specific and not interchangeable.
+            </p>
+            <p>
+              For ChromaDB, set up your own server to keep data private. For Gemini, get a free API key from{' '}
+              <a href="https://console.cloud.google.com/ai-platform" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                Google AI Studio
+              </a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,0 +1,301 @@
+Fractured Loop – Update Guide
+
+⚠️ Important Notes
+
+Core Logic Must Remain Intact:
+
+Seed ID is the foundation — every block, master, and derivative must retain a consistent ID lineage.
+
+Nothing should overwrite existing blocks; instead, new states (expanded, master, shot list, styled) must reference back to their seed ID.
+
+All knowledge context (chat histories, user edits, metadata) must remain attached to the asset chain.
+
+
+Decision Escalation:
+
+If a structural change requires altering how Seed ID is used, flag this for explicit approval before implementation.
+
+
+
+
+---
+
+System Overview
+
+Fractured Loop now operates on two timelines:
+
+1. Primary Timeline (Ideation Loop)
+
+User drops Primary / Secondary / Tertiary assets as editable blocks.
+
+Blocks expand into chat panels for refinement, then collapse into blocks again.
+
+At the end, an Output Node generates a draft (story, image prompt, or video text).
+
+User can promote any draft to a Master Asset.
+
+
+
+2. Secondary Timeline (Production Loop)
+
+Appears only after first Master Asset is created.
+
+Holds locked Master Assets + derived blocks (shot lists, styles, edits).
+
+Functions like a structured editor, keeping narrative / visual logic intact.
+
+
+
+
+
+---
+
+Asset Lifecycle
+
+1. Raw Assets (Primary Timeline)
+
+Creation:
+
+User drags in block → chooses type (Primary/Secondary/Tertiary).
+
+Asset gets Seed ID + Metadata (type, context, creation timestamp).
+
+
+Expansion:
+
+Clicking block opens chat editor (text/chat context saved under Seed ID).
+
+
+Collapse:
+
+Saved → block shrinks back into timeline.
+
+
+Output Node:
+
+Reads all active blocks in sequence → generates draft.
+
+
+Promotion:
+
+User selects “Make Master Asset” → freezes draft into locked state.
+
+
+
+
+---
+
+2. Master Assets (Secondary Timeline)
+
+Properties:
+
+Non-editable.
+
+Seed ID preserved, but flagged as MASTER.
+
+Contains lineage of all raw assets that built it.
+
+
+Types & Options:
+
+Story Master:
+
+Option → “Generate Shot List.”
+
+
+Image Master:
+
+Option → “Apply Style Across Shots.” (only available if shot list exists).
+
+
+Video Master:
+
+Placeholder for now (future expansion).
+
+
+
+
+
+---
+
+3. Shot List Blocks
+
+Generation:
+
+Created from Story Master.
+
+Each shot is a smaller block inside Secondary Timeline.
+
+
+Editing:
+
+Shot blocks use the same logic as Primary Timeline assets:
+
+Click → expands to chat editor.
+
+Toggle options/dropdowns available (e.g., framing, lens, mood).
+
+Chat has full context of story + master asset to prevent breaking narrative.
+
+
+
+Application:
+
+Once edited, user can apply Master Image Style across all shot blocks.
+
+
+
+
+---
+
+4. Secondary Timeline Features
+
+Edit Button (Global):
+
+Suggests B-roll / inserts / transitions using text-to-video generation.
+
+Positioned at the end of Secondary Timeline.
+
+
+Logic Flow:
+
+Story Master → Shot List → Image Master (applied style) → Edit suggestions.
+
+Keeps progression modular but always traceable back to seed assets.
+
+
+
+
+---
+
+Knowledge Base & Core Logic
+
+Seed ID:
+
+Every block (raw, master, shot) must inherit original Seed ID lineage.
+
+Example:
+
+Raw Story Block (Seed A) → Story Master (Seed A.1-MASTER) → Shot 3 (Seed A.1.3).
+
+
+
+Knowledge Attachments:
+
+Each Seed stores:
+
+Asset type (primary/secondary/tertiary/master/shot).
+
+Chat context (all Q&A with user).
+
+User toggles & dropdown selections.
+
+Outputs generated (drafts, prompts).
+
+
+
+Persistence:
+
+Even when promoted or collapsed, original knowledge remains accessible.
+
+No overwrites — only state changes.
+
+
+
+
+---
+
+Implementation Steps
+
+1. Block Expansion/Collapse (Primary Timeline):
+
+UI for chat editor inside block.
+
+Collapse back into visual block with metadata stored.
+
+
+
+2. Output Node:
+
+Aggregates blocks in timeline.
+
+Generates draft.
+
+Offers “Make Master Asset.”
+
+
+
+3. Secondary Timeline:
+
+Auto-appears after first Master Asset.
+
+Holds locked Master Assets.
+
+
+
+4. Shot List System:
+
+Generate from Story Master.
+
+Editable like primary blocks.
+
+Inherits story context for coherence.
+
+
+
+5. Apply Style:
+
+If Image Master + Shot List exist → apply global style to all shots.
+
+
+
+6. Edit Button:
+
+At bottom of Secondary Timeline.
+
+Suggests B-roll / fillers via text-to-video.
+
+
+
+
+
+---
+
+User Experience Flow Example
+
+1. User drops Primary Asset: “Haunted Cathedral.”
+
+
+2. Expands → chats → collapses.
+
+
+3. Adds Secondary Asset: “Lighting.”
+
+
+4. Output Node → generates short story draft.
+
+
+5. Promotes to Story Master.
+
+
+6. Secondary Timeline appears → user clicks “Generate Shot List.”
+
+
+7. Shot list blocks appear (smaller, editable).
+
+
+8. User tweaks shot 3 (chat editor, dropdown toggles).
+
+
+9. Separately, an Image Master exists → user clicks “Apply Style Across Shots.”
+
+
+10. Edit Button → suggests B-roll for gaps.
+
+
+
+git init
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/SPACEreact/Unity-loop.git
+git push -u origin main
