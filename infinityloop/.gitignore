@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pythonlibs/
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# ChromaDB
+chroma_db/
+
+# UV cache
+.cache/
+
+# Replit
+.replit
+replit.nix
+.config/
+.upm/
+.pythonlibs/

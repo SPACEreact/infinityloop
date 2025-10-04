@@ -1,0 +1,41 @@
+1. Current Work:
+   - User wants to enhance the master asset creation for multi-shot from story assets.
+   - Add similar feature for visual assets to batch style.
+   - Add a button to create multi-shot assets with a separate modal for shot creation.
+   - Multi-shot assets should be created as assets and usable in batch style generation.
+   - Workspace.tsx is the main file managing assets, timelines, and UI.
+   - No existing modal for shot creation found; ConfirmModal exists for delete confirmation.
+   - handleGenerateOutput and handleCreateShots functions handle master asset and shot creation.
+
+2. Key Technical Concepts:
+   - React functional components with hooks.
+   - Asset and timeline management.
+   - Modal UI components.
+   - Asset creation and updating project state.
+   - AI suggestion integration.
+   - MCP syncing.
+
+3. Relevant Files and Code:
+   - loop/components/Workspace.tsx: Main file with Workspace component and subcomponents.
+     - handleGenerateOutput: creates master assets from story or image folders.
+     - handleCreateShots: creates shots from master assets.
+     - ConfirmModal: existing modal component.
+     - AssetLibraryPanel, ControlPanel, SimpleTimelineView: UI components.
+   - No other modal components found in codebase.
+
+4. Problem Solving:
+   - Need to add a new modal for multi-shot creation.
+   - Add UI button to open modal.
+   - Implement logic to create multi-shot assets from story assets in modal.
+   - Implement similar for visual assets to batch style.
+   - Ensure multi-shot assets can be passed to batch style generation.
+   - Maintain existing functionality and UI consistency.
+
+5. Pending Tasks and Next Steps:
+   - Add MultiShotCreationModal component in Workspace.tsx.
+   - Add button in timeline or control panel to open modal.
+   - Implement modal UI to select story assets and create multi-shot asset.
+   - Implement similar for visual assets to batch style.
+   - Update handleGenerateOutput or add new handlers to support multi-shot generation.
+   - Test creation and usage of multi-shot assets.
+   - Ensure undo, toast notifications, and asset selection work correctly.
