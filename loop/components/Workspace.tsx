@@ -850,7 +850,11 @@ const ControlPanel = ({
   onGenerate,
   isGenerating,
   onSyncAssetsToMcp,
-  isMcpLoading
+  isMcpLoading,
+  onOpenReference,
+  onOpenHelp,
+  onOpenApi,
+  onOpenOutput
 }: {
   tagWeights: Record<string, number>;
   onTagWeightChange: (tagId: string, weight: number) => void;
@@ -858,22 +862,87 @@ const ControlPanel = ({
   isGenerating: boolean;
   onSyncAssetsToMcp: () => void;
   isMcpLoading: boolean;
+  onOpenReference: () => void;
+  onOpenHelp: () => void;
+  onOpenApi: () => void;
+  onOpenOutput: () => void;
 }) => {
   return (
     <aside className="glass-card w-full p-4 flex flex-col overflow-y-auto custom-scrollbar max-h-full flex-shrink-0 transition-all duration-300">
       <div className="flex items-center gap-2 px-2 mb-4">
         <Cog6ToothIcon className="w-8 h-8" title="Creative controls" />
-        <h1 className="text-xl font-bold ink-strong">Controls</h1>
+        <h1 className="text-xl font-bold ink-strong">Command Center</h1>
       </div>
 
       <div className="space-y-4">
         <button
           onClick={onSyncAssetsToMcp}
           disabled={isMcpLoading}
-          className={`w-full cta-button py-3 px-4 ${isMcpLoading ? 'is-disabled' : ''}`}
+          className={`w-full cta-button py-3 px-4 shadow-lg transform hover:scale-105 transition-all duration-200 ${isMcpLoading ? 'is-disabled' : ''}`}
+          style={{
+            background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+            boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+            border: '2px solid #ccc'
+          }}
         >
           Save
         </button>
+
+        <button
+          onClick={onOpenOutput}
+          className="w-full cta-button py-3 px-4 shadow-lg transform hover:scale-105 transition-all duration-200"
+          style={{
+            background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+            boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+            border: '2px solid #ccc'
+          }}
+        >
+          <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" />
+          Output Panel
+        </button>
+
+        <div className="border-t border-white/20 pt-4 space-y-3">
+          <h3 className="text-sm font-semibold ink-strong mb-3">Tools & References</h3>
+          
+          <button
+            onClick={onOpenReference}
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            style={{
+              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+              border: '2px solid #ccc'
+            }}
+          >
+            <DocumentTextIcon className="w-5 h-5" />
+            Reference Library
+          </button>
+
+          <button
+            onClick={onOpenHelp}
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            style={{
+              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+              border: '2px solid #ccc'
+            }}
+          >
+            <QuestionMarkCircleIcon className="w-5 h-5" />
+            Help & Guide
+          </button>
+
+          <button
+            onClick={onOpenApi}
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            style={{
+              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+              border: '2px solid #ccc'
+            }}
+          >
+            <Cog6ToothIcon className="w-5 h-5" />
+            API Configuration
+          </button>
+        </div>
       </div>
     </aside>
   );
@@ -1031,77 +1100,79 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
     return (
       <div className="space-y-8" style={{ background: 'rgba(255, 182, 193, 0.05)' }}>
         <div className="flex justify-center md:justify-center relative">
-          <div className="group inline-flex items-center gap-2">
+          <div className="group inline-flex items-center gap-4">
             {/* Left dropdown for Story */}
             <div className="relative">
               <button
-                className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2"
-                style={{ backgroundColor: '#FFFACD', color: '#8B7355' }}
+                className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+                style={{ backgroundColor: '#FFFACD', color: '#8B7355', border: '3px solid #F0E68C' }}
                 onClick={() => onGenerateOutput('story')}
               >
                 <MagicWandIcon className="w-5 h-5" />
-                Story
+                Generate Story
               </button>
             </div>
 
             {/* Center button - 3D effect */}
             <button
-              className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+              className="timeline-action px-6 py-3 text-base font-bold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
               style={{
                 background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-                boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-                border: '2px solid #ccc'
+                boxShadow: '0 12px 24px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.9)',
+                border: '3px solid #bbb',
+                filter: 'drop-shadow(4px 4px 0 rgba(0,0,0,0.4)) contrast(1.2)'
               }}
+              onClick={onGenerate}
             >
-              <MagicWandIcon className="w-5 h-5" />
-              Generate
+              <MagicWandIcon className="w-6 h-6" />
+              GENERATE ALL
             </button>
 
             {/* Right dropdown for Image */}
             <div className="relative">
               <button
-                className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2"
-                style={{ backgroundColor: '#E0F6FF', color: '#4682B4' }}
+                className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+                style={{ backgroundColor: '#E0F6FF', color: '#4682B4', border: '3px solid #B0E0E6' }}
                 onClick={() => onGenerateOutput('image')}
               >
                 <MagicWandIcon className="w-5 h-5" />
-                Image
+                Generate Visual
               </button>
             </div>
           </div>
         </div>
 
-        {/* Style Controls */}
+        {/* Style Controls - Compact and Thin */}
         <div className="flex justify-center">
-          <div className="panel-section p-4 max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <label htmlFor="weighting-enabled-timeline" className="font-bold ink-strong">Enable Tag Weighting</label>
+          <div className="p-2 max-w-lg w-full bg-white/10 rounded-full backdrop-blur-sm border border-white/20">
+            <div className="flex items-center gap-2 px-2">
+              <label htmlFor="weighting-enabled-timeline" className="text-xs font-medium ink-strong whitespace-nowrap">Tag</label>
               <button
                 role="switch"
                 aria-checked={isWeightingEnabled}
                 onClick={() => onWeightingToggle(!isWeightingEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full toggle-track ${isWeightingEnabled ? 'switch-on' : ''}`}
+                className={`relative inline-flex h-4 w-7 items-center rounded-full toggle-track ${isWeightingEnabled ? 'switch-on' : ''}`}
                 id="weighting-enabled-timeline"
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full toggle-thumb ${isWeightingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-2.5 w-2.5 transform rounded-full toggle-thumb ${isWeightingEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
               </button>
-            </div>
-
-            <div className={`transition-opacity duration-300 ${isWeightingEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-              <label htmlFor="style-rigidity-timeline" className="block font-bold ink-strong mb-2">Style Rigidity</label>
-              <input
-                id="style-rigidity-timeline"
-                type="range"
-                min="0"
-                max="100"
-                value={styleRigidity}
-                onChange={(e) => onStyleRigidityChange(parseInt(e.target.value, 10))}
-                className="w-full"
-                disabled={!isWeightingEnabled}
-              />
-              <div className="text-xs ink-subtle flex justify-between">
-                <span>More AI Freedom</span>
-                <span>Strict Adherence</span>
+              
+              <div className={`flex items-center gap-2 flex-1 ${isWeightingEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                <label htmlFor="style-rigidity-timeline" className="text-xs ink-strong whitespace-nowrap">Style</label>
+                <input
+                  id="style-rigidity-timeline"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={styleRigidity}
+                  onChange={(e) => onStyleRigidityChange(parseInt(e.target.value, 10))}
+                  className="flex-1 h-1 bg-white/30 rounded-full appearance-none cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${styleRigidity}%, rgba(255,255,255,0.3) ${styleRigidity}%, rgba(255,255,255,0.3) 100%)`
+                  }}
+                  disabled={!isWeightingEnabled}
+                />
+                <span className="text-xs ink-subtle min-w-[2rem] text-center">{styleRigidity}%</span>
               </div>
             </div>
           </div>
@@ -1129,6 +1200,25 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
 
   const renderSecondaryTimeline = () => (
     <div className="space-y-8" style={{ background: 'rgba(230, 230, 250, 0.05)' }}>
+      {/* Multi-shot Actions */}
+      <div className="flex justify-center mb-6">
+        <div className="group inline-flex items-center gap-2">
+          <button
+            onClick={() => setIsMultiShotModalOpen(true)}
+            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+            style={{
+              background: 'linear-gradient(145deg, #E6E6FA, #D1D1F0)',
+              boxShadow: '0 10px 20px rgba(230, 230, 250, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
+              border: '3px solid #D1D1F0',
+              color: '#4B0082',
+              filter: 'drop-shadow(4px 4px 0 rgba(75, 0, 130, 0.3)) contrast(1.2)'
+            }}
+          >
+            <PlusIcon className="w-6 h-6" />
+            CREATE MULTI-SHOT
+          </button>
+        </div>
+      </div>
 
 {project.secondaryTimeline ? (
   <div className="space-y-5">
@@ -1157,8 +1247,13 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
               setSelectedAssetIdForShots(asset.id);
               setIsCreateShotsModalOpen(true);
             }}
-            className="timeline-action px-3 py-1.5 text-sm"
-            style={{ backgroundColor: '#98FB98', color: '#2E8B57' }}
+            className="timeline-action px-3 py-1.5 text-sm shadow-lg transform hover:scale-105 transition-all duration-200"
+            style={{ 
+              background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
+              boxShadow: '0 4px 8px rgba(152, 251, 152, 0.3), inset 0 1px 0 rgba(255,255,255,0.8)',
+              border: '2px solid #7AE67A',
+              color: '#2E8B57' 
+            }}
           >
             <MagicWandIcon className="w-4 h-4 mr-1" />
             Create Shots
@@ -1175,6 +1270,25 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
 
   const renderThirdTimeline = () => (
     <div className="space-y-8" style={{ background: 'rgba(152, 251, 152, 0.05)' }}>
+      {/* Batch Style Actions */}
+      <div className="flex justify-center mb-6">
+        <div className="group inline-flex items-center gap-2">
+          <button
+            onClick={() => setIsBatchStyleModalOpen(true)}
+            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+            style={{
+              background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
+              boxShadow: '0 10px 20px rgba(152, 251, 152, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
+              border: '3px solid #7AE67A',
+              color: '#2E8B57',
+              filter: 'drop-shadow(4px 4px 0 rgba(46, 139, 87, 0.3)) contrast(1.2)'
+            }}
+          >
+            <PlusIcon className="w-6 h-6" />
+            CREATE BATCH STYLE
+          </button>
+        </div>
+      </div>
 
       {project.thirdTimeline ? (
         <div className="space-y-5">
@@ -1329,6 +1443,9 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
   // New state for MCP
   const [isMcpLoading, setIsMcpLoading] = useState(false);
+
+  // New state for output modal
+  const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
 
   // New function to create multi-shot asset from selected master story assets
   const createMultiShotAsset = (numberOfShots: number, shotType: string) => {
@@ -2074,10 +2191,32 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
         <div className="relative flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex items-center gap-3">
-              <FracturedLoopLogo className="w-10 h-10" />
-              <span className="text-3xl md:text-4xl font-black uppercase tracking-[0.45em] text-[hsl(var(--ink))]">
-                {appLabel}
-              </span>
+              <div className="flex items-center">
+                <span className="text-3xl md:text-4xl font-black uppercase tracking-[0.45em] text-[hsl(var(--ink))]">
+                  L
+                </span>
+                <div className="flex items-center mx-2">
+                  {/* First infinity symbol for first O */}
+                  <svg className="w-8 h-6" viewBox="0 0 32 20" fill="none">
+                    <path
+                      d="M8 10c0-3.5 2.5-6 6-6s6 2.5 6 6-2.5 6-6 6-6-2.5-6-6zm14 0c0-3.5 2.5-6 6-6s6 2.5 6 6-2.5 6-6 6-6-2.5-6-6z"
+                      fill="currentColor"
+                      className="text-[hsl(var(--primary))]"
+                    />
+                  </svg>
+                  {/* Second infinity symbol for second O */}
+                  <svg className="w-8 h-6" viewBox="0 0 32 20" fill="none">
+                    <path
+                      d="M8 10c0-3.5 2.5-6 6-6s6 2.5 6 6-2.5 6-6 6-6-2.5-6-6zm14 0c0-3.5 2.5-6 6-6s6 2.5 6 6-2.5 6-6 6-6-2.5-6-6z"
+                      fill="currentColor"
+                      className="text-[hsl(var(--primary))]"
+                    />
+                  </svg>
+                </div>
+                <span className="text-3xl md:text-4xl font-black uppercase tracking-[0.45em] text-[hsl(var(--ink))]">
+                  P
+                </span>
+              </div>
             </div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[hsl(var(--foreground)/0.7)] md:text-sm">
               Idea · Prompt · Visualisation
@@ -2103,31 +2242,6 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
               >
                 <MagicWandIcon className="w-5 h-5" />
                 <span className="uppercase tracking-[0.2em] text-xs font-semibold md:text-sm">Timeline</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsReferenceViewerOpen(true)}
-                className="glass-nav-button"
-                aria-haspopup="dialog"
-              >
-                <DocumentTextIcon className="w-5 h-5" />
-                <span className="uppercase tracking-[0.2em] text-xs font-semibold md:text-sm">Reference</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsUserGuideOpen(true)}
-                className="glass-nav-button"
-              >
-                <QuestionMarkCircleIcon className="w-5 h-5" />
-                <span className="uppercase tracking-[0.2em] text-xs font-semibold md:text-sm">Help</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsApiConfigOpen(true)}
-                className="glass-nav-button"
-              >
-                <Cog6ToothIcon className="w-5 h-5" />
-                <span className="uppercase tracking-[0.2em] text-xs font-semibold md:text-sm">API</span>
               </button>
             </nav>
           </div>
@@ -2198,7 +2312,7 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
             </div>
           </div>
 
-          <div className="flex-shrink-0 w-full lg:fixed lg:right-6 lg:top-[14rem] lg:bottom-6 lg:w-[19rem] h-full flex flex-col gap-6">
+          <div className="flex-shrink-0 w-full lg:fixed lg:right-6 lg:top-[14rem] lg:bottom-6 lg:w-[19rem] h-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
             {selectedAssetId && (
               <div className="flex-shrink-0 max-h-128 overflow-hidden">
                 <AssetDetailsPanel
@@ -2212,20 +2326,6 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
               </div>
             )}
 
-            <div className="flex-shrink-0 h-64 overflow-hidden">
-              <MultiShotPanel
-                assets={project.assets}
-                onCreateMultiShot={() => setIsMultiShotModalOpen(true)}
-              />
-            </div>
-
-            <div className="flex-shrink-0 h-64 overflow-hidden">
-              <BatchStylePanel
-                assets={project.assets}
-                onCreateBatchStyle={() => setIsBatchStyleModalOpen(true)}
-              />
-            </div>
-
             <div className="flex-shrink-0 h-80 overflow-hidden">
               <FinalInputsPanel assets={project.assets} />
             </div>
@@ -2238,6 +2338,10 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
                 isGenerating={isGenerating}
                 onSyncAssetsToMcp={syncAssetsToMcp}
                 isMcpLoading={isMcpLoading}
+                onOpenReference={() => setIsReferenceViewerOpen(true)}
+                onOpenHelp={() => setIsUserGuideOpen(true)}
+                onOpenApi={() => setIsApiConfigOpen(true)}
+                onOpenOutput={() => setIsOutputModalOpen(true)}
               />
             </div>
           </div>
@@ -2274,6 +2378,42 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
           isOpen={isApiConfigOpen}
           onClose={() => setIsApiConfigOpen(false)}
         />
+      )}
+
+      {/* Output Modal */}
+      {isOutputModalOpen && (
+        <div className="glass-modal-backdrop" onClick={(e) => e.target === e.currentTarget && setIsOutputModalOpen(false)}>
+          <div className="glass-modal max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="glass-modal__header">
+              <h2 className="glass-modal__title ink-strong">Output Panel</h2>
+              <button
+                onClick={() => setIsOutputModalOpen(false)}
+                className="icon-button-soft"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ChatAssistant
+                messages={chatMessages}
+                isLoading={isChatLoading}
+                generatedOutput={generatedOutput}
+                onSendMessage={handleSendMessage}
+                project={project}
+                showMockNotice={showMockNotice}
+                onDismissMockNotice={() => setHasDismissedMockNotice(true)}
+                onCreateAsset={(asset) => {
+                  setProject(prev => ({
+                    ...prev,
+                    assets: [...prev.assets, asset],
+                    updatedAt: new Date()
+                  }));
+                }}
+                onUpdateAsset={handleUpdateAsset}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmModal
