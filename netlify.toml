@@ -1,0 +1,7 @@
+[build]
+  base = "loop"
+  command = "npm ci && npm run build"
+  publish = "loop/dist"
+
+[build.environment]
+  NODE_VERSION = "22.20.0"
