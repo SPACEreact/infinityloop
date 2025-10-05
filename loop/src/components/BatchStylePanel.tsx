@@ -11,15 +11,8 @@ export const BatchStylePanel: React.FC<BatchStylePanelProps> = ({ assets, onCrea
 
   return (
     <div className="h-full flex flex-col bg-white/40 backdrop-blur-sm rounded-lg border border-white/60 shadow-lg">
-      <div className="flex items-center justify-between p-4 border-b border-white/60">
+      <div className="flex items-center p-4 border-b border-white/60">
         <h2 className="text-lg font-semibold text-gray-800">Batch Style Assets</h2>
-        <button
-          onClick={onCreateBatchStyle}
-          className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition-colors"
-          title="Apply Style to Multi-Shot"
-        >
-          Create Batch Style
-        </button>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">

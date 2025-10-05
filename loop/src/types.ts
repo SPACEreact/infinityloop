@@ -76,7 +76,6 @@ export interface TimelineBlock {
 
 // Primary Timeline (User Inputs with Folders)
 export interface PrimaryTimeline {
-  blocks: TimelineBlock[];
   folders: {
     story: TimelineBlock[];
     image: TimelineBlock[];
