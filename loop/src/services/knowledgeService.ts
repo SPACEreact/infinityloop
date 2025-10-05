@@ -1,13 +1,13 @@
-import cameraMovementNotes from '../knowledge/camera_movement_notes.md?raw';
-import filmTechniquesNotes from '../knowledge/film_techniques_notes.md?raw';
-import fracturedLoopNotes from '../knowledge/fractured_loop_build_system_notes.md?raw';
-import sceneWritingNotes from '../knowledge/scene_writing_and_opening_hooks.md?raw';
-import screenplayConventions from '../knowledge/screenplay_conventions_and_archetypes.md?raw';
-import screenwritingDay6 from '../knowledge/screenwriting_day6_notes.md?raw';
-import screenwritingLogline from '../knowledge/screenwriting_logline_plot_exposure_notes.md?raw';
-import storyIdeaGeneration from '../knowledge/story_idea_generation_notes.md?raw';
-import storyStructuresNotes from '../knowledge/story_structures_notes.md?raw';
-import subtextNotes from '../knowledge/subtext_notes.md?raw';
+import cameraMovementNotes from '../../knowledge/camera_movement_notes.md?raw';
+import filmTechniquesNotes from '../../knowledge/film_techniques_notes.md?raw';
+import fracturedLoopNotes from '../../knowledge/fractured_loop_build_system_notes.md?raw';
+import sceneWritingNotes from '../../knowledge/scene_writing_and_opening_hooks.md?raw';
+import screenplayConventions from '../../knowledge/screenplay_conventions_and_archetypes.md?raw';
+import screenwritingDay6 from '../../knowledge/screenwriting_day6_notes.md?raw';
+import screenwritingLogline from '../../knowledge/screenwriting_logline_plot_exposure_notes.md?raw';
+import storyIdeaGeneration from '../../knowledge/story_idea_generation_notes.md?raw';
+import storyStructuresNotes from '../../knowledge/story_structures_notes.md?raw';
+import subtextNotes from '../../knowledge/subtext_notes.md?raw';
 
 export interface KnowledgeBase {
   cameraMovements: string[];

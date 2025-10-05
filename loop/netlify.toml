@@ -1,6 +1,6 @@
 [build]
-  base = "."
-  command = "bash build.sh"
+  base = "loop"
+  command = "npm ci && npm run build"
   publish = "dist"
 
 [build.environment]

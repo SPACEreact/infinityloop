@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import type { Project } from './types';
 import Workspace from './components/Workspace';
+import { useProject } from './hooks/useProject';
 
 const App: React.FC = () => {
   const appLabel = 'Loop';
 
-  // Initialize with empty project
-  const [project, setProject] = useState<Project>({
+  const initialProject: Project = {
     id: 'project-1',
     name: 'Untitled Project',
     assets: [],
@@ -21,7 +21,30 @@ const App: React.FC = () => {
     secondaryTimeline: undefined,
     createdAt: new Date(),
     updatedAt: new Date()
-  });
+  };
+
+  const {
+    project,
+    setProject,
+    selectedAssetId,
+    setSelectedAssetId,
+    pendingDeleteAsset,
+    toastState,
+    setToastState,
+    handleAddAsset,
+    handleAssetDrop,
+    handleRequestDeleteAsset,
+    handleConfirmDelete,
+    handleCancelDelete,
+    handleUndoDelete,
+    handleUpdateAsset,
+    selectedStoryAssets,
+    setSelectedStoryAssets,
+    selectedMultiShots,
+    setSelectedMultiShots,
+    selectedMasterImage,
+    setSelectedMasterImage
+  } = useProject(initialProject);
 
   // Global state for Tag Weighting System
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
@@ -44,6 +67,24 @@ const App: React.FC = () => {
           appLabel={appLabel}
           project={project}
           setProject={setProject}
+          selectedAssetId={selectedAssetId}
+          setSelectedAssetId={setSelectedAssetId}
+          pendingDeleteAsset={pendingDeleteAsset}
+          toastState={toastState}
+          setToastState={setToastState}
+          handleAddAsset={handleAddAsset}
+          handleAssetDrop={handleAssetDrop}
+          handleRequestDeleteAsset={handleRequestDeleteAsset}
+          handleConfirmDelete={handleConfirmDelete}
+          handleCancelDelete={handleCancelDelete}
+          handleUndoDelete={handleUndoDelete}
+          handleUpdateAsset={handleUpdateAsset}
+          selectedStoryAssets={selectedStoryAssets}
+          setSelectedStoryAssets={setSelectedStoryAssets}
+          selectedMultiShots={selectedMultiShots}
+          setSelectedMultiShots={setSelectedMultiShots}
+          selectedMasterImage={selectedMasterImage}
+          setSelectedMasterImage={setSelectedMasterImage}
           tagWeights={tagWeights}
           styleRigidity={styleRigidity}
           isWeightingEnabled={isWeightingEnabled}
