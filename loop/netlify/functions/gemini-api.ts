@@ -111,18 +111,21 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
       case 'generateImage': {
         const { prompt } = requestData;
-        const IMAGEN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict';
+        // Use Imagen 3 through the correct Vertex AI endpoint
+        const IMAGEN_API_URL = `${GEMINI_API_BASE_URL}/models/imagen-3.0-generate-001:generateImages`;
 
         const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
         const base64Image = await retryApiCall(async () => {
           const request = {
-            prompt: {
-              text: enhancedPrompt
-            },
-            sampleCount: 1,
-            outputOptions: {
-              mimeType: 'image/png'
+            instances: [{
+              prompt: enhancedPrompt,
+              sampleCount: 1
+            }],
+            parameters: {
+              aspectRatio: "1:1",
+              safetyFilterLevel: "block_some",
+              personGeneration: "allow_adult"
             }
           };
 

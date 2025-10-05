@@ -38,6 +38,8 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | KnowledgeCategoryId>('all');
+  const [selectedTopic, setSelectedTopic] = useState<{topic: string; category: string; content: string} | null>(null);
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dialogTitleId = React.useId();
@@ -256,6 +258,49 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
     }
   };
 
+  const handleTopicClick = (topic: string, categoryId: string) => {
+    // Find detailed content about the topic from the knowledge base
+    const detailedContent = findTopicDetails(topic, categoryId);
+    setSelectedTopic({
+      topic,
+      category: categoryId,
+      content: detailedContent
+    });
+    setIsTopicModalOpen(true);
+  };
+
+  const findTopicDetails = (topic: string, categoryId: string): string => {
+    // Search through structured context for relevant information
+    const relevantSections = structuredContext.filter(section => 
+      section.content.toLowerCase().includes(topic.toLowerCase()) ||
+      section.title.toLowerCase().includes(topic.toLowerCase())
+    );
+    
+    if (relevantSections.length > 0) {
+      return relevantSections.map(section => 
+        `**${section.title}**\n\n${section.content}`
+      ).join('\n\n---\n\n');
+    }
+    
+    // Fallback to basic description from knowledge base
+    const categories = {
+      cameraMovements: knowledgeBase.cameraMovements,
+      filmTechniques: knowledgeBase.filmTechniques,
+      storyStructures: knowledgeBase.storyStructures,
+      sceneWritingTechniques: knowledgeBase.sceneWritingTechniques,
+      screenplayArchetypes: knowledgeBase.screenplayArchetypes
+    };
+    
+    const categoryItems = categories[categoryId as keyof typeof categories] || [];
+    const itemIndex = categoryItems.indexOf(topic);
+    
+    if (itemIndex !== -1) {
+      return `This is a ${categoryId.replace(/([A-Z])/g, ' $1').toLowerCase()} technique: **${topic}**\n\nFor detailed information about this technique, please refer to the full knowledge base or ask the AI assistant for specific guidance on how to apply this in your project.`;
+    }
+    
+    return `**${topic}**\n\nThis ${categoryId.replace(/([A-Z])/g, ' $1').toLowerCase()} technique is part of our curated knowledge base. For specific guidance on implementation and usage, please consult with the AI assistant or reference additional filmmaking resources.`;
+  };
+
   if (!isOpen) {
     return null;
   }
@@ -422,9 +467,12 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
                     {category.items.map((item) => (
                       <li
                         key={item}
-                        className="rounded-xl border border-border bg-card/5 px-3 py-2"
+                        className="rounded-xl border border-border bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 px-3 py-2 cursor-pointer transition-all duration-200 transform hover:scale-105 hover:shadow-md"
+                        onClick={() => handleTopicClick(item, category.id)}
                       >
-                        {highlightMatches(item)}
+                        <div className="font-medium text-white">
+                          {highlightMatches(item)}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -455,6 +503,89 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
           </details>
         </div>
       </div>
+      
+      {/* Topic Detail Modal */}
+      {isTopicModalOpen && selectedTopic && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsTopicModalOpen(false);
+            }
+          }}
+        >
+          <div className="relative mx-4 w-full max-w-3xl rounded-3xl border-2 border-primary/30 bg-gradient-to-br from-gray-900/95 to-gray-800/95 shadow-2xl backdrop-blur-xl">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-50"></div>
+            <div className="relative">
+              <div className="flex items-start justify-between gap-4 border-b-2 border-primary/20 px-6 py-5">
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-bold text-white">
+                    {selectedTopic.topic}
+                  </h3>
+                  <p className="text-sm text-blue-300">
+                    {selectedTopic.category.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} Technique
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTopicModalOpen(false)}
+                  className="rounded-full border-2 border-white/20 bg-white/10 p-2 text-white transition hover:bg-white/20 transform hover:scale-110"
+                  style={{
+                    background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    border: '2px solid #ccc'
+                  }}
+                  aria-label="Close topic detail"
+                >
+                  <XMarkIcon className="h-5 w-5" title="Close" />
+                </button>
+              </div>
+              
+              <div className="px-6 py-6">
+                <div className="prose prose-lg prose-invert max-w-none">
+                  <div className="text-gray-200 whitespace-pre-wrap leading-relaxed">
+                    {selectedTopic.content.split('\n').map((line, index) => {
+                      if (line.startsWith('**') && line.endsWith('**')) {
+                        return (
+                          <h4 key={index} className="text-xl font-bold text-blue-300 mt-6 mb-3">
+                            {line.replace(/\*\*/g, '')}
+                          </h4>
+                        );
+                      }
+                      if (line === '---') {
+                        return <hr key={index} className="my-6 border-gray-600" />;
+                      }
+                      if (line.trim() === '') {
+                        return <br key={index} />;
+                      }
+                      return (
+                        <p key={index} className="mb-4 text-gray-300">
+                          {line}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setIsTopicModalOpen(false)}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                  >
+                    Apply to Project
+                  </button>
+                  <button
+                    onClick={() => setIsTopicModalOpen(false)}
+                    className="px-6 py-3 bg-gray-700 text-gray-300 font-medium rounded-xl hover:bg-gray-600 transition-all duration-200"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
