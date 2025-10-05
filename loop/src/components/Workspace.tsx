@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ChatRole } from '../types';
-import type { Project, Asset, Message, TimelineBlock } from '../types';
-import { generateFromWorkspace, generateSandboxResponse, isMockMode } from '../services/geminiService';
+import type { Project, Asset, Message } from '../types';
+import { generateSandboxResponse } from '../services/geminiService';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { MultiShotCreationModal } from './MultiShotCreationModal';
@@ -48,6 +48,11 @@ interface WorkspaceProps {
   onTagWeightChange: (tagId: string, weight: number) => void;
   onStyleRigidityChange: (value: number) => void;
   onWeightingToggle: (enabled: boolean) => void;
+  activeTimeline: 'primary' | 'secondary' | 'third' | 'fourth';
+  setActiveTimeline: (timeline: 'primary' | 'secondary' | 'third' | 'fourth') => void;
+  isGenerating: boolean;
+  onGenerate: () => void;
+  onGenerateOutput: (folder: 'story' | 'image' | 'all') => void;
 }
 
 const Workspace: React.FC<WorkspaceProps> = ({
@@ -77,10 +82,13 @@ const Workspace: React.FC<WorkspaceProps> = ({
   isWeightingEnabled,
   onTagWeightChange,
   onStyleRigidityChange,
-  onWeightingToggle
+  onWeightingToggle,
+  activeTimeline,
+  setActiveTimeline,
+  isGenerating,
+  onGenerate,
+  onGenerateOutput
 }) => {
-  const [activeTimeline, setActiveTimeline] = useState<'primary' | 'secondary' | 'third' | 'fourth'>('primary');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generatedOutput, setGeneratedOutput] = useState<string>('');
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isReferenceViewerOpen, setIsReferenceViewerOpen] = useState(false);
@@ -94,51 +102,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  const handleGenerate = async (outputType: 'story' | 'image' | 'text_to_video' = 'story') => {
-    setIsGenerating(true);
-    setGeneratedOutput('');
-
-    try {
-      const allBlocks = [
-        ...project.primaryTimeline.folders.story,
-        ...project.primaryTimeline.folders.image,
-        ...project.primaryTimeline.folders.text_to_video,
-      ];
-      const canvas = {
-        nodes: allBlocks.map(block => ({
-          id: block.id,
-          assetId: block.assetId,
-          position: { x: 0, y: 0 },
-          size: 1
-        })),
-        connections: []
-      };
-
-      const response = await generateFromWorkspace({
-        assets: project.assets,
-        canvas
-      }, tagWeights, styleRigidity, outputType);
-
-      const outputSections: string[] = [];
-      if (response.data) {
-        outputSections.push(response.data);
-      }
-      if (response.error) {
-        outputSections.push(`⚠️ ${response.error}`);
-      }
-      if (!outputSections.length) {
-        outputSections.push('No content was returned. Please try again in a moment.');
-      }
-
-      setGeneratedOutput(outputSections.join('\n\n---\n\n'));
-    } catch (error) {
-      console.error('Generation error:', error);
-      setGeneratedOutput('An unexpected error occurred while generating content. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
     if (!message.trim()) return null;
@@ -248,8 +211,8 @@ const Workspace: React.FC<WorkspaceProps> = ({
               selectedAssetId={selectedAssetId}
               setSelectedAssetId={setSelectedAssetId}
               onAssetDrop={handleAssetDrop}
-              onGenerateOutput={handleGenerate}
-              onGenerate={() => handleGenerate()}
+              onGenerateOutput={onGenerateOutput}
+              onGenerate={onGenerate}
               activeTimeline={activeTimeline}
               setActiveTimeline={setActiveTimeline}
               onCreateShots={handleCreateShots}
@@ -297,7 +260,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
               <ControlPanel
                 tagWeights={tagWeights}
                 onTagWeightChange={onTagWeightChange}
-                onGenerate={() => handleGenerate()}
+                onGenerate={onGenerate}
                 isGenerating={isGenerating}
                 onSyncAssetsToMcp={handleSyncAssetsToMcp}
                 isMcpLoading={isMcpLoading}

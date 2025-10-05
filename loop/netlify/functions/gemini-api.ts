@@ -1,8 +1,8 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 
-const GEMINI_API_KEY = "AIzaSyBD5wS3hwL4zRiAs5tAaxfH8YNZ3efqT3U";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_API_URL = `${GEMINI_API_BASE_URL}/models/gemini-2.5-flash:generateContent`;
+const GEMINI_API_URL = `${GEMINI_API_BASE_URL}/models/gemini-1.5-flash:generateContent`;
 
 export interface GenerationRequest {
   contents: Array<{
@@ -109,10 +109,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         };
       }
 
+      /*
       case 'generateImage': {
+        //- FIXME: This endpoint is incorrect for Imagen 3 on Vertex AI.
+        //- The correct endpoint is likely on the us-central1-aiplatform.googleapis.com domain.
+        //- This needs to be updated to a valid Vertex AI endpoint for Imagen 3.
+        //- Commenting out this section to prevent runtime errors.
         const { prompt } = requestData;
         // Use Imagen 3 through the correct Vertex AI endpoint
-        const IMAGEN_API_URL = `${GEMINI_API_BASE_URL}/models/imagen-3.0-generate-001:generateImages`;
+        const IMAGEN_API_URL = `${GEMINI_API_URL}/models/imagen-3.0-generate-001:generateImages`;
 
         const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
@@ -150,13 +155,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             success: true,
             data: base64Image,
-            isMock: false 
+            isMock: false
           })
         };
       }
+      */
 
       case 'listModels': {
         const response = await fetch(`${GEMINI_API_BASE_URL}/models?key=${GEMINI_API_KEY}`, {

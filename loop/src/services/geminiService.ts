@@ -243,6 +243,14 @@ export const generateFromWorkspace = async (
   outputType: string
 ): Promise<GeminiResult<string>> => {
   let systemPrompt = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}\n\nGenerate ${outputType} content based on the provided project workspace. `;
+  if (outputType === 'Master Story') {
+    systemPrompt += `
+      The output should be a comprehensive story document that includes the following sections:
+      1.  **Logline:** A one-sentence summary of the story.
+      2.  **Synopsis:** A short paragraph (3-5 sentences) summarizing the plot.
+      3.  **Key Scene:** A short script or screenplay for a pivotal scene (1-2 pages).
+    `;
+  }
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
     .map(([tag, weight]) => `${tag} (importance: ${Math.round(weight * 100)}%)`)

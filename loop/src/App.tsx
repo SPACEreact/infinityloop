@@ -43,7 +43,12 @@ const App: React.FC = () => {
     selectedMultiShots,
     setSelectedMultiShots,
     selectedMasterImage,
-    setSelectedMasterImage
+    setSelectedMasterImage,
+    activeTimeline,
+    setActiveTimeline,
+    isGenerating,
+    handleGenerate,
+    handleGenerateOutput
   } = useProject(initialProject);
 
   // Global state for Tag Weighting System
@@ -91,6 +96,11 @@ const App: React.FC = () => {
           onTagWeightChange={handleTagWeightChange}
           onStyleRigidityChange={setStyleRigidity}
           onWeightingToggle={setIsWeightingEnabled}
+          activeTimeline={activeTimeline}
+          setActiveTimeline={setActiveTimeline}
+          isGenerating={isGenerating}
+          onGenerate={handleGenerate}
+          onGenerateOutput={handleGenerateOutput}
         />
       </div>
     </div>

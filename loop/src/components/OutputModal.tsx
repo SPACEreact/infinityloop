@@ -307,14 +307,21 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                         </div>
                       )}
 
-                      {selectedAsset.content && (
-                        <div>
-                          <h5 className="text-sm font-medium ink-strong">Content</h5>
-                          <div className="text-sm ink-subtle p-2 bg-white/10 rounded max-h-40 overflow-y-auto custom-scrollbar">
-                            {selectedAsset.content}
+                      {
+                        selectedAsset.content && (
+                          <div>
+                            <h5 className="text-sm font-medium ink-strong">Content</h5>
+                            <div 
+                              className="text-sm ink-subtle p-2 bg-white/10 rounded max-h-40 overflow-y-auto custom-scrollbar"
+                              dangerouslySetInnerHTML={{
+                                __html: selectedAsset.content
+                                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                  .replace(/\n/g, '<br />')
+                              }}
+                            />
                           </div>
-                        </div>
-                      )}
+                        )
+                      }
 
                       {selectedAsset.tags && selectedAsset.tags.length > 0 && (
                         <div>
