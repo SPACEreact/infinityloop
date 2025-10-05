@@ -13,14 +13,13 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onToggleChat
 }) => {
   return (
-    <header className="flex items-center justify-between p-4 border-b border-gray-700">
+    <header className="flex items-center justify-between p-4 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg">
       <div></div>
       
-      <div className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-lg">
-        <FracturedLoopLogo className="w-10 h-10" />
-        <h1 className="text-2xl font-bold text-white/90 tracking-wide">
-          L<span className="inline-block mx-1 text-3xl bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">∞</span>P
-          <span className="text-xs block text-center text-white/60 font-light tracking-wider">idea to visualisation</span>
+      <div className="flex items-center gap-3 px-6 py-3 rounded-2xl">
+        <h1 className="text-4xl font-bold text-white/90 tracking-wide">
+          L<span className="inline-block mx-1 text-5xl bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">∞</span>P
+          <span className="text-xs block text-center text-white/60 font-light tracking-wider uppercase">Idea to Visualization</span>
         </h1>
       </div>
       

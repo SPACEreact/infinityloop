@@ -6,7 +6,7 @@ interface FloatingOutputButtonProps {
 
 const FloatingOutputButton: React.FC<FloatingOutputButtonProps> = ({ onOpenModal }) => {
   return (
-    <div className="absolute top-4 right-4 z-20">
+    <div className="absolute bottom-4 right-4 z-20">
       <button
         onClick={onOpenModal}
         className="px-4 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg transform hover:scale-110 transition-all duration-300 group"

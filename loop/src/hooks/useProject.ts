@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Project, Asset, TimelineBlock } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
+import { generateFromWorkspace } from '../services/geminiService';
 
 type FolderKey = string;
 
@@ -38,6 +39,8 @@ export const useProject = (initialProject: Project) => {
   const [selectedStoryAssets, setSelectedStoryAssets] = useState<string[]>([]);
   const [selectedMultiShots, setSelectedMultiShots] = useState<string[]>([]);
   const [selectedMasterImage, setSelectedMasterImage] = useState<string | null>(null);
+  const [activeTimeline, setActiveTimeline] = useState<'primary' | 'secondary' | 'third' | 'fourth'>('primary');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleAddAsset = useCallback((templateType: string) => {
     const template = ASSET_TEMPLATES[templateType];
@@ -238,7 +241,56 @@ export const useProject = (initialProject: Project) => {
     }));
   };
 
-  // Add other handlers here...
+  const handleGenerateOutput = async (folder: 'story' | 'image' | 'all') => {
+    setIsGenerating(true);
+    setToastState({ id: crypto.randomUUID(), message: 'Generating master assets...', kind: 'info' });
+
+    // This is a simplified workspace object. You might need to pass more data.
+    const workspace = {
+      assets: project.assets,
+      canvas: { nodes: [], connections: [] } // Placeholder for canvas data
+    };
+
+    const outputType = folder === 'story' ? 'Master Story' : 'Master Visual Style';
+    const result = await generateFromWorkspace(workspace, {}, 50, outputType);
+
+    if (result.data && !result.error) {
+      const newMasterAsset: Asset = {
+        id: crypto.randomUUID(),
+        seedId: crypto.randomUUID(),
+        type: folder === 'story' ? 'master_story' : 'master_visual',
+        name: `Master ${folder === 'story' ? 'Story' : 'Visual'}`,
+        content: result.data,
+        tags: ['master-asset'],
+        createdAt: new Date(),
+        summary: `Generated master asset for ${folder}`,
+        isMaster: true,
+        lineage: project.primaryTimeline.folders[folder]?.map(b => b.assetId) || [],
+        metadata: {}
+      };
+
+      setProject(prev => ({
+        ...prev,
+        assets: [...prev.assets, newMasterAsset],
+        secondaryTimeline: {
+          ...prev.secondaryTimeline,
+          masterAssets: [...(prev.secondaryTimeline?.masterAssets || []), newMasterAsset]
+        },
+        updatedAt: new Date()
+      }));
+
+      setToastState({ id: crypto.randomUUID(), message: 'Master asset generated successfully!', kind: 'success' });
+      setActiveTimeline('secondary');
+    } else {
+      setToastState({ id: crypto.randomUUID(), message: `Generation failed: ${result.error || 'Unknown error'}`, kind: 'error' });
+    }
+
+    setIsGenerating(false);
+  };
+
+  const handleGenerate = async () => {
+    await handleGenerateOutput('all');
+  };
 
   return {
     project,
@@ -260,6 +312,11 @@ export const useProject = (initialProject: Project) => {
     selectedMultiShots,
     setSelectedMultiShots,
     selectedMasterImage,
-    setSelectedMasterImage
+    setSelectedMasterImage,
+    activeTimeline,
+    setActiveTimeline,
+    isGenerating,
+    handleGenerate,
+    handleGenerateOutput
   };
 };
