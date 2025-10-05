@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { ChatRole } from '../types';
 import type { Project, Asset, Message, TimelineBlock } from '../types';
 import { generateFromWorkspace, generateSandboxResponse, isMockMode } from '../services/geminiService';
-import { FracturedLoopLogo } from './IconComponents';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { MultiShotCreationModal } from './MultiShotCreationModal';
@@ -14,6 +13,9 @@ import { ControlPanel } from './ControlPanel';
 import { Timeline } from './Timeline';
 import { ConfirmModal } from './ConfirmModal';
 import { ToastNotification, ToastState } from './ToastNotification';
+import { OutputModal } from './OutputModal';
+import WorkspaceHeader from './WorkspaceHeader';
+import FloatingOutputButton from './FloatingOutputButton';
 // import { saveProject } from '../services/mcpService';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
@@ -91,6 +93,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [isMcpLoading, setIsMcpLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleGenerate = async (outputType: 'story' | 'image' | 'text_to_video' = 'story') => {
     setIsGenerating(true);
@@ -225,68 +228,87 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      <header className="flex items-center justify-between p-4 border-b border-gray-700">
-        <div className="flex items-center gap-2">
-          <FracturedLoopLogo className="w-8 h-8" />
-          <h1 className="text-xl font-bold">{appLabel}</h1>
-        </div>
-      </header>
+      <WorkspaceHeader 
+        appLabel={appLabel} 
+        isChatOpen={isChatOpen} 
+        onToggleChat={() => setIsChatOpen(!isChatOpen)} 
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="w-1/4 p-4 border-r border-gray-700 overflow-y-auto">
           <AssetLibraryPanel onAddAsset={handleAddAsset} />
         </div>
 
-        <main className="flex-1 p-4 overflow-y-auto">
-          <Timeline
-            project={project}
-            selectedAssetId={selectedAssetId}
-            setSelectedAssetId={setSelectedAssetId}
-            onAssetDrop={handleAssetDrop}
-            onGenerateOutput={handleGenerate}
-            onGenerate={() => handleGenerate()}
-            activeTimeline={activeTimeline}
-            setActiveTimeline={setActiveTimeline}
-            onCreateShots={handleCreateShots}
-            isWeightingEnabled={isWeightingEnabled}
-            onWeightingToggle={onWeightingToggle}
-            styleRigidity={styleRigidity}
-            onStyleRigidityChange={onStyleRigidityChange}
-            selectedAssetIdForShots={selectedAssetIdForShots}
-            setSelectedAssetIdForShots={setSelectedAssetIdForShots}
-            isCreateShotsModalOpen={isCreateShotsModalOpen}
-            setIsCreateShotsModalOpen={setIsCreateShotsModalOpen}
-            setIsMultiShotModalOpen={setIsMultiShotModalOpen}
-            setIsBatchStyleModalOpen={setIsBatchStyleModalOpen}
-            setIsOutputModalOpen={setIsOutputModalOpen}
-          />
+        <main className={`flex-1 relative ${isChatOpen ? 'w-1/2' : ''}`}>
+          <FloatingOutputButton onOpenModal={() => setIsOutputModalOpen(true)} />
+          
+          <div className="p-4 overflow-y-auto h-full">
+            <Timeline
+              project={project}
+              selectedAssetId={selectedAssetId}
+              setSelectedAssetId={setSelectedAssetId}
+              onAssetDrop={handleAssetDrop}
+              onGenerateOutput={handleGenerate}
+              onGenerate={() => handleGenerate()}
+              activeTimeline={activeTimeline}
+              setActiveTimeline={setActiveTimeline}
+              onCreateShots={handleCreateShots}
+              isWeightingEnabled={isWeightingEnabled}
+              onWeightingToggle={onWeightingToggle}
+              styleRigidity={styleRigidity}
+              onStyleRigidityChange={onStyleRigidityChange}
+              selectedAssetIdForShots={selectedAssetIdForShots}
+              setSelectedAssetIdForShots={setSelectedAssetIdForShots}
+              isCreateShotsModalOpen={isCreateShotsModalOpen}
+              setIsCreateShotsModalOpen={setIsCreateShotsModalOpen}
+              setIsMultiShotModalOpen={setIsMultiShotModalOpen}
+              setIsBatchStyleModalOpen={setIsBatchStyleModalOpen}
+              setIsOutputModalOpen={setIsOutputModalOpen}
+            />
+          </div>
         </main>
 
-        <div className="w-1/4 p-4 border-l border-gray-700 overflow-y-auto">
-          {selectedAssetId ? (
-            <AssetDetailsPanel
-              selectedAssetId={selectedAssetId}
+        {isChatOpen && (
+          <div className="w-1/3 border-l border-gray-700">
+            <ChatAssistant
+              messages={chatMessages}
+              isLoading={isChatLoading}
+              generatedOutput={generatedOutput}
+              onSendMessage={handleSendMessage}
               project={project}
+              onCreateAsset={handleAddAsset}
               onUpdateAsset={handleUpdateAsset}
-              onDeleteAsset={handleRequestDeleteAsset}
-              onClose={() => setSelectedAssetId(null)}
-              onRequestSuggestion={handleRequestFieldSuggestion}
             />
-          ) : (
-            <ControlPanel
-              tagWeights={tagWeights}
-              onTagWeightChange={onTagWeightChange}
-              onGenerate={() => handleGenerate()}
-              isGenerating={isGenerating}
-              onSyncAssetsToMcp={handleSyncAssetsToMcp}
-              isMcpLoading={isMcpLoading}
-              onOpenReference={() => setIsReferenceViewerOpen(true)}
-              onOpenHelp={() => setIsUserGuideOpen(true)}
-              onOpenApi={() => setIsApiConfigOpen(true)}
-              onOpenOutput={() => setIsOutputModalOpen(true)}
-            />
-          )}
-        </div>
+          </div>
+        )}
+
+        {!isChatOpen && (
+          <div className="w-1/4 p-4 border-l border-gray-700 overflow-y-auto">
+            {selectedAssetId ? (
+              <AssetDetailsPanel
+                selectedAssetId={selectedAssetId}
+                project={project}
+                onUpdateAsset={handleUpdateAsset}
+                onDeleteAsset={handleRequestDeleteAsset}
+                onClose={() => setSelectedAssetId(null)}
+                onRequestSuggestion={handleRequestFieldSuggestion}
+              />
+            ) : (
+              <ControlPanel
+                tagWeights={tagWeights}
+                onTagWeightChange={onTagWeightChange}
+                onGenerate={() => handleGenerate()}
+                isGenerating={isGenerating}
+                onSyncAssetsToMcp={handleSyncAssetsToMcp}
+                isMcpLoading={isMcpLoading}
+                onOpenReference={() => setIsReferenceViewerOpen(true)}
+                onOpenHelp={() => setIsUserGuideOpen(true)}
+                onOpenApi={() => setIsApiConfigOpen(true)}
+                onOpenOutput={() => setIsOutputModalOpen(true)}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <ToastNotification
@@ -302,6 +324,43 @@ const Workspace: React.FC<WorkspaceProps> = ({
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
+
+      <OutputModal
+        isOpen={isOutputModalOpen}
+        finalAssets={project.assets}
+        onClose={() => setIsOutputModalOpen(false)}
+      />
+
+      <MultiShotCreationModal
+        isOpen={isMultiShotModalOpen}
+        onClose={() => setIsMultiShotModalOpen(false)}
+        project={project}
+        onCreateAsset={handleAddAsset}
+      />
+
+      <BatchStyleModal
+        isOpen={isBatchStyleModalOpen}
+        onClose={() => setIsBatchStyleModalOpen(false)}
+        project={project}
+        onCreateAsset={handleAddAsset}
+      />
+
+      <UserGuide 
+        isOpen={isUserGuideOpen}
+        onClose={() => setIsUserGuideOpen(false)}
+      />
+
+      <ApiConfig 
+        isOpen={isApiConfigOpen}
+        onClose={() => setIsApiConfigOpen(false)}
+      />
+
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <ReferenceViewer
+          isOpen={isReferenceViewerOpen}
+          onClose={() => setIsReferenceViewerOpen(false)}
+        />
+      </React.Suspense>
     </div>
   );
 };

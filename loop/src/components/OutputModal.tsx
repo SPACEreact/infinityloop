@@ -126,7 +126,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        style={{ maxWidth: '900px', maxHeight: '90vh' }}
+        style={{ maxWidth: '95vw', width: '1400px', maxHeight: '95vh', minHeight: '800px' }}
       >
         <div className="glass-modal__header">
           <h2 id={titleId} className="glass-modal__title ink-strong flex items-center gap-2">
@@ -189,26 +189,26 @@ export const OutputModal: React.FC<OutputModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-6" style={{ maxHeight: 'calc(95vh - 200px)', minHeight: '600px' }}>
           {/* Overview Tab */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                  <div className="text-2xl font-bold text-blue-400">{assetGroups.masterStories.length}</div>
-                  <div className="text-sm ink-subtle">Master Stories</div>
+            <div className="space-y-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="text-center p-8 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl border border-blue-500/30 hover:border-blue-400/50 transition-all duration-300 transform hover:scale-105 hover:shadow-xl">
+                  <div className="text-4xl font-bold text-blue-400 mb-2">{assetGroups.masterStories.length}</div>
+                  <div className="text-sm font-medium text-blue-300">Master Stories</div>
                 </div>
-                <div className="text-center p-4 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                  <div className="text-2xl font-bold text-purple-400">{assetGroups.multiShots.length}</div>
-                  <div className="text-sm ink-subtle">Multi-Shot Assets</div>
+                <div className="text-center p-8 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl border border-purple-500/30 hover:border-purple-400/50 transition-all duration-300 transform hover:scale-105 hover:shadow-xl">
+                  <div className="text-4xl font-bold text-purple-400 mb-2">{assetGroups.multiShots.length}</div>
+                  <div className="text-sm font-medium text-purple-300">Multi-Shot Assets</div>
                 </div>
-                <div className="text-center p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                  <div className="text-2xl font-bold text-green-400">{totalShots}</div>
-                  <div className="text-sm ink-subtle">Total Shots</div>
+                <div className="text-center p-8 bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-2xl border border-green-500/30 hover:border-green-400/50 transition-all duration-300 transform hover:scale-105 hover:shadow-xl">
+                  <div className="text-4xl font-bold text-green-400 mb-2">{totalShots}</div>
+                  <div className="text-sm font-medium text-green-300">Total Shots</div>
                 </div>
-                <div className="text-center p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                  <div className="text-2xl font-bold text-yellow-400">{assetGroups.batchStyled.length}</div>
-                  <div className="text-sm ink-subtle">Styled Assets</div>
+                <div className="text-center p-8 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 rounded-2xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all duration-300 transform hover:scale-105 hover:shadow-xl">
+                  <div className="text-4xl font-bold text-yellow-400 mb-2">{assetGroups.batchStyled.length}</div>
+                  <div className="text-sm font-medium text-yellow-300">Styled Assets</div>
                 </div>
               </div>
 
@@ -261,8 +261,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
 
           {/* Asset Details Tab */}
           {activeTab === 'details' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Asset List */}
                 <div className="space-y-2">
                   <h3 className="font-medium ink-strong">Select Asset for Details</h3>

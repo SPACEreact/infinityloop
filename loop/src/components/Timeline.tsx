@@ -46,6 +46,8 @@ export const Timeline = ({
   setIsMultiShotModalOpen: (open: boolean) => void;
   setIsBatchStyleModalOpen: (open: boolean) => void;
   setIsOutputModalOpen: (open: boolean) => void;
+  onGenerateDirectorAdvice?: () => void;
+  onAcceptSuggestion?: (suggestionId: string) => void;
 }) => {
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, folder?: string) => {
@@ -204,34 +206,6 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                     <div>• Optimizes for next workflow steps</div>
                   </div>
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-3 h-3 bg-purple-900/95 rotate-45 border-r border-b border-white/20"></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Sleek Output Button - Positioned elegantly */}
-            <div className="relative group/output">
-              <button
-                onClick={() => setIsOutputModalOpen(true)}
-                className="timeline-action px-4 py-2.5 text-sm font-semibold flex items-center gap-2 shadow-lg transform hover:scale-110 transition-all duration-300 group"
-                style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  border: '2px solid rgba(255,255,255,0.3)',
-                  color: 'white',
-                  borderRadius: '12px'
-                }}
-                title="View Final Outputs"
-              >
-                <SparklesIcon className="w-4 h-4 group-hover:animate-pulse" />
-                Output
-              </button>
-              
-              {/* Hover popup for Output */}
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover/output:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                <div className="bg-gradient-to-br from-indigo-900/95 to-purple-900/95 backdrop-blur-sm text-white text-xs rounded-lg p-3 shadow-xl border border-white/20 whitespace-nowrap">
-                  <div className="font-medium mb-1">✨ Final Outputs</div>
-                  <div className="text-gray-200">View and manage all generated content</div>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-indigo-900/95 rotate-45 border-r border-b border-white/20"></div>
                 </div>
               </div>
             </div>
@@ -430,31 +404,86 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
     </div>
   );
 
-  const renderFourthTimeline = () => (
-    <div className="space-y-8" style={{ background: 'rgba(255, 218, 185, 0.05)' }}>
+  const renderFourthTimeline = () => {
+
+    const generateDirectorAdvice = async () => {
+      // This would trigger the parent component to generate director advice
+      if (onGenerateDirectorAdvice) {
+        onGenerateDirectorAdvice();
+      }
+    };
+
+    const acceptSuggestion = (suggestionId: string) => {
+      // This would update the suggestion status in the parent component
+      if (onAcceptSuggestion) {
+        onAcceptSuggestion(suggestionId);
+      }
+    };
+
+    return (
+      <div className="space-y-8" style={{ background: 'rgba(255, 218, 185, 0.05)' }}>
+      {/* Director's Advice Actions */}
+      <div className="flex justify-center mb-6">
+        <div className="group inline-flex items-center gap-2">
+          <button
+            onClick={() => generateDirectorAdvice()}
+            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+            style={{
+              background: 'linear-gradient(145deg, #FFDAB9, #FFCBA4)',
+              boxShadow: '0 10px 20px rgba(255, 218, 185, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
+              border: '3px solid #FFCBA4',
+              color: '#8B4513',
+              filter: 'drop-shadow(4px 4px 0 rgba(139, 69, 19, 0.3)) contrast(1.2)'
+            }}
+          >
+            <SparklesIcon className="w-6 h-6" />
+            GENERATE DIRECTOR ADVICE
+          </button>
+        </div>
+      </div>
 
       {project.fourthTimeline ? (
         <div className="space-y-5">
-          <h3 className="text-lg font-semibold ink-strong">Suggestions</h3>
+          <h3 className="text-lg font-semibold ink-strong">Director's Suggestions</h3>
           {project.fourthTimeline.suggestions.map((suggestion, index) => (
-            <div key={suggestion.id} className="p-5 timeline-card">
+            <div key={suggestion.id} className="p-5 timeline-card cursor-pointer hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-semibold ink-strong">{suggestion.type.toUpperCase()}</h4>
-                  <p className="text-sm ink-subtle">{suggestion.description}</p>
+                <div className="flex-1">
+                  <h4 className="font-semibold ink-strong text-orange-300">{suggestion.type.toUpperCase()}</h4>
+                  <p className="text-sm ink-subtle mt-2">{suggestion.description}</p>
+                  {suggestion.advice && (
+                    <div className="mt-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                      <p className="text-sm text-orange-200">{suggestion.advice}</p>
+                    </div>
+                  )}
                 </div>
-                <div className={`timeline-chip ${suggestion.accepted ? 'is-affirmative' : ''}`}>
-                  {suggestion.accepted ? 'Accepted' : 'Pending'}
+                <div className="flex flex-col gap-2">
+                  <div className={`timeline-chip ${suggestion.accepted ? 'is-affirmative' : ''}`}>
+                    {suggestion.accepted ? 'Accepted' : 'Pending'}
+                  </div>
+                  {!suggestion.accepted && (
+                    <button
+                      onClick={() => acceptSuggestion(suggestion.id)}
+                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded hover:bg-green-500/30 transition-colors"
+                    >
+                      Accept
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="ink-subtle">No director suggestions yet.</p>
+        <div className="text-center py-12">
+          <div className="text-6xl mb-4">🎬</div>
+          <h3 className="text-lg font-semibold ink-strong mb-2">No Director Suggestions Yet</h3>
+          <p className="ink-subtle mb-6">Generate AI-powered director advice based on your project's story, shots, and style.</p>
+        </div>
       )}
     </div>
-  );
+    );
+  };
 
   return (
     <div className="h-full w-full">
