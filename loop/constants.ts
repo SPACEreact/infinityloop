@@ -296,7 +296,294 @@ export const MASTER_PROMPT = `You are Fractured Loop Infinity, an expert AI film
 
 When generating content, consider the harmony and tension between interconnected assets. Maintain creative integrity while respecting the user's vision. Use psychological depth in character development and cinematic expertise in visual design. Always aim for compelling, coherent storytelling that resonates emotionally.`;
 
-// Field options for smart UI components
+// Tag dependency and context flow enhancements
+export const TAG_DEPENDENCIES: Record<string, {
+  suggests: string[];  // Tags that are commonly used together
+  conflicts: string[]; // Tags that shouldn't be used together
+  requires?: string[];  // Tags that must be present when this tag is used
+  category: 'story' | 'visual' | 'technical' | 'workflow';
+}> = {
+  // Story tags
+  'character': {
+    suggests: ['dialogue', 'personality', 'motivation', 'backstory'],
+    conflicts: ['static', 'no_dialogue'],
+    category: 'story'
+  },
+  'plot_point': {
+    suggests: ['story_structure', 'conflict', 'tension'],
+    conflicts: ['static_scene'],
+    category: 'story'
+  },
+  'master_story': {
+    suggests: ['character', 'plot_point', 'structure'],
+    conflicts: ['fragment', 'incomplete'],
+    requires: ['story'],
+    category: 'story'
+  },
+  
+  // Visual tags
+  'camera': {
+    suggests: ['focal_length', 'aperture', 'movement'],
+    conflicts: [],
+    category: 'visual'
+  },
+  'lighting': {
+    suggests: ['mood', 'atmosphere', 'color_temperature'],
+    conflicts: ['no_lighting'],
+    category: 'visual'
+  },
+  'color_grading': {
+    suggests: ['mood', 'style', 'atmosphere'],
+    conflicts: ['black_and_white'],
+    category: 'visual'
+  },
+  'master_image': {
+    suggests: ['style', 'composition', 'color_grading', 'lighting'],
+    conflicts: ['incomplete', 'draft'],
+    requires: ['visual'],
+    category: 'visual'
+  },
+  
+  // Workflow tags
+  'multi_shot': {
+    suggests: ['scene_breakdown', 'shot_sequence', 'continuity'],
+    conflicts: ['single_shot'],
+    requires: ['master_story'],
+    category: 'workflow'
+  },
+  'batch_style': {
+    suggests: ['consistency', 'master_visual', 'style_application'],
+    conflicts: ['individual_styling'],
+    requires: ['multi_shot', 'master_image'],
+    category: 'workflow'
+  },
+  
+  // Technical tags
+  'technical': {
+    suggests: ['specifications', 'parameters', 'settings'],
+    conflicts: ['artistic_only'],
+    category: 'technical'
+  },
+  'cinematic': {
+    suggests: ['composition', 'movement', 'lighting', 'color'],
+    conflicts: ['documentary_style'],
+    category: 'technical'
+  }
+};
+
+export const CONTEXT_FLOW_RULES: Record<string, {
+  precedence: number; // Higher numbers take precedence
+  propagatesTo: string[]; // Asset types this flows to
+  enhances: string[]; // Tags this enhances
+  workflow_stage: 'input' | 'master' | 'multi_shot' | 'batch_style' | 'output';
+}> = {
+  'story': {
+    precedence: 10,
+    propagatesTo: ['master_story', 'multi_shot'],
+    enhances: ['character', 'plot', 'narrative'],
+    workflow_stage: 'input'
+  },
+  'visual': {
+    precedence: 8,
+    propagatesTo: ['master_image', 'batch_style'],
+    enhances: ['style', 'composition', 'aesthetic'],
+    workflow_stage: 'input'
+  },
+  'master_story': {
+    precedence: 15,
+    propagatesTo: ['multi_shot', 'scene_breakdown'],
+    enhances: ['structure', 'pacing', 'character_development'],
+    workflow_stage: 'master'
+  },
+  'master_image': {
+    precedence: 12,
+    propagatesTo: ['batch_style', 'visual_consistency'],
+    enhances: ['style', 'visual_language', 'color_palette'],
+    workflow_stage: 'master'
+  },
+  'multi_shot': {
+    precedence: 18,
+    propagatesTo: ['batch_style', 'individual_shots'],
+    enhances: ['continuity', 'shot_progression', 'scene_flow'],
+    workflow_stage: 'multi_shot'
+  },
+  'batch_style': {
+    precedence: 20,
+    propagatesTo: ['final_output', 'video_generation'],
+    enhances: ['visual_consistency', 'style_application', 'production_ready'],
+    workflow_stage: 'batch_style'
+  }
+};
+
+// Enhanced tag suggestion system
+export const generateTagSuggestions = (existingTags: string[], assetType: string, context?: any): string[] => {
+  const suggestions: string[] = [];
+  const usedSuggestions = new Set<string>();
+  
+  // Base suggestions from existing tags
+  existingTags.forEach(tag => {
+    const deps = TAG_DEPENDENCIES[tag];
+    if (deps) {
+      deps.suggests.forEach(suggestedTag => {
+        if (!existingTags.includes(suggestedTag) && !usedSuggestions.has(suggestedTag)) {
+          suggestions.push(suggestedTag);
+          usedSuggestions.add(suggestedTag);
+        }
+      });
+    }
+  });
+  
+  // Context-based suggestions
+  if (context?.workflow_stage) {
+    const stageRules = Object.entries(CONTEXT_FLOW_RULES)
+      .filter(([_, rule]) => rule.workflow_stage === context.workflow_stage)
+      .sort(([_, a], [__, b]) => b.precedence - a.precedence);
+    
+    stageRules.forEach(([tag, rule]) => {
+      if (!existingTags.includes(tag) && !usedSuggestions.has(tag)) {
+        suggestions.push(tag);
+        usedSuggestions.add(tag);
+      }
+      
+      rule.enhances.forEach(enhanceTag => {
+        if (!existingTags.includes(enhanceTag) && !usedSuggestions.has(enhanceTag)) {
+          suggestions.push(enhanceTag);
+          usedSuggestions.add(enhanceTag);
+        }
+      });
+    });
+  }
+  
+  // Asset type specific suggestions
+  const assetTypeMap: Record<string, string[]> = {
+    'master_story': ['narrative', 'structure', 'character_development', 'pacing'],
+    'master_image': ['composition', 'style_reference', 'color_palette', 'lighting'],
+    'shot': ['camera_angle', 'framing', 'movement', 'focus'],
+    'multi_shot': ['continuity', 'sequence', 'flow', 'transitions'],
+    'batch_style': ['consistency', 'visual_language', 'style_application']
+  };
+  
+  const typeSpecific = assetTypeMap[assetType] || [];
+  typeSpecific.forEach(tag => {
+    if (!existingTags.includes(tag) && !usedSuggestions.has(tag)) {
+      suggestions.push(tag);
+      usedSuggestions.add(tag);
+    }
+  });
+  
+  return suggestions.slice(0, 8); // Limit to 8 suggestions
+};
+
+// Tag conflict detection
+export const detectTagConflicts = (tags: string[]): { conflicts: Array<{tag1: string, tag2: string, reason: string}>, warnings: string[] } => {
+  const conflicts: Array<{tag1: string, tag2: string, reason: string}> = [];
+  const warnings: string[] = [];
+  
+  tags.forEach(tag => {
+    const deps = TAG_DEPENDENCIES[tag];
+    if (deps) {
+      // Check for direct conflicts
+      deps.conflicts.forEach(conflictTag => {
+        if (tags.includes(conflictTag)) {
+          conflicts.push({
+            tag1: tag,
+            tag2: conflictTag,
+            reason: `${tag} conflicts with ${conflictTag}`
+          });
+        }
+      });
+      
+      // Check for missing requirements
+      if (deps.requires) {
+        deps.requires.forEach(requiredTag => {
+          if (!tags.includes(requiredTag)) {
+            warnings.push(`${tag} typically requires ${requiredTag}`);
+          }
+        });
+      }
+    }
+  });
+  
+  return { conflicts, warnings };
+};
+
+// Context flow enhancement
+export const enhanceContextFlow = (assets: any[]): {
+  flowAnalysis: Record<string, any>;
+  suggestions: string[];
+  optimizations: Array<{type: string, description: string, priority: 'high' | 'medium' | 'low'}>;
+} => {
+  const flowAnalysis: Record<string, any> = {};
+  const suggestions: string[] = [];
+  const optimizations: Array<{type: string, description: string, priority: 'high' | 'medium' | 'low'}> = [];
+  
+  // Analyze asset relationships and flow
+  const assetsByType = assets.reduce((acc, asset) => {
+    if (!acc[asset.type]) acc[asset.type] = [];
+    acc[asset.type].push(asset);
+    return acc;
+  }, {} as Record<string, any[]>);
+  
+  // Check workflow completeness
+  const storyAssets = assetsByType['master_story'] || [];
+  const visualAssets = assetsByType['master_image'] || [];
+  const multiShotAssets = assets.filter(a => a.tags?.includes('multi_shot')) || [];
+  const batchStyleAssets = assetsByType['batch_style'] || [];
+  
+  flowAnalysis.workflowCompleteness = {
+    story: storyAssets.length,
+    visual: visualAssets.length,
+    multiShot: multiShotAssets.length,
+    batchStyle: batchStyleAssets.length
+  };
+  
+  // Suggest next steps based on current state
+  if (storyAssets.length > 0 && multiShotAssets.length === 0) {
+    suggestions.push('Create multi-shot breakdowns from your story assets');
+    optimizations.push({
+      type: 'workflow',
+      description: 'Your story assets are ready for multi-shot creation',
+      priority: 'high'
+    });
+  }
+  
+  if (visualAssets.length > 0 && multiShotAssets.length > 0 && batchStyleAssets.length === 0) {
+    suggestions.push('Apply batch styling to combine your visual style with multi-shot sequences');
+    optimizations.push({
+      type: 'workflow',
+      description: 'Ready for batch style application - you have both visual and multi-shot assets',
+      priority: 'high'
+    });
+  }
+  
+  // Check for tag consistency across related assets
+  const tagConsistency = assets.reduce((acc, asset) => {
+    asset.tags?.forEach((tag: string) => {
+      if (!acc[tag]) acc[tag] = [];
+      acc[tag].push(asset.type);
+    });
+    return acc;
+  }, {} as Record<string, string[]>);
+  
+  flowAnalysis.tagConsistency = tagConsistency;
+  
+  // Identify orphaned or underconnected assets
+  assets.forEach(asset => {
+    if (!asset.lineage || asset.lineage.length === 0) {
+      if (['master_story', 'master_image'].includes(asset.type)) {
+        // This is expected for master assets
+      } else {
+        optimizations.push({
+          type: 'connectivity',
+          description: `Asset "${asset.name}" lacks lineage connections`,
+          priority: 'medium'
+        });
+      }
+    }
+  });
+  
+  return { flowAnalysis, suggestions, optimizations };
+};
 export type FieldOptionsType = Record<string, Record<string, any>>;
 
 export const FIELD_OPTIONS: FieldOptionsType = {

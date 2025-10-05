@@ -172,10 +172,38 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
   const [showMasterIteration, setShowMasterIteration] = useState(false);
   const [iterationPrompt, setIterationPrompt] = useState('');
 
-  // Shot creation state
+  // Enhanced shot creation and multi-shot state
   const [showShotCreation, setShowShotCreation] = useState(false);
   const [shotCreationPrompt, setShotCreationPrompt] = useState('');
   const [targetMasterAsset, setTargetMasterAsset] = useState<string | null>(null);
+  const [showMultiShotCreation, setShowMultiShotCreation] = useState(false);
+  const [multiShotConfig, setMultiShotConfig] = useState({
+    numberOfShots: 3,
+    shotType: 'mixed',
+    duration: '3-5 seconds',
+    cameraMovement: 'static'
+  });
+
+  // Asset propagation flow state
+  const [showAssetPropagation, setShowAssetPropagation] = useState(false);
+  const [propagationStep, setPropagationStep] = useState<'story' | 'visual' | 'multi_shot' | 'batch_style' | 'complete'>('story');
+  const [propagatedAssets, setPropagatedAssets] = useState<{
+    storyAssets: string[];
+    visualAssets: string[];
+    multiShotAssets: string[];
+    batchStyleAssets: string[];
+  }>({
+    storyAssets: [],
+    visualAssets: [],
+    multiShotAssets: [],
+    batchStyleAssets: []
+  });
+
+  // Master Visual and Story creation context
+  const [showMasterCreation, setShowMasterCreation] = useState(false);
+  const [masterCreationStep, setMasterCreationStep] = useState<'story' | 'visual'>('story');
+  const [storyIterationPrompt, setStoryIterationPrompt] = useState('');
+  const [visualIterationPrompt, setVisualIterationPrompt] = useState('');
 
   // Build types and their questions
   const buildTypes: Record<string, { name: string; description: string; questions: { key: string; question: string; section: string; }[] }> = {
@@ -374,6 +402,25 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
     }
   };
 
+  // Helper functions for asset management
+  const getAssetsByType = (type: string) => {
+    if (!project?.assets) return [];
+    const typeMap: Record<string, string[]> = {
+      'story': ['master_story'],
+      'visual': ['master_image', 'master_video'],
+      'multi_shot': ['multi_shot'],
+      'batch_style': ['batch_style'],
+      'shot': ['shot']
+    };
+    const targetTypes = typeMap[type] || [type];
+    return project.assets.filter((asset: any) => targetTypes.includes(asset.type));
+  };
+
+  const getMasterAssets = () => {
+    if (!project?.assets) return [];
+    return project.assets.filter((asset: any) => asset.isMaster);
+  };
+
   const suggestionListId = 'prompt-suggestion-list';
 
   useEffect(() => {
@@ -426,12 +473,51 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
     }
   };
 
-  // Get master assets for dropdowns
-  const getMasterAssets = () => {
-    if (!project) return [];
-    return project.assets.filter((asset: any) =>
-      asset.type === 'master_story' || asset.type === 'master_image'
-    );
+  // Enhanced functions for timeline-aware asset creation
+  const handleTimelineAwareGeneration = async () => {
+    if (!project) return;
+    
+    const timelineContext = {
+      primaryAssets: project.primaryTimeline?.folders || {},
+      secondaryAssets: project.secondaryTimeline?.masterAssets || [],
+      thirdAssets: project.thirdTimeline?.styledShots || [],
+      currentStep: propagationStep
+    };
+    
+    const contextMessage = `Timeline Context for Generation:\n\n` +
+      `Current Step: ${propagationStep}\n` +
+      `Story Assets: ${timelineContext.primaryAssets.story?.length || 0}\n` +
+      `Visual Assets: ${timelineContext.primaryAssets.image?.length || 0}\n` +
+      `Master Assets: ${timelineContext.secondaryAssets.length}\n` +
+      `Styled Shots: ${timelineContext.thirdAssets.length}\n\n` +
+      `Generate the next logical step in the Loop workflow based on current timeline state.`;
+    
+    try {
+      await onSendMessage(contextMessage);
+    } catch (error) {
+      console.error('Timeline-aware generation failed:', error);
+    }
+  };
+  
+  const handleAssetPropagationFlow = () => {
+    setShowAssetPropagation(true);
+    setPropagationStep('story');
+  };
+  
+  const proceedToPropagationStep = (step: typeof propagationStep) => {
+    setPropagationStep(step);
+    
+    const stepMessages = {
+      story: "Let's create master story assets. These will serve as the foundation for your multi-shot sequences.",
+      visual: "Now let's create master visual assets that will define the look and style of your project.", 
+      multi_shot: "Time to break down your story into multi-shot sequences with specific shot types and timing.",
+      batch_style: "Let's apply your master visual style to all multi-shot sequences in one batch operation.",
+      complete: "Asset propagation complete! Your timeline now has a complete flow from story to final styled shots."
+    };
+    
+    const contextPrompt = `TIMELINE WORKFLOW - ${step.toUpperCase()} STEP\n\n${stepMessages[step]}\n\nCurrent assets available:\n- Story assets: ${propagatedAssets.storyAssets.length}\n- Visual assets: ${propagatedAssets.visualAssets.length}\n- Multi-shot assets: ${propagatedAssets.multiShotAssets.length}\n- Batch style assets: ${propagatedAssets.batchStyleAssets.length}\n\nGuide me through creating assets for the ${step} step.`;
+    
+    onSendMessage(contextPrompt);
   };
 
   const renderMessageContent = (message: Message) => {
@@ -541,6 +627,81 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
       </div>
 
       <div className="p-4 chat-footer">
+        {/* Asset Propagation Workflow */}
+        {showAssetPropagation && (
+          <div className="mb-4 p-4 chat-feature-surface" style={getFeatureStyles(propagationStep)}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold chat-feature-header">
+                Timeline Workflow - {propagationStep.replace('_', ' ').toUpperCase()} Step
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAssetPropagation(false)}
+                className="chat-close-button"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <div className="flex gap-2 mb-3">
+                {['story', 'visual', 'multi_shot', 'batch_style', 'complete'].map((step) => (
+                  <div
+                    key={step}
+                    className={`px-3 py-1 text-xs rounded-full font-medium ${
+                      step === propagationStep
+                        ? 'bg-blue-500 text-white'
+                        : propagationStep === 'complete' || 
+                          (['story', 'visual', 'multi_shot', 'batch_style'].indexOf(step) < 
+                           ['story', 'visual', 'multi_shot', 'batch_style'].indexOf(propagationStep))
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {step.replace('_', ' ')}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="text-sm ink-subtle">
+                Current Assets Available:
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div>Story: {getAssetsByType('story').length}</div>
+                  <div>Visual: {getAssetsByType('visual').length}</div>
+                  <div>Multi-shot: {getAssetsByType('multi_shot').length}</div>
+                  <div>Batch Style: {getAssetsByType('batch_style').length}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              {propagationStep !== 'complete' && (
+                <button
+                  onClick={() => proceedToPropagationStep(
+                    propagationStep === 'story' ? 'visual' :
+                    propagationStep === 'visual' ? 'multi_shot' :
+                    propagationStep === 'multi_shot' ? 'batch_style' : 'complete'
+                  )}
+                  className="px-4 py-2 chat-feature-action"
+                >
+                  Next: {
+                    propagationStep === 'story' ? 'Visual Assets' :
+                    propagationStep === 'visual' ? 'Multi-Shot' :
+                    propagationStep === 'multi_shot' ? 'Batch Style' : 'Complete'
+                  }
+                </button>
+              )}
+              
+              <button
+                onClick={() => proceedToPropagationStep(propagationStep)}
+                className="px-4 py-2 chat-feature-action"
+              >
+                Get Guidance for {propagationStep.replace('_', ' ')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Master Asset Iteration Panel */}
         {showMasterIteration && (
           <div className="mb-4 p-4 chat-feature-surface" style={getFeatureStyles('iteration')}>
@@ -827,11 +988,31 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
             <button
               type="button"
+              onClick={handleAssetPropagationFlow}
+              className="p-2 chat-icon-button"
+              style={getFeatureStyles('story')}
+              aria-label="Timeline workflow"
+              title="Start timeline asset propagation workflow"
+            >
+              <MagicWandIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleTimelineAwareGeneration}
+              className="p-2 chat-icon-button"
+              style={getFeatureStyles('menu')}
+              aria-label="Smart generation"
+              title="Generate based on current timeline context"
+            >
+              <SparklesIcon className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
               onClick={() => setShowMasterIteration(!showMasterIteration)}
               className="p-2 chat-icon-button"
               style={getFeatureStyles('iteration')}
               aria-label="Iterate master asset"
-              title="Iterate on master assets"
+              title="Iterate Master Story & Visual Assets"
             >
               <CubeTransparentIcon className="w-5 h-5" />
             </button>
@@ -840,10 +1021,10 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               onClick={() => setShowShotCreation(!showShotCreation)}
               className="p-2 chat-icon-button"
               style={getFeatureStyles('shots')}
-              aria-label="Create shots"
-              title="Create shots from master assets"
+              aria-label="Create Multi-Shot"
+              title="Create Multi-Shot from Master Assets"
             >
-              <SparklesIcon className="w-5 h-5" />
+              <UserIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -852,7 +1033,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               style={getFeatureStyles('menu')}
               aria-label="Build menu"
             >
-              <MagicWandIcon className="w-5 h-5" />
+              <UserIcon className="w-5 h-5" />
             </button>
             <button
               type="submit"

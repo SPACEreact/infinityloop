@@ -162,7 +162,7 @@
     padding: 10px 18px;
     margin: 6px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
     font-size: 13px;
     font-weight: 500;
     color: hsl(var(--foreground));
@@ -170,6 +170,8 @@
     position: relative;
     overflow: hidden;
     backdrop-filter: blur(10px);
+    transform: translateZ(0);
+    will-change: transform, box-shadow, background-color;
   }
 
   /* Comic book dots on hover */
@@ -189,9 +191,15 @@
   .asset-chip:hover {
     background: hsl(var(--card) / 0.9);
     border-color: hsl(var(--primary) / 0.6);
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px hsl(var(--primary) / 0.3);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 35px hsl(var(--primary) / 0.35), 
+                0 4px 15px hsl(var(--primary) / 0.25);
     color: hsl(var(--primary-foreground));
+  }
+  
+  .asset-chip:active {
+    transform: translateY(-2px) scale(0.98);
+    transition-duration: 0.1s;
   }
 
   .asset-chip:hover::before {
@@ -212,7 +220,7 @@
     animation: gentle-pulse 2s ease-in-out infinite;
   }
 
-  /* Glass modal */
+  /* Glass modal with enhanced animations */
   .glass-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -223,6 +231,7 @@
     background: hsl(var(--ink) / 0.38);
     backdrop-filter: blur(18px);
     z-index: 1200;
+    animation: fadeInBackdrop 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   .glass-modal {
@@ -236,6 +245,9 @@
     padding: 2rem;
     position: relative;
     color: hsl(var(--foreground));
+    animation: modalSlideIn 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    transform-origin: center center;
+    will-change: transform, opacity;
   }
 
   .glass-modal__header {
@@ -272,8 +284,9 @@
     padding: 0.65rem 1.4rem;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
     backdrop-filter: blur(4px);
+    will-change: transform, box-shadow, background-color;
   }
 
   .modal-button--destructive {
@@ -622,6 +635,114 @@
   }
 }
 
+/* Enhanced modal animations */
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(18px);
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Smooth page transitions */
+@keyframes pageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Enhanced card hover animations */
+@keyframes cardLift {
+  from {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  }
+  to {
+    transform: translateY(-6px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Ripple effect for buttons */
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Smooth typing animation */
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* Loading pulse */
+@keyframes loadingPulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+/* Bounce in animation for new elements */
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Slide up animation for timeline items */
+@keyframes slideUpStagger {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @layer utilities {
   .bg-gray-900 {
     background: transparent !important;
@@ -787,38 +908,89 @@
   transform: scale(1.05);
 }
 
-/* Animated elements */
+/* Enhanced animated elements with stagger effects */
 .fade-in {
-  animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.fade-in-up {
+  animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .slide-up {
-  animation: slideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.slide-in-left {
+  animation: pageSlideIn 0.5s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .float {
   animation: float 6s ease-in-out infinite;
 }
 
+.pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.loading-pulse {
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+/* Staggered animations for lists */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Interactive animation classes */
+.hover-lift:hover {
+  animation: cardLift 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.click-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.click-ripple::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  transform: scale(0);
+  animation: ripple 0.6s linear;
+  pointer-events: none;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(30px) scale(0.95);
+    filter: blur(5px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
   }
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(40px);
+    transform: translateY(50px) scale(0.9);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
   }
 }
 
@@ -849,7 +1021,87 @@
   }
 }
 
-/* Soft glow effects - Pastel colors */
+/* Micro-interactions and enhanced animations */
+.micro-bounce {
+  animation: microBounce 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stagger-animation:nth-child(1) { animation-delay: 0.1s; }
+.stagger-animation:nth-child(2) { animation-delay: 0.2s; }
+.stagger-animation:nth-child(3) { animation-delay: 0.3s; }
+.stagger-animation:nth-child(4) { animation-delay: 0.4s; }
+.stagger-animation:nth-child(5) { animation-delay: 0.5s; }
+
+.magnetic-hover {
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: transform;
+}
+
+.magnetic-hover:hover {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.05) saturate(1.1);
+}
+
+.glass-hover {
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  backdrop-filter: blur(10px);
+}
+
+.glass-hover:hover {
+  backdrop-filter: blur(15px);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes microBounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.02);
+  }
+}
+
+@keyframes elasticIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-10deg);
+  }
+  50% {
+    transform: scale(1.05) rotate(2deg);
+  }
+  70% {
+    transform: scale(0.95) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes liquidMove {
+  0%, 100% {
+    border-radius: 20px;
+    transform: rotate(0deg);
+  }
+  25% {
+    border-radius: 25px 15px 20px 25px;
+    transform: rotate(1deg);
+  }
+  50% {
+    border-radius: 15px 25px 15px 25px;
+    transform: rotate(0deg);
+  }
+  75% {
+    border-radius: 25px 20px 25px 15px;
+    transform: rotate(-1deg);
+  }
+}
+
+.liquid-button {
+  animation: liquidMove 8s ease-in-out infinite;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
 .glow-indigo {
   filter: drop-shadow(0 0 20px hsl(var(--secondary) / 0.4));
 }
@@ -1116,13 +1368,24 @@
   z-index: 2;
 }
 
-/* Smooth transitions for interactive elements */
+/* Enhanced smooth transitions for all interactive elements */
 * {
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94); /* easeOutQuad - smoother */
 }
 
 button, a, [role="button"] {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+/* Micro-interactions for buttons */
+button:hover, [role="button"]:hover {
+  transform: translateY(-1px);
+}
+
+button:active, [role="button"]:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.1s;
 }
 
 /* Focus states - Pastel style */
@@ -1910,4 +2173,92 @@ textarea:focus-visible {
   background: linear-gradient(135deg, hsl(var(--primary) / 0.9) 0%, hsl(var(--accent) / 0.75) 100%);
   color: hsl(var(--ink));
   box-shadow: 0 22px 38px hsl(var(--primary) / 0.32);
+}
+
+/* Enhanced utility classes for smooth interactions */
+.hover-lift {
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.hover-lift:hover {
+  transform: translateY(-3px) translateZ(0);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 5px 10px rgba(0, 0, 0, 0.1);
+}
+
+.click-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.click-ripple::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.click-ripple:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Enhanced scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.6), hsl(var(--secondary) / 0.6));
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.8), hsl(var(--secondary) / 0.8));
+}
+
+.ink-strong {
+  color: hsl(var(--ink));
+  font-weight: 600;
+}
+
+.ink-subtle {
+  color: hsl(var(--ink) / 0.7);
+}
+
+/* Enhanced transform utilities */
+.translateY\(-1px\) {
+  transform: translateY(-1px);
+}
+
+.translateY\(-2px\) {
+  transform: translateY(-2px);
+}
+
+.translateX\(2px\) {
+  transform: translateX(2px);
+}
+
+/* Magnetic hover effects */
+.magnetic-hover {
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: transform;
+}
+
+.magnetic-hover:hover {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.05) saturate(1.1);
 }

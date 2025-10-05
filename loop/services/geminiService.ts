@@ -1,11 +1,9 @@
 import { MASTER_PROMPT } from '../constants';
 import { knowledgeBase } from './knowledgeService';
 
-const ENV_GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim();
-const GEMINI_API_KEY = ENV_GEMINI_API_KEY;
-const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_API_URL = `${GEMINI_API_BASE_URL}/models/gemini-2.5-flash:generateContent`;
-export const isMockMode = !GEMINI_API_KEY;
+// Server-side API endpoints (no API key needed on client-side)
+const NETLIFY_FUNCTION_URL = '/.netlify/functions/gemini-api';
+export const isMockMode = false; // Always try server-side first
 
 export interface GeminiResult<T> {
   data: T | null;
@@ -146,45 +144,13 @@ const friendlyErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-// Retry utility function
-async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> {
-  let lastError: unknown;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      lastError = error;
-      if (i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
-        console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  throw lastError!;
-}
-
-// Types
-export interface GenerationRequest {
-  contents: Array<{
-    parts: Array<{ text: string }>;
-  }>;
-}
-
-export interface GenerationResponse {
-  candidates: Array<{
-    content: {
-      parts: Array<{ text: string }>;
-    };
-  }>;
-}
-
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
   try {
-    const response = await fetch(`${GEMINI_API_BASE_URL}/models?key=${GEMINI_API_KEY}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'listModels' })
     });
 
     if (!response.ok) {
@@ -192,8 +158,12 @@ export const listModels = async (): Promise<any> => {
       throw new Error(`ListModels API request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    const data = await response.json();
-    return data;
+    const result = await response.json();
+    if (result.success) {
+      return result.data;
+    } else {
+      throw new Error(result.error || 'Unknown error');
+    }
   } catch (error: unknown) {
     console.error('ListModels API Error:', error);
     if (error instanceof Error) {
@@ -230,41 +200,33 @@ export const generateSandboxResponse = async (
 
   const fullPrompt = `${systemPrompt}\n\nConversation History:\n${historyText}\n\nUser: ${userMessage}\nAssistant:`;
 
-  if (isMockMode) {
-    return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
-  }
-
   try {
-    const data = await retryApiCall(async () => {
-      const request: GenerationRequest = {
-        contents: [{
-          parts: [{ text: fullPrompt }]
-        }]
-      };
-
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const json: GenerationResponse = await response.json();
-      return json.candidates[0]?.content.parts[0]?.text?.trim() ?? '';
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'generateContent', 
+        prompt: fullPrompt 
+      })
     });
 
-    if (!data) {
-      return createResult(null, 'Gemini returned an empty response. Try adjusting your prompt and running it again.', false);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    return createResult(data, null, false);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return createResult(result.data, null, result.isMock || false);
+    } else {
+      // Fallback to mock mode if server-side fails
+      return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
+    }
   } catch (error: unknown) {
-    const message = friendlyErrorMessage(error, 'We hit a snag connecting to Gemini. Please verify your API key and try again.');
-    return createResult(null, message, false);
+    // Fallback to mock mode on error
+    console.warn('Server-side generation failed, falling back to mock mode:', error);
+    return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
   }
 };
 
@@ -280,10 +242,6 @@ export const generateFromWorkspace = async (
   styleRigidity: number,
   outputType: string
 ): Promise<GeminiResult<string>> => {
-  if (isMockMode) {
-    return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
-  }
-
   let systemPrompt = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}\n\nGenerate ${outputType} content based on the provided project workspace. `;
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
@@ -313,36 +271,32 @@ export const generateFromWorkspace = async (
   const fullPrompt = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
 
   try {
-    const data = await retryApiCall(async () => {
-      const request: GenerationRequest = {
-        contents: [{
-          parts: [{ text: fullPrompt }]
-        }]
-      };
-
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const json: GenerationResponse = await response.json();
-      return json.candidates[0]?.content.parts[0]?.text?.trim() ?? '';
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'generateContent', 
+        prompt: fullPrompt 
+      })
     });
 
-    if (!data) {
-      return createResult(null, 'Gemini returned an empty workspace response. Please try again with refreshed inputs.', false);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    return createResult(data, null, false);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return createResult(result.data, null, result.isMock || false);
+    } else {
+      // Fallback to mock mode if server-side fails
+      return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
+    }
   } catch (error: unknown) {
-    const message = friendlyErrorMessage(error, 'Unable to generate from the workspace right now. Double-check your Gemini setup and retry.');
-    return createResult(null, message, false);
+    // Fallback to mock mode on error
+    console.warn('Server-side workspace generation failed, falling back to mock mode:', error);
+    return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
   }
 };
 
@@ -353,10 +307,6 @@ export const runBuild = async (
   tagWeights: Record<string, number>,
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
-  if (isMockMode) {
-    return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
-  }
-
   let systemPrompt = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}\n\nProcess the ${buildType} build with the provided answers. Use knowledge base to inform your output. `;
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
@@ -379,92 +329,78 @@ export const runBuild = async (
   const fullPrompt = `${systemPrompt}\n\nAnswers:\n${answersText}\n\nSandbox Context:\n${sandboxText}\n\nGenerate ${buildType} output:`;
 
   try {
-    const data = await retryApiCall(async () => {
-      const request: GenerationRequest = {
-        contents: [{
-          parts: [{ text: fullPrompt }]
-        }]
-      };
-
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const json: GenerationResponse = await response.json();
-      return json.candidates[0]?.content.parts[0]?.text?.trim() ?? '';
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'generateContent', 
+        prompt: fullPrompt 
+      })
     });
 
-    if (!data) {
-      return createResult(null, `Gemini returned an empty ${buildType} build response. Try again in a moment.`, false);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    return createResult(data, null, false);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return createResult(result.data, null, result.isMock || false);
+    } else {
+      // Fallback to mock mode if server-side fails
+      return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
+    }
   } catch (error: unknown) {
-    const message = friendlyErrorMessage(error, `We couldn't finish the ${buildType} build. Check your Gemini credentials and retry.`);
-    return createResult(null, message, false);
+    // Fallback to mock mode on error
+    console.warn('Server-side build failed, falling back to mock mode:', error);
+    return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
   }
 };
 
 export const generateImageFromPrompt = async (prompt: string): Promise<GeminiResult<string>> => {
-  const IMAGEN_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict';
+  const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
-  if (isMockMode) {
+  try {
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'generateImage', 
+        prompt: enhancedPrompt 
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return createResult(result.data, null, result.isMock || false);
+    } else {
+      // Fallback to mock mode if server-side fails
+      const mockCaption = [
+        `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
+        'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
+        `Prompt captured: ${prompt}`,
+        '',
+        'Swap in a valid API key to stream real renders.'
+      ].join('\n');
+      return createResult(JSON.stringify({ prompt, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
+    }
+  } catch (error: unknown) {
+    // Fallback to mock mode on error
+    console.warn('Server-side image generation failed, falling back to mock mode:', error);
     const mockCaption = [
       `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
-      'Gemini image generation is offline, so here’s a placeholder tile for quick comps.',
+      'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
       `Prompt captured: ${prompt}`,
       '',
       'Swap in a valid API key to stream real renders.'
     ].join('\n');
     return createResult(JSON.stringify({ prompt, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
-  }
-
-  const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
-
-  try {
-    const base64Image = await retryApiCall(async () => {
-      const request = {
-        prompt: {
-          text: enhancedPrompt
-        },
-        sampleCount: 1,
-        outputOptions: {
-          mimeType: 'image/png'
-        }
-      };
-
-      const response = await fetch(`${IMAGEN_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Image API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      if (data.predictions && data.predictions.length > 0) {
-        return data.predictions[0].bytesBase64Encoded as string;
-      }
-      throw new Error('No image returned from model');
-    });
-
-    if (!base64Image) {
-      return createResult(null, 'Gemini returned an empty image payload. Try again with a tweaked prompt.', false);
-    }
-
-    return createResult(base64Image, null, false);
-  } catch (error: unknown) {
-    const message = friendlyErrorMessage(error, 'Image generation is unavailable right now. Confirm your Gemini configuration and retry.');
-    return createResult(null, message, false);
   }
 };

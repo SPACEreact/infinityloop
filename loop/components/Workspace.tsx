@@ -834,8 +834,8 @@ const AssetDetailsPanel = ({
           </div>
         </div>
 
-        <div className="text-xs ink-subtle">
-          Created: {asset.createdAt.toLocaleDateString()}
+        <div className="text-xs ink-subtle mt-1">
+          Asset ID: {asset.seedId.slice(0, 12)}...
         </div>
       </div>
     </aside>
@@ -885,20 +885,7 @@ const ControlPanel = ({
             border: '2px solid #ccc'
           }}
         >
-          Save
-        </button>
-
-        <button
-          onClick={onOpenOutput}
-          className="w-full cta-button py-3 px-4 shadow-lg transform hover:scale-105 transition-all duration-200"
-          style={{
-            background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-            boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-            border: '2px solid #ccc'
-          }}
-        >
-          <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" />
-          Output Panel
+          Save Project
         </button>
 
         <div className="border-t border-white/20 pt-4 space-y-3">
@@ -913,7 +900,6 @@ const ControlPanel = ({
               border: '2px solid #ccc'
             }}
           >
-            <DocumentTextIcon className="w-5 h-5" />
             Reference Library
           </button>
 
@@ -926,7 +912,6 @@ const ControlPanel = ({
               border: '2px solid #ccc'
             }}
           >
-            <QuestionMarkCircleIcon className="w-5 h-5" />
             Help & Guide
           </button>
 
@@ -939,7 +924,6 @@ const ControlPanel = ({
               border: '2px solid #ccc'
             }}
           >
-            <Cog6ToothIcon className="w-5 h-5" />
             API Configuration
           </button>
         </div>
@@ -1059,13 +1043,10 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                 />
               ))}
             </div>
-            <div>
-              <h3 className="font-semibold ink-strong">{asset.name}</h3>
-              <p className="text-sm ink-subtle">{asset.type.replace('_', ' ')}</p>
+            <div className="flex-1">
+              <h3 className="font-semibold ink-strong text-base">{asset.name}</h3>
+              <p className="text-sm ink-subtle capitalize">{asset.type.replace('_', ' ')}</p>
             </div>
-          </div>
-          <div className="text-xs ink-subtle">
-            {asset.createdAt.toLocaleDateString()}
           </div>
         </div>
         {asset.summary && (
@@ -1102,42 +1083,102 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
         <div className="flex justify-center md:justify-center relative">
           <div className="group inline-flex items-center gap-4">
             {/* Left dropdown for Story */}
-            <div className="relative">
+            <div className="relative group/story">
               <button
                 className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
                 style={{ backgroundColor: '#FFFACD', color: '#8B7355', border: '3px solid #F0E68C' }}
                 onClick={() => onGenerateOutput('story')}
               >
-                <MagicWandIcon className="w-5 h-5" />
                 Generate Story
               </button>
+              
+              {/* Hover popup for Story */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover/story:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                <div className="bg-gray-900/95 backdrop-blur-sm text-white text-xs rounded-lg p-3 shadow-xl border border-white/10 whitespace-nowrap">
+                  <div className="font-medium mb-1">Story Generation</div>
+                  <div className="text-gray-300">Creates master story assets from your inputs</div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900/95 rotate-45 border-r border-b border-white/10"></div>
+                </div>
+              </div>
             </div>
 
-            {/* Center button - 3D effect */}
-            <button
-              className="timeline-action px-6 py-3 text-base font-bold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
-              style={{
-                background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-                boxShadow: '0 12px 24px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.9)',
-                border: '3px solid #bbb',
-                filter: 'drop-shadow(4px 4px 0 rgba(0,0,0,0.4)) contrast(1.2)'
-              }}
-              onClick={onGenerate}
-            >
-              <MagicWandIcon className="w-6 h-6" />
-              GENERATE ALL
-            </button>
+            {/* Center button - 3D effect with enhanced hover */}
+            <div className="relative group/generate">
+              <button
+                className="timeline-action px-6 py-3 text-base font-bold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+                style={{
+                  background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
+                  boxShadow: '0 12px 24px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.9)',
+                  border: '3px solid #bbb',
+                  filter: 'drop-shadow(4px 4px 0 rgba(0,0,0,0.4)) contrast(1.2)'
+                }}
+                onClick={onGenerate}
+              >
+                <MagicWandIcon className="w-6 h-6" />
+                GENERATE ALL
+              </button>
+              
+              {/* Enhanced hover popup for Generate All */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover/generate:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                <div className="bg-gradient-to-br from-purple-900/95 to-blue-900/95 backdrop-blur-sm text-white text-xs rounded-lg p-4 shadow-2xl border border-white/20 min-w-48">
+                  <div className="font-bold mb-2 text-sm">🎬 Master Generation</div>
+                  <div className="space-y-1 text-gray-200">
+                    <div>• Processes all timeline assets</div>
+                    <div>• Creates master story & visual</div>
+                    <div>• Applies AI-powered enhancement</div>
+                    <div>• Optimizes for next workflow steps</div>
+                  </div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-3 h-3 bg-purple-900/95 rotate-45 border-r border-b border-white/20"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sleek Output Button - Positioned elegantly */}
+            <div className="relative group/output">
+              <button
+                onClick={() => setIsOutputModalOpen(true)}
+                className="timeline-action px-4 py-2.5 text-sm font-semibold flex items-center gap-2 shadow-lg transform hover:scale-110 transition-all duration-300 group"
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  color: 'white',
+                  borderRadius: '12px'
+                }}
+                title="View Final Outputs"
+              >
+                <SparklesIcon className="w-4 h-4 group-hover:animate-pulse" />
+                Output
+              </button>
+              
+              {/* Hover popup for Output */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover/output:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                <div className="bg-gradient-to-br from-indigo-900/95 to-purple-900/95 backdrop-blur-sm text-white text-xs rounded-lg p-3 shadow-xl border border-white/20 whitespace-nowrap">
+                  <div className="font-medium mb-1">✨ Final Outputs</div>
+                  <div className="text-gray-200">View and manage all generated content</div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-indigo-900/95 rotate-45 border-r border-b border-white/20"></div>
+                </div>
+              </div>
+            </div>
 
             {/* Right dropdown for Image */}
-            <div className="relative">
+            <div className="relative group/visual">
               <button
                 className="timeline-action px-4 py-2.5 text-sm font-semibold md:text-base md:px-5 md:py-3 flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
                 style={{ backgroundColor: '#E0F6FF', color: '#4682B4', border: '3px solid #B0E0E6' }}
                 onClick={() => onGenerateOutput('image')}
               >
-                <MagicWandIcon className="w-5 h-5" />
                 Generate Visual
               </button>
+              
+              {/* Hover popup for Visual */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover/visual:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                <div className="bg-gray-900/95 backdrop-blur-sm text-white text-xs rounded-lg p-3 shadow-xl border border-white/10 whitespace-nowrap">
+                  <div className="font-medium mb-1">Visual Generation</div>
+                  <div className="text-gray-300">Creates master visual style assets</div>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900/95 rotate-45 border-r border-b border-white/10"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1255,7 +1296,6 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
               color: '#2E8B57' 
             }}
           >
-            <MagicWandIcon className="w-4 h-4 mr-1" />
             Create Shots
           </button>
         </div>
@@ -1448,7 +1488,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
 
   // New function to create multi-shot asset from selected master story assets
-  const createMultiShotAsset = (numberOfShots: number, shotType: string) => {
+  const createMultiShotAsset = (numberOfShots: number, shotType: string, shotDetails?: any) => {
     if (selectedStoryAssets.length === 0) {
       setToastState({
         id: crypto.randomUUID(),
@@ -1460,11 +1500,12 @@ const Workspace: React.FC<WorkspaceProps> = ({
 
     const masterStories = project.assets.filter(asset => selectedStoryAssets.includes(asset.id));
     
-    // Create structured content with configuration
+    // Create structured content with enhanced configuration
     const structuredContent = {
       configuration: {
         numberOfShots,
         shotType,
+        shotDetails: shotDetails || {},
         totalScenes: masterStories.length,
         totalShots: masterStories.length * numberOfShots
       },
@@ -1475,7 +1516,17 @@ const Workspace: React.FC<WorkspaceProps> = ({
         seedId: asset.seedId,
         shotConfiguration: {
           count: numberOfShots,
-          type: shotType
+          type: shotType,
+          details: shotDetails || {},
+          shots: Array.from({ length: numberOfShots }, (_, shotIndex) => ({
+            shotNumber: shotIndex + 1,
+            shotType: shotType === 'mixed' ? 
+              ['wide', 'medium', 'closeup'][shotIndex % 3] : shotType,
+            duration: shotDetails?.duration || '3-5 seconds',
+            cameraMovement: shotDetails?.cameraMovement || 'static',
+            lightingStyle: shotDetails?.lightingStyle || 'natural',
+            description: shotDetails?.shotDescription || ''
+          }))
         }
       }))
     };
@@ -1486,18 +1537,32 @@ const Workspace: React.FC<WorkspaceProps> = ({
 Configuration:
 - Number of Shots per Scene: ${numberOfShots}
 - Shot Type: ${shotType.replace('_', ' ')}
+${shotDetails?.duration ? `- Duration per Shot: ${shotDetails.duration}` : ''}
+${shotDetails?.cameraMovement ? `- Camera Movement: ${shotDetails.cameraMovement.replace('_', ' ')}` : ''}
+${shotDetails?.lightingStyle ? `- Lighting Style: ${shotDetails.lightingStyle.replace('_', ' ')}` : ''}
 - Total Scenes: ${masterStories.length}
 - Total Shots to Generate: ${masterStories.length * numberOfShots}
+${shotDetails?.shotDescription ? `
+Custom Instructions:
+${shotDetails.shotDescription}` : ''}
 
 Scenes:
 ${masterStories.map((asset, index) => `
 Scene ${index + 1}: ${asset.name}
 ${'-'.repeat(50)}
 ${asset.content}
-`).join('\n')}
+
+Shot Breakdown:
+${Array.from({ length: numberOfShots }, (_, shotIndex) => {
+  const currentShotType = shotType === 'mixed' ? 
+    ['Wide Shot', 'Medium Shot', 'Close-up'][shotIndex % 3] : 
+    shotType.replace('_', ' ');
+  return `  Shot ${shotIndex + 1}: ${currentShotType} - ${shotDetails?.duration || '3-5 seconds'}`;
+}).join('\n')}
+`).join('')}
 
 Shot Configuration:
-Each scene will be broken down into ${numberOfShots} ${shotType.replace('_', ' ')} shot(s).
+Each scene will be broken down into ${numberOfShots} ${shotType.replace('_', ' ')} shot(s) with the specified technical parameters.
 `;
 
     const combinedTags = Array.from(new Set(masterStories.flatMap(a => a.tags)));
@@ -1505,12 +1570,12 @@ Each scene will be broken down into ${numberOfShots} ${shotType.replace('_', ' '
     const multiShotAsset: Asset = {
       id: crypto.randomUUID(),
       seedId: crypto.randomUUID(),
-      type: 'multi_shot',
-      name: `Multi-Shot (${masterStories.length} scenes, ${numberOfShots} shots each)`,
+      type: 'master_story',
+      name: `Multi-Shot: ${masterStories.length} scenes × ${numberOfShots} ${shotType.replace('_', ' ')} shots`,
       content: contentString,
-      tags: combinedTags,
+      tags: [...combinedTags, 'multi_shot', shotType, ...(shotDetails?.lightingStyle ? [shotDetails.lightingStyle] : []), ...(shotDetails?.cameraMovement ? [shotDetails.cameraMovement] : [])],
       createdAt: new Date(),
-      summary: `Multi-shot configuration: ${masterStories.length} scenes with ${numberOfShots} ${shotType.replace('_', ' ')} shots each (${masterStories.length * numberOfShots} total shots)`,
+      summary: `Multi-shot configuration: ${masterStories.length} scenes with ${numberOfShots} ${shotType.replace('_', ' ')} shots each (${masterStories.length * numberOfShots} total shots)${shotDetails?.duration ? ` - ${shotDetails.duration} duration` : ''}`,
       isMaster: true,
       lineage: masterStories.map(a => a.id),
       metadata: structuredContent
@@ -2248,9 +2313,9 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 px-4 py-4 lg:px-6 lg:py-6">
-        <div className="flex h-full min-h-0 flex-col gap-6 lg:flex-row">
-          <div className="flex-shrink-0 w-full lg:w-[19rem]">
+      <div className="flex-1 min-h-0 px-6 py-6 lg:px-8 lg:py-8">
+        <div className="flex h-full min-h-0 flex-col gap-8 lg:flex-row">
+          <div className="flex-shrink-0 w-full lg:w-[20rem]">
             <div className="h-full min-h-0">
               <AssetLibraryPanel 
                 onAddAsset={handleAssetDropOnTimeline}
@@ -2258,7 +2323,7 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
             </div>
           </div>
 
-          <div className="min-h-0 h-full flex-1 flex flex-col overflow-y-auto custom-scrollbar lg:mr-[20rem]">
+          <div className="min-h-0 h-full flex-1 flex flex-col overflow-y-auto custom-scrollbar lg:mr-[21rem]">
             <div className="flex h-full min-h-0 w-full">
               <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="flex-1 min-h-0 flex flex-col">
@@ -2312,41 +2377,44 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
             </div>
           </div>
 
-          <div className="flex-shrink-0 w-full lg:fixed lg:right-6 lg:top-[14rem] lg:bottom-6 lg:w-[19rem] h-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
-            {selectedAssetId && (
-              <div className="flex-shrink-0 max-h-128 overflow-hidden">
-                <AssetDetailsPanel
-                  selectedAssetId={selectedAssetId}
-                  project={project}
-                  onUpdateAsset={handleUpdateAsset}
-                  onDeleteAsset={handleRequestDeleteAsset}
-                  onClose={() => setSelectedAssetId(null)}
-                  onRequestSuggestion={handleRequestFieldSuggestion}
+          <div className="flex-shrink-0 w-full lg:fixed lg:right-8 lg:top-[14rem] lg:bottom-8 lg:w-[20rem] h-full">
+            <div className="h-full overflow-y-auto custom-scrollbar">
+              <div className="space-y-8 pb-8">
+              {selectedAssetId && (
+                <div className="flex-shrink-0">
+                  <AssetDetailsPanel
+                    selectedAssetId={selectedAssetId}
+                    project={project}
+                    onUpdateAsset={handleUpdateAsset}
+                    onDeleteAsset={handleRequestDeleteAsset}
+                    onClose={() => setSelectedAssetId(null)}
+                    onRequestSuggestion={handleRequestFieldSuggestion}
+                  />
+                </div>
+              )}
+
+              <div className="flex-shrink-0">
+                <FinalInputsPanel assets={project.assets} />
+              </div>
+
+              <div className="flex-shrink-0">
+                <ControlPanel
+                  tagWeights={_tagWeights}
+                  onTagWeightChange={_onTagWeightChange}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  onSyncAssetsToMcp={syncAssetsToMcp}
+                  isMcpLoading={isMcpLoading}
+                  onOpenReference={() => setIsReferenceViewerOpen(true)}
+                  onOpenHelp={() => setIsUserGuideOpen(true)}
+                  onOpenApi={() => setIsApiConfigOpen(true)}
+                  onOpenOutput={() => setIsOutputModalOpen(true)}
                 />
               </div>
-            )}
-
-            <div className="flex-shrink-0 h-80 overflow-hidden">
-              <FinalInputsPanel assets={project.assets} />
-            </div>
-
-            <div className="min-h-0 flex-1">
-              <ControlPanel
-                tagWeights={_tagWeights}
-                onTagWeightChange={_onTagWeightChange}
-                onGenerate={handleGenerate}
-                isGenerating={isGenerating}
-                onSyncAssetsToMcp={syncAssetsToMcp}
-                isMcpLoading={isMcpLoading}
-                onOpenReference={() => setIsReferenceViewerOpen(true)}
-                onOpenHelp={() => setIsUserGuideOpen(true)}
-                onOpenApi={() => setIsApiConfigOpen(true)}
-                onOpenOutput={() => setIsOutputModalOpen(true)}
-              />
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {isReferenceViewerOpen && (
         <React.Suspense
@@ -2460,6 +2528,7 @@ The visual style from "${masterImageAsset.name}" will be applied to all shots in
         onDismiss={handleDismissToast}
         onUndo={toastState?.allowUndo ? handleUndoDelete : undefined}
       />
+    </div>
     </div>
   );
 };

@@ -82,8 +82,11 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
     }
   };
 
-  // Filter for multi-shot assets and master_image assets
-  const multiShotAssets = assets.filter(asset => asset.type === 'multi_shot');
+  // Filter for multi-shot assets (now using master_story with multi-shot tags) and master_image assets
+  const multiShotAssets = assets.filter(asset => 
+    (asset.type === 'master_story' && asset.tags?.includes('multi_shot')) || 
+    asset.type === 'multi_shot'
+  );
   const masterImageAssets = assets.filter(asset => asset.type === 'master_image' && asset.isMaster);
 
   const selectedMultiShotAssets = assets.filter(asset => selectedMultiShots.includes(asset.id));
@@ -136,7 +139,7 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
                     <div className="flex-1">
                       <div className="font-medium ink-strong">{asset.name}</div>
                       <div className="text-xs ink-subtle mt-1">
-                        Seed: {asset.seedId.slice(0, 8)}... | Type: {asset.type}
+                        Seed: {asset.seedId.slice(0, 8)}... | Shots: {asset.metadata?.configuration?.totalShots || 'N/A'}
                       </div>
                       {asset.summary && (
                         <div className="text-xs ink-subtle mt-2 p-2 bg-white/5 rounded">
@@ -198,9 +201,12 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
                   <strong>Multi-Shot Assets Selected:</strong> {selectedMultiShotAssets.length}
                   {selectedMultiShotAssets.length > 0 && (
                     <ul className="mt-1 ml-4 space-y-1">
-                      {selectedMultiShotAssets.map(asset => (
-                        <li key={asset.id} className="text-xs">• {asset.name}</li>
-                      ))}
+                      {selectedMultiShotAssets.map(asset => {
+                        const totalShots = asset.metadata?.configuration?.totalShots || 0;
+                        return (
+                          <li key={asset.id} className="text-xs">• {asset.name} ({totalShots} shots)</li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
