@@ -136,9 +136,16 @@ const createMockBuildResponse = (
 
 const friendlyErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) {
+    // Handle rate limiting specifically
+    if (error.message.includes('429') || error.message.includes('rate limit')) {
+      return 'Rate limit exceeded. Please wait a moment before trying again.';
+    }
     return `${fallback} (${error.message})`;
   }
   if (typeof error === 'string') {
+    if (error.includes('429') || error.includes('rate limit')) {
+      return 'Rate limit exceeded. Please wait a moment before trying again.';
+    }
     return `${fallback} (${error})`;
   }
   return fallback;

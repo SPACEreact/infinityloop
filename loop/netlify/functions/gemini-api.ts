@@ -4,6 +4,24 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_API_URL = `${GEMINI_API_BASE_URL}/models/gemini-1.5-flash:generateContent`;
 
+// Rate limiting: simple in-memory store (for serverless, consider Redis for production)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
+
+// Input validation
+const MAX_PROMPT_LENGTH = 10000; // characters
+const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
+
+// Security headers
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com;",
+};
+
 export interface GenerationRequest {
   contents: Array<{
     parts: Array<{ text: string }>;
@@ -37,12 +55,55 @@ async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 10
 }
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+  // Validate API key on startup
+  if (!GEMINI_API_KEY) {
+    console.error('GEMINI_API_KEY environment variable is not set');
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        ...SECURITY_HEADERS
+      },
+      body: JSON.stringify({ error: 'Service configuration error' })
+    };
+  }
+
+  // Get client IP for rate limiting
+  const clientIP = event.headers['x-forwarded-for'] || event.headers['x-real-ip'] || 'unknown';
+
+  // Rate limiting check
+  const now = Date.now();
+  const rateLimitKey = clientIP as string;
+  const currentLimit = rateLimitStore.get(rateLimitKey);
+
+  if (currentLimit) {
+    if (now > currentLimit.resetTime) {
+      // Reset the limit
+      rateLimitStore.set(rateLimitKey, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    } else if (currentLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
+      const retryAfter = Math.ceil((currentLimit.resetTime - now) / 1000);
+      return {
+        statusCode: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': retryAfter.toString()
+        },
+        body: JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' })
+      };
+    } else {
+      currentLimit.count++;
+    }
+  } else {
+    rateLimitStore.set(rateLimitKey, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+  }
+
   // Handle CORS
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    ...SECURITY_HEADERS
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -70,7 +131,19 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
+    // Check request size
+    if (event.body.length > MAX_REQUEST_SIZE) {
+      return {
+        statusCode: 413,
+        headers,
+        body: JSON.stringify({ error: 'Request too large' })
+      };
+    }
+
     const { action, ...requestData } = JSON.parse(event.body);
+
+    // Log request for monitoring (without sensitive data)
+    console.log(`[${new Date().toISOString()}] ${event.httpMethod} ${event.path} - Action: ${action} - IP: ${clientIP}`);
 
     switch (action) {
       case 'generateContent': {

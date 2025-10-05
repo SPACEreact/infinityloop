@@ -5,3 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "20.19"
+
+# Environment variables for API integrations
+# GEMINI_API_KEY: Your Google Gemini API key (set in Netlify dashboard)
+# This key is used securely in serverless functions and never exposed to the frontend
