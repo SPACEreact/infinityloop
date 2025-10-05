@@ -2,7 +2,7 @@
 export interface Asset {
   id: string;
   seedId: string; // Core lineage identifier (e.g., "A", "A.1", "A.1.3")
-  type: 'primary' | 'secondary' | 'tertiary' | 'master_story' | 'master_image' | 'master_video' | 'shot';
+  type: 'primary' | 'secondary' | 'tertiary' | 'master_story' | 'master_image' | 'master_video' | 'shot' | 'multi_shot' | 'batch_style';
   name: string;
   content: string;
   tags: string[];
@@ -15,6 +15,54 @@ export interface Asset {
   outputs?: string[]; // Generated drafts, prompts
   isMaster?: boolean; // Flag for master assets
   lineage?: string[]; // Array of asset IDs that contributed to this asset
+  // Enhanced multi-shot properties
+  shotCount?: number; // Number of shots in multi-shot asset
+  shotType?: string; // Type of shots (mixed, wide, close-up, etc.)
+  shotDetails?: ShotDetails; // Detailed shot configuration
+  inputData?: StructuredInputData; // Structured paragraph data
+  individualShots?: IndividualShot[]; // Array of individual shot configurations
+}
+
+// Enhanced shot configuration types
+export interface ShotDetails {
+  duration: string;
+  cameraMovement: string;
+  focusType: string;
+  lightingStyle: string;
+  shotDescription: string;
+  framing?: string;
+  cameraAngle?: string;
+  lensType?: string;
+  colorGrading?: string;
+}
+
+// Individual shot configuration for per-shot customization
+export interface IndividualShot {
+  id: string;
+  shotNumber: number;
+  shotType: string;
+  description: string;
+  duration: string;
+  cameraMovement: string;
+  cameraAngle: string;
+  lensType: string;
+  lightingStyle: string;
+  framing: string;
+  colorGrading?: string;
+  notes?: string;
+}
+
+// Structured input data for comprehensive shot planning
+export interface StructuredInputData {
+  sceneDescription: string;
+  characterDetails: string;
+  locationDetails: string;
+  moodAndTone: string;
+  keyMoments: string[];
+  visualStyle: string;
+  narrativePurpose: string;
+  cinematicReferences?: string;
+  specificInstructions?: string;
 }
 
 // Timeline Block Interface
@@ -32,6 +80,7 @@ export interface PrimaryTimeline {
   folders: {
     story: TimelineBlock[];
     image: TimelineBlock[];
+    text_to_video: TimelineBlock[];
   };
   outputDraft?: string; // Generated draft from Output Node
 }
@@ -47,6 +96,7 @@ export interface SecondaryTimeline {
 export interface ThirdTimeline {
   styledShots: Asset[]; // Shots numbered by story flow
   videoPrompts: string[]; // Generated video prompts for shots
+  batchStyleAssets?: Asset[]; // Batch-styled assets
 }
 
 // Fourth Timeline (Director's Advice)

@@ -25,10 +25,10 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
 
   const tabs = [
     { id: 'getting-started', label: 'Meet Loop', icon: '🌈' },
-    { id: 'builds', label: 'Guided Modes', icon: '🪄' },
-    { id: 'timeline', label: 'Timelines', icon: '🧵' },
-    { id: 'assets', label: 'Sidebars & Assets', icon: '🗂️' },
-    { id: 'ai-chat', label: 'AI Studio', icon: '🤖' }
+    { id: 'workflow', label: 'Workflow', icon: '🎬' },
+    { id: 'timeline', label: 'Timeline System', icon: '🧵' },
+    { id: 'assets', label: 'Assets & Tools', icon: '🗂️' },
+    { id: 'ai-chat', label: 'AI Assistant', icon: '🤖' }
   ];
 
   const renderTabContent = () => {
@@ -39,12 +39,13 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
             <div className="space-y-3">
               <h3 className="text-xl font-bold ink-strong">Welcome to Loop</h3>
               <p className="ink-subtle leading-relaxed">
-                Loop is the pastel glass workspace for cinematic builders. Glide between timelines, curated sidebars, and an adaptive AI studio to spin ideas into master assets while the brand keeps everything feeling light, luminous, and precise.
+                Loop is an advanced filmmaking workflow platform that guides you from story conception to final styled outputs. Create, organize, and enhance your cinematic projects with AI-powered assistance and intelligent asset propagation.
               </p>
               <div className="flex flex-wrap gap-2">
-                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Pastel Glass UI</span>
-                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Dual Timelines</span>
-                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">AI Knowledge Chips</span>
+                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Multi-Shot Creation</span>
+                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Batch Styling</span>
+                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Timeline Workflow</span>
+                <span className="badge-accent px-3 py-1 text-[0.65rem] uppercase tracking-[0.2em]">Smart Asset Flow</span>
               </div>
             </div>
 
@@ -69,6 +70,77 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
                   Choose a chat theme that matches your creative vibe and tap the shimmering knowledge suggestions under the composer to instantly load context-rich prompts.
                 </p>
               </div>
+            </div>
+          </div>
+        );
+
+      case 'workflow':
+        return (
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h3 className="text-xl font-bold ink-strong">Complete Filmmaking Workflow</h3>
+              <p className="ink-subtle leading-relaxed">
+                Loop guides you through a complete filmmaking workflow from initial story concepts to final styled outputs ready for video generation.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="panel-section p-4 space-y-2">
+                <h5 className="font-semibold ink-strong text-base flex items-center gap-2">
+                  <span className="w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                  Scene Creation
+                </h5>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Drag story and visual assets from the library to build your scene foundation. Create characters, plot points, and visual elements.
+                </p>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h5 className="font-semibold ink-strong text-base flex items-center gap-2">
+                  <span className="w-6 h-6 bg-blue-400 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                  Master Asset Generation
+                </h5>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Generate master story and master visual assets from your scene inputs. These serve as the foundation for multi-shot creation.
+                </p>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h5 className="font-semibold ink-strong text-base flex items-center gap-2">
+                  <span className="w-6 h-6 bg-purple-400 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                  Multi-Shot Creation
+                </h5>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Break down your master story into multiple shots with specific camera angles, movements, and timing. Configure shot types, duration, and cinematographic details.
+                </p>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h5 className="font-semibold ink-strong text-base flex items-center gap-2">
+                  <span className="w-6 h-6 bg-green-400 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                  Batch Style Application
+                </h5>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Apply your master visual style to all multi-shot sequences in one operation. Create consistent visual styling across all shots.
+                </p>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h5 className="font-semibold ink-strong text-base flex items-center gap-2">
+                  <span className="w-6 h-6 bg-indigo-400 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
+                  Final Output
+                </h5>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Access all final styled outputs through the elegant Output button. Export and manage your production-ready assets.
+                </p>
+              </div>
+            </div>
+
+            <div className="panel-section p-4 space-y-2 bg-gradient-to-r from-blue-50/30 to-purple-50/30">
+              <h4 className="font-semibold ink-strong">🎯 Pro Tip</h4>
+              <p className="text-sm ink-subtle leading-relaxed">
+                Use the AI Assistant's Timeline Workflow feature to get guided help at each step. Click the magic wand icon in the chat to access smart suggestions based on your current progress.
+              </p>
             </div>
           </div>
         );
@@ -129,34 +201,78 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
         return (
           <div className="space-y-6">
             <div className="space-y-3">
-              <h3 className="text-xl font-bold ink-strong">Timelines</h3>
+              <h3 className="text-xl font-bold ink-strong">Four-Timeline System</h3>
               <p className="ink-subtle leading-relaxed">
-                Every project flows through layered timelines. Use the pastel tabs above the canvas to hop between Primary seeds, Master assemblies, Styling sweeps, and Director suggestions.
+                Loop uses a sophisticated four-timeline system to organize your filmmaking workflow from initial concepts to final outputs.
               </p>
             </div>
 
-            <div className="panel-section p-4 space-y-3">
-              <h4 className="text-lg font-semibold ink-strong">Primary Timeline (Seed Loop)</h4>
-              <ul className="space-y-2 ink-subtle leading-relaxed text-sm list-disc list-inside">
-                <li><strong className="ink-strong">Drop:</strong> drag chips from the Asset Library or complete a guided mode.</li>
-                <li><strong className="ink-strong">Expand:</strong> click a block to open the chat editor with contextual suggestions.</li>
-                <li><strong className="ink-strong">Promote:</strong> use the floating action to lock in a Master asset when it feels right.</li>
-              </ul>
+            <div className="space-y-4">
+              <div className="panel-section p-4 space-y-3" style={{ backgroundColor: 'rgba(255, 182, 193, 0.1)' }}>
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span className="w-6 h-6 bg-pink-400 text-white rounded-full flex items-center justify-center text-xs">1</span>
+                  Scene Timeline
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  The foundation timeline where you build your scenes by dragging story and visual assets from the library. Organize characters, plot points, and visual elements.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Drag assets from the Asset Library</li>
+                  <li>Combine story and visual elements</li>
+                  <li>Generate master assets using the Generate buttons</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-3" style={{ backgroundColor: 'rgba(230, 230, 250, 0.1)' }}>
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span className="w-6 h-6 bg-purple-400 text-white rounded-full flex items-center justify-center text-xs">2</span>
+                  Multi-Shot Timeline
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Break down your master story assets into detailed multi-shot sequences with specific cinematographic parameters.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Create multi-shot assets from master stories</li>
+                  <li>Configure shot types, duration, and camera movement</li>
+                  <li>Set lighting styles and cinematographic details</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-3" style={{ backgroundColor: 'rgba(152, 251, 152, 0.1)' }}>
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span className="w-6 h-6 bg-green-400 text-white rounded-full flex items-center justify-center text-xs">3</span>
+                  Batch Style Timeline
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Apply consistent visual styling by combining multi-shot sequences with master visual assets in batch operations.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Select multiple multi-shot assets</li>
+                  <li>Choose a master visual style</li>
+                  <li>Apply styling to all shots at once</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-3" style={{ backgroundColor: 'rgba(255, 218, 185, 0.1)' }}>
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span className="w-6 h-6 bg-orange-400 text-white rounded-full flex items-center justify-center text-xs">4</span>
+                  Director's Advice Timeline
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Receive intelligent suggestions for editing, pacing, transitions, and other directorial decisions.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Get AI-powered directorial suggestions</li>
+                  <li>Review editing and pacing recommendations</li>
+                  <li>Accept or dismiss individual suggestions</li>
+                </ul>
+              </div>
             </div>
 
-            <div className="panel-section p-4 space-y-3">
-              <h4 className="text-lg font-semibold ink-strong">Secondary Timeline (Master Loop)</h4>
-              <ul className="space-y-2 ink-subtle leading-relaxed text-sm list-disc list-inside">
-                <li>Generated Masters appear as frosted blocks—non-destructive and lineage-aware.</li>
-                <li>Trigger <strong className="ink-strong">Frame Mode</strong> continuations to spawn shot stacks under each story beat.</li>
-                <li>Use the end-cap <span className="badge-accent px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.18em]">✂️ Edit</span> button for transition and B-roll suggestions.</li>
-              </ul>
-            </div>
-
-            <div className="panel-section p-4 space-y-3">
-              <h4 className="text-lg font-semibold ink-strong">Styling & Director Timelines</h4>
-              <p className="ink-subtle leading-relaxed text-sm">
-                Apply global looks via pastel style chips, then review director notes for pacing, texture, and sound. Each adjustment respects seed IDs, so continuity stays intact across loops.
+            <div className="panel-section p-4 space-y-2 bg-gradient-to-r from-purple-50/30 to-pink-50/30">
+              <h4 className="font-semibold ink-strong">🎬 Timeline Navigation</h4>
+              <p className="text-sm ink-subtle leading-relaxed">
+                Use the colorful timeline tabs to switch between different stages of your workflow. Each timeline builds upon the previous one, creating a natural progression from concept to completion.
               </p>
             </div>
           </div>
@@ -214,29 +330,96 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
         return (
           <div className="space-y-6">
             <div className="space-y-3">
-              <h3 className="text-xl font-bold ink-strong">AI Studio</h3>
+              <h3 className="text-xl font-bold ink-strong">AI Assistant & Smart Features</h3>
               <p className="ink-subtle leading-relaxed">
-                The chat is Loop’s studio brain. Swap themes, stack knowledge suggestions, and let the assistant translate your direction into timeline-ready outputs.
+                Loop's AI assistant provides intelligent guidance throughout your filmmaking workflow with specialized tools and contextual awareness.
               </p>
             </div>
 
-            <div className="panel-section p-4 space-y-2">
-              <h4 className="text-lg font-semibold ink-strong">Studio Features</h4>
-              <ul className="space-y-2 ink-subtle leading-relaxed text-sm list-disc list-inside">
-                <li><strong className="ink-strong">Theme selector:</strong> shift the interface palette and tone for brainstorming, technical breakdowns, or director notes.</li>
-                <li><strong className="ink-strong">Knowledge suggestions:</strong> tap chips to instantly cite references, lighting setups, or narrative frameworks.</li>
-                <li><strong className="ink-strong">Mode shortcuts:</strong> Magic Wand toggles Narrative, Frame, and Style modes without leaving the chat.</li>
-                <li><strong className="ink-strong">Master iteration:</strong> use the cube icon to remix promoted assets while preserving their seed lineage.</li>
-              </ul>
+            <div className="space-y-4">
+              <div className="panel-section p-4 space-y-2">
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span role="img" aria-label="workflow">🌊</span>
+                  Timeline Workflow Assistant
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Get step-by-step guidance through the complete filmmaking workflow. The assistant tracks your progress and provides contextual suggestions.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Click the magic wand icon to start timeline workflow</li>
+                  <li>Progress tracking through story → visual → multi-shot → batch style</li>
+                  <li>Smart suggestions based on current assets</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span role="img" aria-label="iterate">🔄</span>
+                  Master Asset Iteration
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Refine and improve your master story and visual assets with guided iteration prompts.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Select master assets to iterate on</li>
+                  <li>Provide specific improvement requests</li>
+                  <li>Maintain asset lineage and connections</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span role="img" aria-label="shots">🎬</span>
+                  Shot Creation & Multi-Shot Tools
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Create detailed cinematographic breakdowns from your story assets with intelligent shot planning.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Generate multiple shots from master stories</li>
+                  <li>Configure camera angles, movements, and timing</li>
+                  <li>Apply cinematographic expertise automatically</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span role="img" aria-label="knowledge">🧠</span>
+                  Knowledge Base Integration
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Access built-in filmmaking knowledge including story structures, camera techniques, and industry best practices.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>Filmmaking terminology and techniques</li>
+                  <li>Story structure and character development</li>
+                  <li>Cinematography and visual storytelling</li>
+                </ul>
+              </div>
+
+              <div className="panel-section p-4 space-y-2">
+                <h4 className="text-lg font-semibold ink-strong flex items-center gap-2">
+                  <span role="img" aria-label="build">🏗️</span>
+                  Guided Build Modes
+                </h4>
+                <p className="text-sm ink-subtle leading-relaxed">
+                  Use structured questionnaires to build comprehensive story and visual assets with professional depth.
+                </p>
+                <ul className="space-y-1 ink-subtle text-sm list-disc list-inside ml-4">
+                  <li>StoryBuild: Complete narrative development</li>
+                  <li>ShotBuild: Detailed cinematography planning</li>
+                  <li>Step-by-step guided creation process</li>
+                </ul>
+              </div>
             </div>
 
-            <div className="panel-section p-4 space-y-2">
-              <h4 className="text-lg font-semibold ink-strong">Tips for Best Results</h4>
-              <ul className="space-y-2 ink-subtle leading-relaxed text-sm list-disc list-inside">
-                <li>Reference the timeline block ID you’re refining for precise callbacks.</li>
-                <li>Pair cinematic references (directors, lenses, palettes) with knowledge chips for high-fidelity prompts.</li>
-                <li>Ask for remix paths—Loop can suggest alternate shots, tones, or edit passes while honoring your master assets.</li>
-                <li>Use chat themes to set the tone: playful for ideation, technical for production planning.</li>
+            <div className="panel-section p-4 space-y-2 bg-gradient-to-r from-blue-50/30 to-green-50/30">
+              <h4 className="font-semibold ink-strong">💡 Smart Features</h4>
+              <ul className="space-y-1 ink-subtle text-sm list-disc list-inside">
+                <li>Context-aware suggestions based on your current workflow stage</li>
+                <li>Automatic tag suggestions and conflict detection</li>
+                <li>Asset relationship tracking and lineage management</li>
+                <li>Smart content formatting for different AI models</li>
               </ul>
             </div>
           </div>

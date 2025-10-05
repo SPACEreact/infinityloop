@@ -10,9 +10,7 @@ export const FinalInputsPanel: React.FC<FinalInputsPanelProps> = ({ assets }) =>
   const batchStyleAssets = assets.filter(asset => asset.type === 'batch_style');
   const videoPromptAssets = assets.filter(asset => asset.type === 'video_prompt');
   
-  const allFinalAssets = [...batchStyleAssets, ...videoPromptAssets].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const allFinalAssets = [...batchStyleAssets, ...videoPromptAssets];
 
   return (
     <div className="h-full flex flex-col bg-white/40 backdrop-blur-sm rounded-lg border border-white/60 shadow-lg">
@@ -68,12 +66,11 @@ export const FinalInputsPanel: React.FC<FinalInputsPanelProps> = ({ assets }) =>
                           {asset.content}
                         </div>
                       )}
-                      <div className="text-xs text-gray-500 mt-2 flex items-center gap-4">
+                      <div className="text-xs text-gray-500 mt-3 flex items-center gap-4">
                         <span>Seed: {asset.seedId.slice(0, 8)}...</span>
                         {asset.lineage && asset.lineage.length > 0 && (
                           <span>Sources: {asset.lineage.length}</span>
                         )}
-                        <span className="ml-auto">{new Date(asset.createdAt).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
@@ -108,12 +105,11 @@ export const FinalInputsPanel: React.FC<FinalInputsPanelProps> = ({ assets }) =>
                           {asset.content}
                         </div>
                       )}
-                      <div className="text-xs text-gray-500 mt-2 flex items-center gap-4">
+                      <div className="text-xs text-gray-500 mt-3 flex items-center gap-4">
                         <span>Seed: {asset.seedId.slice(0, 8)}...</span>
                         {asset.lineage && asset.lineage.length > 0 && (
                           <span>Sources: {asset.lineage.length}</span>
                         )}
-                        <span className="ml-auto">{new Date(asset.createdAt).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
