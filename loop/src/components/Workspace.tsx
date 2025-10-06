@@ -102,8 +102,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [isApiConfigOpen, setIsApiConfigOpen] = useState(false);
   const [isMultiShotModalOpen, setIsMultiShotModalOpen] = useState(false);
   const [isBatchStyleModalOpen, setIsBatchStyleModalOpen] = useState(false);
-  const [isCreateShotsModalOpen, setIsCreateShotsModalOpen] = useState(false);
-  const [selectedAssetIdForShots, setSelectedAssetIdForShots] = useState<string | null>(null);
   const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
   const [isMcpLoading, setIsMcpLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -513,11 +511,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
     });
   };
 
-  const handleCreateShots = (assetId: string) => {
-    setSelectedAssetIdForShots(assetId);
-    setIsCreateShotsModalOpen(true);
-  };
-
   const handleSyncAssetsToMcp = async () => {
     setIsMcpLoading(true);
     try {
@@ -569,15 +562,10 @@ const Workspace: React.FC<WorkspaceProps> = ({
               onGenerate={onGenerate}
               activeTimeline={activeTimeline}
               setActiveTimeline={setActiveTimeline}
-              onCreateShots={handleCreateShots}
               isWeightingEnabled={isWeightingEnabled}
               onWeightingToggle={onWeightingToggle}
               styleRigidity={styleRigidity}
               onStyleRigidityChange={onStyleRigidityChange}
-              selectedAssetIdForShots={selectedAssetIdForShots}
-              setSelectedAssetIdForShots={setSelectedAssetIdForShots}
-              isCreateShotsModalOpen={isCreateShotsModalOpen}
-              setIsCreateShotsModalOpen={setIsCreateShotsModalOpen}
               setIsOutputModalOpen={setIsOutputModalOpen}
               onOpenMultiShotModal={handleOpenMultiShotModal}
               onOpenBatchStyleModal={handleOpenBatchStyleModal}

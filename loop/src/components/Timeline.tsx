@@ -13,15 +13,10 @@ export const Timeline = ({
   onGenerate,
   activeTimeline,
   setActiveTimeline,
-  onCreateShots,
   isWeightingEnabled,
   onWeightingToggle,
   styleRigidity,
   onStyleRigidityChange,
-  selectedAssetIdForShots,
-  setSelectedAssetIdForShots,
-  isCreateShotsModalOpen,
-  setIsCreateShotsModalOpen,
   setIsOutputModalOpen,
   onOpenMultiShotModal,
   onOpenBatchStyleModal
@@ -34,15 +29,10 @@ export const Timeline = ({
   onGenerate: () => void;
   activeTimeline: 'primary' | 'secondary' | 'third' | 'fourth';
   setActiveTimeline: (timeline: 'primary' | 'secondary' | 'third' | 'fourth') => void;
-  onCreateShots: (assetId: string) => void;
   isWeightingEnabled: boolean;
   onWeightingToggle: (enabled: boolean) => void;
   styleRigidity: number;
   onStyleRigidityChange: (value: number) => void;
-  selectedAssetIdForShots: string | null;
-  setSelectedAssetIdForShots: (id: string | null) => void;
-  isCreateShotsModalOpen: boolean;
-  setIsCreateShotsModalOpen: (open: boolean) => void;
   setIsOutputModalOpen: (open: boolean) => void;
   onOpenMultiShotModal: () => void;
   onOpenBatchStyleModal: () => void;
@@ -351,24 +341,6 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                     {asset.summary && (
                       <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
                     )}
-                    <div className="flex justify-end mt-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedAssetIdForShots(asset.id);
-                          setIsCreateShotsModalOpen(true);
-                        }}
-                        className="timeline-action px-3 py-1.5 text-sm shadow-lg transform hover:scale-105 transition-all duration-200"
-                        style={{
-                          background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
-                          boxShadow: '0 4px 8px rgba(152, 251, 152, 0.3), inset 0 1px 0 rgba(255,255,255,0.8)',
-                          border: '2px solid #7AE67A',
-                          color: '#2E8B57'
-                        }}
-                      >
-                        Create Shots
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
