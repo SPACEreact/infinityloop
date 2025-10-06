@@ -245,44 +245,99 @@ export const useProject = (initialProject: Project) => {
     setIsGenerating(true);
     setToastState({ id: crypto.randomUUID(), message: 'Generating master assets...', kind: 'info' });
 
-    // This is a simplified workspace object. You might need to pass more data.
     const workspace = {
       assets: project.assets,
-      canvas: { nodes: [], connections: [] } // Placeholder for canvas data
+      canvas: { nodes: [], connections: [] }
     };
 
-    const outputType = folder === 'story' ? 'Master Story' : 'Master Visual Style';
-    const result = await generateFromWorkspace(workspace, {}, 50, outputType);
+    const runGeneration = async (target: 'story' | 'image') => {
+      const outputType = target === 'story' ? 'Master Story' : 'Master Visual Style';
+      const result = await generateFromWorkspace(workspace, {}, 50, outputType);
 
-    if (result.data && !result.error) {
-      const newMasterAsset: Asset = {
+      if (result.data && !result.error) {
+        const now = new Date();
+        const sourceFolder = target === 'story' ? 'story' : 'image';
+
+        const newMasterAsset: Asset = {
+          id: crypto.randomUUID(),
+          seedId: crypto.randomUUID(),
+          type: target === 'story' ? 'master_story' : 'master_image',
+          name: `Master ${target === 'story' ? 'Story' : 'Visual Style'}`,
+          content: result.data,
+          tags: ['master-asset', target === 'story' ? 'story' : 'visual'],
+          createdAt: now,
+          summary: `Generated master ${target === 'story' ? 'story' : 'visual style'} asset.`,
+          isMaster: true,
+          lineage: project.primaryTimeline.folders[sourceFolder as keyof typeof project.primaryTimeline.folders]?.map(block => block.assetId) || [],
+          metadata: {
+            generatedAt: now.toISOString(),
+            outputType
+          }
+        };
+
+        setProject(prev => {
+          const updatedAssets = [...prev.assets, newMasterAsset];
+
+          if (target === 'story') {
+            const existingSecondary = prev.secondaryTimeline ?? {
+              masterAssets: [],
+              shotLists: [],
+              appliedStyles: {}
+            };
+
+            return {
+              ...prev,
+              assets: updatedAssets,
+              secondaryTimeline: {
+                masterAssets: [...(existingSecondary.masterAssets || []), newMasterAsset],
+                shotLists: [...(existingSecondary.shotLists || [])],
+                appliedStyles: existingSecondary.appliedStyles
+              },
+              updatedAt: now
+            };
+          }
+
+          const existingThird = prev.thirdTimeline ?? {
+            styledShots: [],
+            videoPrompts: [],
+            batchStyleAssets: []
+          };
+
+          return {
+            ...prev,
+            assets: updatedAssets,
+            thirdTimeline: {
+              styledShots: [...(existingThird.styledShots || [])],
+              videoPrompts: [...(existingThird.videoPrompts || [])],
+              batchStyleAssets: [...(existingThird.batchStyleAssets || [])]
+            },
+            updatedAt: now
+          };
+        });
+
+        setToastState({
+          id: crypto.randomUUID(),
+          message: `Master ${target === 'story' ? 'story' : 'visual'} asset generated successfully!`,
+          kind: 'success'
+        });
+        setActiveTimeline(target === 'story' ? 'secondary' : 'third');
+
+        return true;
+      }
+
+      setToastState({
         id: crypto.randomUUID(),
-        seedId: crypto.randomUUID(),
-        type: folder === 'story' ? 'master_story' : 'master_visual',
-        name: `Master ${folder === 'story' ? 'Story' : 'Visual'}`,
-        content: result.data,
-        tags: ['master-asset'],
-        createdAt: new Date(),
-        summary: `Generated master asset for ${folder}`,
-        isMaster: true,
-        lineage: project.primaryTimeline.folders[folder]?.map(b => b.assetId) || [],
-        metadata: {}
-      };
+        message: `Generation failed: ${result.error || 'Unknown error'}`,
+        kind: 'error'
+      });
+      return false;
+    };
 
-      setProject(prev => ({
-        ...prev,
-        assets: [...prev.assets, newMasterAsset],
-        secondaryTimeline: {
-          ...prev.secondaryTimeline,
-          masterAssets: [...(prev.secondaryTimeline?.masterAssets || []), newMasterAsset]
-        },
-        updatedAt: new Date()
-      }));
-
-      setToastState({ id: crypto.randomUUID(), message: 'Master asset generated successfully!', kind: 'success' });
-      setActiveTimeline('secondary');
+    if (folder === 'all') {
+      await runGeneration('story');
+      await runGeneration('image');
     } else {
-      setToastState({ id: crypto.randomUUID(), message: `Generation failed: ${result.error || 'Unknown error'}`, kind: 'error' });
+      await runGeneration(folder);
     }
 
     setIsGenerating(false);

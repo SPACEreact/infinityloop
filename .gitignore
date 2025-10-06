@@ -16,6 +16,10 @@ build/
 # ChromaDB
 chroma_db/
 
+# Node
+node_modules/
+loop/node_modules/
+
 # UV cache
 .cache/
 
