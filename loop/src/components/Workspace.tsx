@@ -110,6 +110,14 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  const handleOpenMultiShotModal = useCallback(() => {
+    setIsMultiShotModalOpen(true);
+  }, [setIsMultiShotModalOpen]);
+
+  const handleOpenBatchStyleModal = useCallback(() => {
+    setIsBatchStyleModalOpen(true);
+  }, [setIsBatchStyleModalOpen]);
+
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
     if (!message.trim()) return null;
 
@@ -570,9 +578,9 @@ const Workspace: React.FC<WorkspaceProps> = ({
               setSelectedAssetIdForShots={setSelectedAssetIdForShots}
               isCreateShotsModalOpen={isCreateShotsModalOpen}
               setIsCreateShotsModalOpen={setIsCreateShotsModalOpen}
-              setIsMultiShotModalOpen={setIsMultiShotModalOpen}
-              setIsBatchStyleModalOpen={setIsBatchStyleModalOpen}
               setIsOutputModalOpen={setIsOutputModalOpen}
+              onOpenMultiShotModal={handleOpenMultiShotModal}
+              onOpenBatchStyleModal={handleOpenBatchStyleModal}
             />
           </div>
         </main>

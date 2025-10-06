@@ -22,9 +22,9 @@ export const Timeline = ({
   setSelectedAssetIdForShots,
   isCreateShotsModalOpen,
   setIsCreateShotsModalOpen,
-  setIsMultiShotModalOpen,
-  setIsBatchStyleModalOpen,
-  setIsOutputModalOpen
+  setIsOutputModalOpen,
+  onOpenMultiShotModal,
+  onOpenBatchStyleModal
 }: {
   project: Project;
   selectedAssetId: string | null;
@@ -43,9 +43,9 @@ export const Timeline = ({
   setSelectedAssetIdForShots: (id: string | null) => void;
   isCreateShotsModalOpen: boolean;
   setIsCreateShotsModalOpen: (open: boolean) => void;
-  setIsMultiShotModalOpen: (open: boolean) => void;
-  setIsBatchStyleModalOpen: (open: boolean) => void;
   setIsOutputModalOpen: (open: boolean) => void;
+  onOpenMultiShotModal: () => void;
+  onOpenBatchStyleModal: () => void;
   onGenerateDirectorAdvice?: () => void;
   onAcceptSuggestion?: (suggestionId: string) => void;
 }) => {
@@ -311,7 +311,8 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
         <div className="flex justify-center mb-6">
           <div className="group inline-flex items-center gap-2">
             <button
-              onClick={() => setIsMultiShotModalOpen(true)}
+              type="button"
+              onClick={onOpenMultiShotModal}
               className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
               style={{
                 background: 'linear-gradient(145deg, #E6E6FA, #D1D1F0)',
@@ -449,7 +450,8 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
         <div className="flex justify-center mb-6">
           <div className="group inline-flex items-center gap-2">
             <button
-              onClick={() => setIsBatchStyleModalOpen(true)}
+              type="button"
+              onClick={onOpenBatchStyleModal}
               className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
               style={{
                 background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
