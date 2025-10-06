@@ -24,9 +24,12 @@ class DocumentData(BaseModel):
     documents: List[str]
     metadatas: Optional[List[Dict[str, Any]]] = None
     ids: List[str]
+    embeddings: Optional[List[List[float]]] = None
+
 
 class QueryData(BaseModel):
-    query_texts: List[str]
+    query_texts: Optional[List[str]] = None
+    query_embeddings: Optional[List[List[float]]] = None
     n_results: int = 10
     where: Optional[Dict[str, Any]] = None
     where_document: Optional[Dict[str, Any]] = None
@@ -49,11 +52,15 @@ async def add_documents(collection_name: str, data: DocumentData):
     """Add documents to a collection"""
     try:
         collection = client.get_collection(name=collection_name)
-        collection.add(
-            documents=data.documents,
-            metadatas=data.metadatas,
-            ids=data.ids
-        )
+        add_params: Dict[str, Any] = {
+            "documents": data.documents,
+            "metadatas": data.metadatas,
+            "ids": data.ids,
+        }
+        if data.embeddings is not None:
+            add_params["embeddings"] = data.embeddings
+
+        collection.add(**add_params)
         return {"message": f"Added {len(data.documents)} documents to collection '{collection_name}'"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -63,12 +70,17 @@ async def query_documents(collection_name: str, query: QueryData):
     """Query documents in a collection"""
     try:
         collection = client.get_collection(name=collection_name)
-        results = collection.query(
-            query_texts=query.query_texts,
-            n_results=query.n_results,
-            where=query.where,
-            where_document=query.where_document
-        )
+        query_params: Dict[str, Any] = {
+            "n_results": query.n_results,
+            "where": query.where,
+            "where_document": query.where_document,
+        }
+        if query.query_texts is not None:
+            query_params["query_texts"] = query.query_texts
+        if query.query_embeddings is not None:
+            query_params["query_embeddings"] = query.query_embeddings
+
+        results = collection.query(**query_params)
         return results
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
