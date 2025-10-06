@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Project, TimelineBlock } from '../types';
+import type { Asset, Project, TimelineBlock } from '../types';
 import { ASSET_TEMPLATES } from '../constants';
 import { MagicWandIcon, PlusIcon, SparklesIcon } from './IconComponents';
 
@@ -61,6 +61,19 @@ export const Timeline = ({
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
+
+  const shotsByMultiShotId = React.useMemo(() => {
+    return project.assets.reduce((acc, asset) => {
+      const parentId = asset.metadata?.parentMultiShotId;
+      if (parentId) {
+        if (!acc[parentId]) {
+          acc[parentId] = [];
+        }
+        acc[parentId].push(asset);
+      }
+      return acc;
+    }, {} as Record<string, Asset[]>);
+  }, [project.assets]);
 
 const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?: Record<string, number>) => {
     const asset = project.assets.find(a => a.id === block.assetId);
@@ -288,121 +301,300 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
     );
   };
 
-  const renderSecondaryTimeline = () => (
-    <div className="space-y-8" style={{ background: 'rgba(230, 230, 250, 0.05)' }}>
-      {/* Multi-shot Actions */}
-      <div className="flex justify-center mb-6">
-        <div className="group inline-flex items-center gap-2">
-          <button
-            onClick={() => setIsMultiShotModalOpen(true)}
-            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
-            style={{
-              background: 'linear-gradient(145deg, #E6E6FA, #D1D1F0)',
-              boxShadow: '0 10px 20px rgba(230, 230, 250, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
-              border: '3px solid #D1D1F0',
-              color: '#4B0082',
-              filter: 'drop-shadow(4px 4px 0 rgba(75, 0, 130, 0.3)) contrast(1.2)'
-            }}
-          >
-            <PlusIcon className="w-6 h-6" />
-            CREATE MULTI-SHOT
-          </button>
-        </div>
-      </div>
+  const renderSecondaryTimeline = () => {
+    const masterStoryAssets = project.secondaryTimeline?.masterAssets || [];
+    const multiShotAssets = project.assets.filter(asset => asset.type === 'multi_shot');
 
-{project.secondaryTimeline ? (
-  <div className="space-y-5">
-    {project.secondaryTimeline.masterAssets.map((asset, index) => (
-      <div
-        key={asset.id}
-        className="p-5 timeline-card cursor-pointer"
-        onClick={() => setSelectedAssetId(asset.id)}
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-8 h-8 flex items-center justify-center font-bold timeline-index secondary">
-            {index + 1}
+    return (
+      <div className="space-y-8" style={{ background: 'rgba(230, 230, 250, 0.05)' }}>
+        {/* Multi-shot Actions */}
+        <div className="flex justify-center mb-6">
+          <div className="group inline-flex items-center gap-2">
+            <button
+              onClick={() => setIsMultiShotModalOpen(true)}
+              className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+              style={{
+                background: 'linear-gradient(145deg, #E6E6FA, #D1D1F0)',
+                boxShadow: '0 10px 20px rgba(230, 230, 250, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
+                border: '3px solid #D1D1F0',
+                color: '#4B0082',
+                filter: 'drop-shadow(4px 4px 0 rgba(75, 0, 130, 0.3)) contrast(1.2)'
+              }}
+            >
+              <PlusIcon className="w-6 h-6" />
+              CREATE MULTI-SHOT
+            </button>
           </div>
+        </div>
+
+        <div className="space-y-10 px-1">
           <div>
-            <h3 className="font-semibold ink-strong">{asset.name}</h3>
-            <p className="text-sm ink-subtle">{asset.type.replace('_', ' ')}</p>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] ink-subtle mb-3">Master Story Assets</h3>
+            {masterStoryAssets.length > 0 ? (
+              <div className="space-y-5">
+                {masterStoryAssets.map((asset, index) => (
+                  <div
+                    key={asset.id}
+                    className={`p-5 timeline-card cursor-pointer ${selectedAssetId === asset.id ? 'timeline-card--active' : ''}`}
+                    onClick={() => setSelectedAssetId(asset.id)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 flex items-center justify-center font-bold timeline-index secondary">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold ink-strong">{asset.name}</h3>
+                        <p className="text-sm ink-subtle">{asset.type.replace('_', ' ')}</p>
+                      </div>
+                    </div>
+                    {asset.summary && (
+                      <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
+                    )}
+                    <div className="flex justify-end mt-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAssetIdForShots(asset.id);
+                          setIsCreateShotsModalOpen(true);
+                        }}
+                        className="timeline-action px-3 py-1.5 text-sm shadow-lg transform hover:scale-105 transition-all duration-200"
+                        style={{
+                          background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
+                          boxShadow: '0 4px 8px rgba(152, 251, 152, 0.3), inset 0 1px 0 rgba(255,255,255,0.8)',
+                          border: '2px solid #7AE67A',
+                          color: '#2E8B57'
+                        }}
+                      >
+                        Create Shots
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="ink-subtle">
+                Generate master story assets from the Scene timeline to unlock multi-shot planning.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] ink-subtle mb-3">Multi-Shot Plans</h3>
+            {multiShotAssets.length > 0 ? (
+              <div className="space-y-5">
+                {multiShotAssets.map(asset => {
+                  const relatedShots = shotsByMultiShotId[asset.id] || [];
+                  const parentMaster = asset.metadata?.parentMasterAssetId
+                    ? project.assets.find(a => a.id === asset.metadata?.parentMasterAssetId)
+                    : undefined;
+                  const totalShots = relatedShots.length || asset.shotCount || 0;
+
+                  return (
+                    <div
+                      key={asset.id}
+                      className={`p-5 timeline-card cursor-pointer ${selectedAssetId === asset.id ? 'timeline-card--active' : ''}`}
+                      onClick={() => setSelectedAssetId(asset.id)}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <h3 className="font-semibold ink-strong">{asset.name}</h3>
+                          <p className="text-xs uppercase tracking-wide ink-subtle mt-1">
+                            {parentMaster ? `Derived from ${parentMaster.name}` : 'Derived from master story'}
+                          </p>
+                        </div>
+                        <div className="w-10 h-10 flex items-center justify-center font-bold timeline-index secondary">
+                          {totalShots}
+                        </div>
+                      </div>
+                      {asset.summary && (
+                        <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
+                      )}
+                      <div className="mt-3 text-xs ink-subtle flex flex-wrap gap-4">
+                        <span>Shot type: {asset.shotType ? asset.shotType.replace('_', ' ') : 'mixed'}</span>
+                        <span>Total shots: {totalShots}</span>
+                      </div>
+                      {relatedShots.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {relatedShots.slice(0, 4).map(shot => (
+                            <span key={shot.id} className="timeline-chip text-xs">{shot.name}</span>
+                          ))}
+                          {relatedShots.length > 4 && (
+                            <span className="timeline-chip text-xs">+{relatedShots.length - 4} more</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="ink-subtle">
+                Use master story assets to create multi-shot plans that feed the Batch Style timeline.
+              </p>
+            )}
           </div>
         </div>
-        {asset.summary && (
-          <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
-        )}
-        <div className="flex justify-end mt-3">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedAssetIdForShots(asset.id);
-              setIsCreateShotsModalOpen(true);
-            }}
-            className="timeline-action px-3 py-1.5 text-sm shadow-lg transform hover:scale-105 transition-all duration-200"
-            style={{ 
-              background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
-              boxShadow: '0 4px 8px rgba(152, 251, 152, 0.3), inset 0 1px 0 rgba(255,255,255,0.8)',
-              border: '2px solid #7AE67A',
-              color: '#2E8B57' 
-            }}
-          >
-            Create Shots
-          </button>
-        </div>
       </div>
-    ))}
-  </div>
-) : (
-  <p className="ink-subtle">No multi-shots yet. Generate from primary timeline first.</p>
-)}
-    </div>
-  );
+    );
+  };
 
-  const renderThirdTimeline = () => (
-    <div className="space-y-8" style={{ background: 'rgba(152, 251, 152, 0.05)' }}>
-      {/* Batch Style Actions */}
-      <div className="flex justify-center mb-6">
-        <div className="group inline-flex items-center gap-2">
-          <button
-            onClick={() => setIsBatchStyleModalOpen(true)}
-            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
-            style={{
-              background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
-              boxShadow: '0 10px 20px rgba(152, 251, 152, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
-              border: '3px solid #7AE67A',
-              color: '#2E8B57',
-              filter: 'drop-shadow(4px 4px 0 rgba(46, 139, 87, 0.3)) contrast(1.2)'
-            }}
-          >
-            <PlusIcon className="w-6 h-6" />
-            CREATE BATCH STYLE
-          </button>
+  const renderThirdTimeline = () => {
+    const masterVisualAssets = project.assets.filter(asset => asset.type === 'master_image' && asset.isMaster);
+    const styledShots = project.thirdTimeline?.styledShots || [];
+    const batchStyleAssets = (project.thirdTimeline?.batchStyleAssets || []).filter(asset => asset.type === 'batch_style');
+
+    return (
+      <div className="space-y-8" style={{ background: 'rgba(152, 251, 152, 0.05)' }}>
+        {/* Batch Style Actions */}
+        <div className="flex justify-center mb-6">
+          <div className="group inline-flex items-center gap-2">
+            <button
+              onClick={() => setIsBatchStyleModalOpen(true)}
+              className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+              style={{
+                background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
+                boxShadow: '0 10px 20px rgba(152, 251, 152, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
+                border: '3px solid #7AE67A',
+                color: '#2E8B57',
+                filter: 'drop-shadow(4px 4px 0 rgba(46, 139, 87, 0.3)) contrast(1.2)'
+              }}
+            >
+              <PlusIcon className="w-6 h-6" />
+              CREATE BATCH STYLE
+            </button>
+          </div>
         </div>
-      </div>
 
-      {project.thirdTimeline ? (
-        <div className="space-y-5">
-          {project.thirdTimeline.styledShots.map((shot, index) => (
-            <div key={shot.id} className="p-5 timeline-card">
-              <div className="flex items-center gap-4">
-                <div className="w-8 h-8 flex items-center justify-center font-bold timeline-index secondary">
-                  {index + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold ink-strong">{shot.name}</h3>
-                  <p className="text-sm ink-subtle">{shot.type.replace('_', ' ')}</p>
-                </div>
+        <div className="space-y-10 px-1">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] ink-subtle mb-3">Master Visual Styles</h3>
+            {masterVisualAssets.length > 0 ? (
+              <div className="space-y-5">
+                {masterVisualAssets.map((asset, index) => (
+                  <div
+                    key={asset.id}
+                    className={`p-5 timeline-card cursor-pointer ${selectedAssetId === asset.id ? 'timeline-card--active' : ''}`}
+                    onClick={() => setSelectedAssetId(asset.id)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 flex items-center justify-center font-bold timeline-index secondary">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold ink-strong">{asset.name}</h3>
+                        <p className="text-sm ink-subtle">{asset.type.replace('_', ' ')}</p>
+                      </div>
+                    </div>
+                    {asset.summary && (
+                      <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-              {shot.summary && (
-                <p className="text-sm ink-subtle mt-3">{shot.summary}</p>
-              )}
-            </div>
-          ))}
+            ) : (
+              <p className="ink-subtle">
+                Generate a master visual style from the Scene timeline to guide batch styling.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] ink-subtle mb-3">Batch Style Runs</h3>
+            {batchStyleAssets.length > 0 ? (
+              <div className="space-y-5">
+                {batchStyleAssets.map(asset => {
+                  const styledShotIds: string[] = asset.metadata?.styledShotIds || [];
+                  const styledCount = styledShotIds.length;
+                  const sourceMultiShot = asset.metadata?.multiShotId
+                    ? project.assets.find(a => a.id === asset.metadata?.multiShotId)
+                    : undefined;
+                  const masterVisual = asset.metadata?.masterImageId
+                    ? project.assets.find(a => a.id === asset.metadata?.masterImageId)
+                    : undefined;
+
+                  return (
+                    <div
+                      key={asset.id}
+                      className={`p-5 timeline-card cursor-pointer ${selectedAssetId === asset.id ? 'timeline-card--active' : ''}`}
+                      onClick={() => setSelectedAssetId(asset.id)}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <h3 className="font-semibold ink-strong">{asset.name}</h3>
+                          <p className="text-xs uppercase tracking-wide ink-subtle mt-1">
+                            {sourceMultiShot ? `Styled from ${sourceMultiShot.name}` : 'Styled batch'}
+                          </p>
+                        </div>
+                        <div className="w-10 h-10 flex items-center justify-center font-bold timeline-index secondary">
+                          {styledCount}
+                        </div>
+                      </div>
+                      {asset.summary && (
+                        <p className="text-sm ink-subtle mt-3">{asset.summary}</p>
+                      )}
+                      <div className="mt-3 text-xs ink-subtle flex flex-wrap gap-4">
+                        {masterVisual && <span>Style: {masterVisual.name}</span>}
+                        <span>Shots styled: {styledCount}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="ink-subtle">
+                Apply batch styling to multi-shot plans to see styled batches appear here.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] ink-subtle mb-3">Styled Shots</h3>
+            {styledShots.length > 0 ? (
+              <div className="space-y-5">
+                {styledShots.map((shot, index) => {
+                  const sourceMultiShot = shot.metadata?.parentMultiShotId
+                    ? project.assets.find(a => a.id === shot.metadata?.parentMultiShotId)
+                    : undefined;
+                  const styleName = shot.metadata?.styleName
+                    || (shot.metadata?.masterImageId
+                      ? project.assets.find(a => a.id === shot.metadata?.masterImageId)?.name
+                      : undefined);
+
+                  return (
+                    <div
+                      key={shot.id}
+                      className={`p-5 timeline-card cursor-pointer ${selectedAssetId === shot.id ? 'timeline-card--active' : ''}`}
+                      onClick={() => setSelectedAssetId(shot.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 flex items-center justify-center font-bold timeline-index secondary">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold ink-strong">{shot.name}</h3>
+                          <p className="text-xs uppercase tracking-wide ink-subtle mt-1">
+                            {styleName ? `Style: ${styleName}` : 'Styled shot'}
+                          </p>
+                        </div>
+                      </div>
+                      {shot.summary && (
+                        <p className="text-sm ink-subtle mt-3">{shot.summary}</p>
+                      )}
+                      {sourceMultiShot && (
+                        <p className="text-xs ink-subtle mt-2">From {sourceMultiShot.name}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="ink-subtle">No styled shots yet. Apply batch styling to generate styled outputs.</p>
+            )}
+          </div>
         </div>
-      ) : (
-        <p className="ink-subtle">No styled shots yet. Generate from secondary timeline first.</p>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderFourthTimeline = () => {
 
