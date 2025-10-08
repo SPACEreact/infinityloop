@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { Message } from '../types';
 import { ChatRole } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { SendIcon, SparklesIcon, UserIcon, MagicWandIcon, CubeTransparentIcon } from './IconComponents';
+import { SendIcon, LoopSparkIcon, LoopPersonaIcon, LoopCatalystIcon, LoopConstructIcon } from './IconComponents';
 import { knowledgeBase } from '../services/knowledgeService';
 
 interface ChatAssistantProps {
@@ -537,7 +537,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
           {showMockNotice && (
             <div className="flex items-start gap-3 rounded-xl border border-indigo-500/40 bg-indigo-500/10 p-4 text-indigo-100">
               <div className="w-8 h-8 rounded-full bg-indigo-500/60 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <SparklesIcon className="w-5 h-5" />
+                <LoopSparkIcon className="w-5 h-5" />
               </div>
               <div className="flex-1 space-y-1">
                 <p className="font-semibold text-indigo-100">Mock mode active</p>
@@ -565,7 +565,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
                   className="w-8 h-8 rounded-full chat-avatar flex items-center justify-center flex-shrink-0"
                   style={getFeatureStyles(currentBuild || 'menu')}
                 >
-                  <SparklesIcon className="w-5 h-5" />
+                  <LoopSparkIcon className="w-5 h-5" />
                 </div>
               )}
 
@@ -586,7 +586,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
               {msg.role === ChatRole.USER && (
                 <div className="w-8 h-8 rounded-full chat-avatar chat-avatar--user flex items-center justify-center flex-shrink-0">
-                  <UserIcon className="w-5 h-5" />
+                  <LoopPersonaIcon className="w-5 h-5" />
                 </div>
               )}
             </div>
@@ -598,7 +598,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
                 className="w-8 h-8 rounded-full chat-avatar flex items-center justify-center flex-shrink-0"
                 style={getFeatureStyles(currentBuild || 'menu')}
               >
-                <SparklesIcon className="w-5 h-5" />
+                <LoopSparkIcon className="w-5 h-5" />
               </div>
               <div
                 className="max-w-none w-full p-4 chat-bubble chat-bubble--model chat-bubble--generated"
@@ -615,7 +615,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
                 className="w-8 h-8 rounded-full chat-avatar flex items-center justify-center flex-shrink-0"
                 style={getFeatureStyles(currentBuild || 'menu')}
               >
-                  <SparklesIcon className="w-5 h-5 animate-pulse" />
+                  <LoopSparkIcon className="w-5 h-5 animate-pulse" />
               </div>
               <div className="max-w-xl p-4 chat-bubble chat-bubble--model">
                 <LoadingSpinner />
@@ -994,7 +994,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               aria-label="Timeline workflow"
               title="Start timeline asset propagation workflow"
             >
-              <MagicWandIcon className="w-5 h-5" />
+              <LoopCatalystIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -1004,7 +1004,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               aria-label="Smart generation"
               title="Generate based on current timeline context"
             >
-              <SparklesIcon className="w-5 h-5" />
+              <LoopSparkIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -1014,7 +1014,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               aria-label="Iterate master asset"
               title="Iterate Master Story & Visual Assets"
             >
-              <CubeTransparentIcon className="w-5 h-5" />
+              <LoopConstructIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -1024,7 +1024,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               aria-label="Create Multi-Shot"
               title="Create Multi-Shot from Master Assets"
             >
-              <UserIcon className="w-5 h-5" />
+              <LoopPersonaIcon className="w-5 h-5" />
             </button>
             <button
               type="button"
@@ -1033,7 +1033,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
               style={getFeatureStyles('menu')}
               aria-label="Build menu"
             >
-              <UserIcon className="w-5 h-5" />
+              <LoopPersonaIcon className="w-5 h-5" />
             </button>
             <button
               type="submit"
