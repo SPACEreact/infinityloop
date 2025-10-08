@@ -1,7 +1,9 @@
 import React from 'react';
-import type { Asset, Project, TimelineBlock } from '../types';
+import type { Asset, Project, TimelineBlock, StructuredInputData, IndividualShot, ShotDetails } from '../types';
 import { ASSET_TEMPLATES } from '../constants';
 import { MagicWandIcon, PlusIcon, SparklesIcon } from './IconComponents';
+import { MultiShotCreationModal } from './MultiShotCreationModal';
+import { BatchStyleModal } from './BatchStyleModal';
 
 // @ts-ignore
 export const Timeline = ({
@@ -17,9 +19,16 @@ export const Timeline = ({
   onWeightingToggle,
   styleRigidity,
   onStyleRigidityChange,
-  setIsOutputModalOpen,
-  onOpenMultiShotModal,
-  onOpenBatchStyleModal
+  selectedStoryAssets,
+  onToggleStoryAsset,
+  onConfirmMultiShot,
+  onCancelMultiShot,
+  selectedMultiShots,
+  selectedMasterImage,
+  onToggleMultiShot,
+  onSelectMasterImage,
+  onConfirmBatchStyle,
+  onCancelBatchStyle
 }: {
   project: Project;
   selectedAssetId: string | null;
@@ -33,9 +42,22 @@ export const Timeline = ({
   onWeightingToggle: (enabled: boolean) => void;
   styleRigidity: number;
   onStyleRigidityChange: (value: number) => void;
-  setIsOutputModalOpen: (open: boolean) => void;
-  onOpenMultiShotModal: () => void;
-  onOpenBatchStyleModal: () => void;
+  selectedStoryAssets: string[];
+  onToggleStoryAsset: (assetId: string) => void;
+  onConfirmMultiShot: (
+    numberOfShots: number,
+    shotType: string,
+    shotDetails?: ShotDetails,
+    structuredData?: StructuredInputData,
+    individualShots?: IndividualShot[]
+  ) => boolean | void;
+  onCancelMultiShot: () => void;
+  selectedMultiShots: string[];
+  selectedMasterImage: string | null;
+  onToggleMultiShot: (assetId: string) => void;
+  onSelectMasterImage: (assetId: string) => void;
+  onConfirmBatchStyle: () => boolean | void;
+  onCancelBatchStyle: () => void;
   onGenerateDirectorAdvice?: () => void;
   onAcceptSuggestion?: (suggestionId: string) => void;
 }) => {
@@ -64,6 +86,9 @@ export const Timeline = ({
       return acc;
     }, {} as Record<string, Asset[]>);
   }, [project.assets]);
+
+  const [isMultiShotModalOpen, setIsMultiShotModalOpen] = React.useState(false);
+  const [isBatchStyleModalOpen, setIsBatchStyleModalOpen] = React.useState(false);
 
 const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?: Record<string, number>) => {
     const asset = project.assets.find(a => a.id === block.assetId);
@@ -302,7 +327,7 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
           <div className="group inline-flex items-center gap-2">
             <button
               type="button"
-              onClick={onOpenMultiShotModal}
+              onClick={() => setIsMultiShotModalOpen(true)}
               className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
               style={{
                 background: 'linear-gradient(145deg, #E6E6FA, #D1D1F0)',
@@ -317,6 +342,24 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
             </button>
           </div>
         </div>
+
+        <MultiShotCreationModal
+          isOpen={isMultiShotModalOpen}
+          assets={project.assets}
+          selectedAssets={selectedStoryAssets}
+          onToggleAsset={onToggleStoryAsset}
+          onConfirm={(numberOfShots, shotType, shotDetails, structuredData, individualShots) => {
+            const result = onConfirmMultiShot(numberOfShots, shotType, shotDetails, structuredData, individualShots);
+            if (result !== false) {
+              setIsMultiShotModalOpen(false);
+            }
+            return result;
+          }}
+          onCancel={() => {
+            setIsMultiShotModalOpen(false);
+            onCancelMultiShot();
+          }}
+        />
 
         <div className="space-y-10 px-1">
           <div>
@@ -423,7 +466,7 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
           <div className="group inline-flex items-center gap-2">
             <button
               type="button"
-              onClick={onOpenBatchStyleModal}
+              onClick={() => setIsBatchStyleModalOpen(true)}
               className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
               style={{
                 background: 'linear-gradient(145deg, #98FB98, #7AE67A)',
@@ -438,6 +481,26 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
             </button>
           </div>
         </div>
+
+        <BatchStyleModal
+          isOpen={isBatchStyleModalOpen}
+          assets={project.assets}
+          selectedMultiShots={selectedMultiShots}
+          selectedMasterImage={selectedMasterImage}
+          onToggleMultiShot={onToggleMultiShot}
+          onSelectMasterImage={onSelectMasterImage}
+          onConfirm={() => {
+            const result = onConfirmBatchStyle();
+            if (result !== false) {
+              setIsBatchStyleModalOpen(false);
+            }
+            return result;
+          }}
+          onCancel={() => {
+            setIsBatchStyleModalOpen(false);
+            onCancelBatchStyle();
+          }}
+        />
 
         <div className="space-y-10 px-1">
           <div>
