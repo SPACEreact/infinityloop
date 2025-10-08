@@ -56,6 +56,9 @@ const normalizeAssetSeed = <T extends Asset>(asset: T, canonicalSeeds: Map<strin
 const normalizeAssetCollection = <T extends Asset>(
   assets: T[] | null | undefined,
   canonicalSeeds: Map<string, string>
+const ensureAssetSeeds = <T extends Asset>(
+  assets?: T[] | null,
+  canonicalSeeds?: Map<string, string>
 ): T[] | undefined => {
   if (!assets) {
     return assets ?? undefined;
@@ -66,11 +69,30 @@ const normalizeAssetCollection = <T extends Asset>(
   assets.forEach((asset, index) => {
     const normalizedAsset = normalizeAssetSeed(asset, canonicalSeeds);
     if (normalizedAsset !== asset) {
+    let desiredSeedId = asset.seedId || undefined;
+
+    if (canonicalSeeds) {
+      const canonicalSeedId = canonicalSeeds.get(asset.id);
+
+      if (canonicalSeedId) {
+        if (desiredSeedId !== canonicalSeedId) {
+          desiredSeedId = canonicalSeedId;
+        }
+      } else {
+        desiredSeedId = desiredSeedId ?? crypto.randomUUID();
+        canonicalSeeds.set(asset.id, desiredSeedId);
+      }
+    } else if (!desiredSeedId) {
+      desiredSeedId = crypto.randomUUID();
+    }
+
+    if (desiredSeedId && desiredSeedId !== asset.seedId) {
       if (!updatedAssets) {
         updatedAssets = [...assets];
       }
 
       updatedAssets[index] = normalizedAsset;
+      updatedAssets[index] = { ...asset, seedId: desiredSeedId } as T;
     }
   });
 
@@ -82,6 +104,7 @@ const normalizeSeeds = (project: Project): Project => {
   const canonicalSeeds = new Map<string, string>();
 
   const normalizedAssets = normalizeAssetCollection(project.assets, canonicalSeeds)!;
+  const normalizedAssets = ensureAssetSeeds(project.assets, canonicalSeeds)!;
   if (normalizedAssets !== project.assets) {
     normalizedProject = {
       ...normalizedProject,
@@ -94,6 +117,7 @@ const normalizeSeeds = (project: Project): Project => {
     let normalizedSecondary: typeof secondary | undefined;
 
     const normalizedMasterAssets = normalizeAssetCollection(secondary.masterAssets, canonicalSeeds)!;
+    const normalizedMasterAssets = ensureAssetSeeds(secondary.masterAssets, canonicalSeeds)!;
     if (normalizedMasterAssets !== secondary.masterAssets) {
       normalizedSecondary = {
         ...(normalizedSecondary ?? { ...secondary }),
@@ -104,6 +128,7 @@ const normalizeSeeds = (project: Project): Project => {
     let shotListsUpdated: typeof secondary.shotLists | undefined;
     secondary.shotLists.forEach((shotList, index) => {
       const normalizedShots = normalizeAssetCollection(shotList.shots, canonicalSeeds)!;
+      const normalizedShots = ensureAssetSeeds(shotList.shots, canonicalSeeds)!;
       if (normalizedShots !== shotList.shots) {
         if (!shotListsUpdated) {
           shotListsUpdated = [...secondary.shotLists];
@@ -132,6 +157,7 @@ const normalizeSeeds = (project: Project): Project => {
     let normalizedThird: typeof third | undefined;
 
     const normalizedStyledShots = normalizeAssetCollection(third.styledShots, canonicalSeeds)!;
+    const normalizedStyledShots = ensureAssetSeeds(third.styledShots, canonicalSeeds)!;
     if (normalizedStyledShots !== third.styledShots) {
       normalizedThird = {
         ...(normalizedThird ?? { ...third }),
@@ -140,6 +166,7 @@ const normalizeSeeds = (project: Project): Project => {
     }
 
     const normalizedBatchAssets = normalizeAssetCollection(third.batchStyleAssets, canonicalSeeds);
+    const normalizedBatchAssets = ensureAssetSeeds(third.batchStyleAssets, canonicalSeeds);
     if (normalizedBatchAssets && normalizedBatchAssets !== third.batchStyleAssets) {
       normalizedThird = {
         ...(normalizedThird ?? { ...third }),
