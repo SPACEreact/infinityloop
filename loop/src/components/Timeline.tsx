@@ -60,6 +60,18 @@ export const Timeline = ({
   onAcceptSuggestion?: (suggestionId: string) => void;
 }) => {
 
+  const sliderVariables = React.useMemo(() => {
+    const center = 50;
+    const offset = Math.abs(styleRigidity - center);
+    const start = Math.max(0, center - offset);
+    const end = Math.min(100, center + offset);
+
+    return {
+      '--slider-start': `${start}%`,
+      '--slider-end': `${end}%`
+    } as React.CSSProperties;
+  }, [styleRigidity]);
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, folder?: string) => {
     e.preventDefault();
     const templateType = e.dataTransfer.getData('text/plain');
@@ -300,10 +312,8 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                         max="100"
                         value={styleRigidity}
                         onChange={(e) => onStyleRigidityChange(parseInt(e.target.value, 10))}
-                        className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer"
-                        style={{
-                          background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${styleRigidity}%, rgba(255,255,255,0.3) ${styleRigidity}%, rgba(255,255,255,0.3) 100%)`
-                        }}
+                        className="timeline-style-slider"
+                        style={sliderVariables}
                         disabled={!isWeightingEnabled}
                       />
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
