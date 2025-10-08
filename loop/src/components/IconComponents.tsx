@@ -70,6 +70,201 @@ export const FracturedLoopLogo: React.FC<IconProps> = ({ className, title }) => 
   );
 };
 
+const loopGradientStops = (
+  <>
+    <stop offset="0%" stopColor="hsl(var(--secondary))" />
+    <stop offset="50%" stopColor="hsl(var(--primary))" />
+    <stop offset="100%" stopColor="hsl(var(--accent))" />
+  </>
+);
+
+export const LoopCatalystIcon: React.FC<IconProps> = ({ className, title }) => {
+  const gradientId = React.useId();
+  const loopId = `${gradientId}-loop`;
+  const glowId = `${gradientId}-glow`;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      focusable="false"
+      {...getAccessibilityProps(title)}
+    >
+      {renderTitle(title)}
+      <defs>
+        <linearGradient id={loopId} x1="0%" y1="0%" x2="100%" y2="100%">
+          {loopGradientStops}
+        </linearGradient>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor="hsl(var(--chat-highlight, var(--muted)))" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+      </defs>
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M6.6 9.6c1.1-1.1 2.8-1.1 3.9 0l.9.9.9-.9c1.1-1.1 2.8-1.1 3.9 0s1.1 2.9 0 4-2.8 1.1-3.9 0l-.9-.9-.9.9c-1.1 1.1-2.8 1.1-3.9 0s-1.1-2.9 0-4z"
+          stroke={`url(#${loopId})`}
+          strokeWidth="1.6"
+        />
+        <path
+          d="M6.2 14.1c-.6-1.6-.2-3.4 1.1-4.7"
+          stroke="hsl(var(--card))"
+          strokeWidth="0.9"
+          opacity="0.85"
+        />
+        <path
+          d="M17.8 9.4c1.3 1.3 1.7 3.1 1.1 4.7"
+          stroke="hsl(var(--card))"
+          strokeWidth="0.9"
+          opacity="0.85"
+        />
+        <path d="M4.2 18.6l5.7-5.7" stroke={`url(#${loopId})`} strokeWidth="1.5" />
+        <path d="M5.5 19.8l6.5-6.5" stroke="hsl(var(--card))" strokeWidth="1" opacity="0.75" />
+        <circle cx="4.9" cy="6.1" r="1.2" fill={`url(#${glowId})`} />
+        <path d="M4.9 4.2l.4 1.3 1.3.4-1.3.4-.4 1.3-.4-1.3-1.3-.4 1.3-.4z" fill={`url(#${loopId})`} />
+      </g>
+    </svg>
+  );
+};
+
+export const LoopSparkIcon: React.FC<IconProps> = ({ className, title }) => {
+  const gradientId = React.useId();
+  const loopId = `${gradientId}-loop`;
+  const sparkId = `${gradientId}-spark`;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      focusable="false"
+      {...getAccessibilityProps(title)}
+    >
+      {renderTitle(title)}
+      <defs>
+        <linearGradient id={loopId} x1="0%" y1="0%" x2="100%" y2="100%">
+          {loopGradientStops}
+        </linearGradient>
+        <radialGradient id={sparkId} cx="50%" cy="50%" r="55%">
+          <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity="0.95" />
+          <stop offset="70%" stopColor="hsl(var(--primary))" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+      </defs>
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M6.3 10c1-1.3 2.9-1.5 4.1-.3l1 1 1-1c1.2-1.2 3.1-1 4.1.3 1.1 1.3 1 3.2-.2 4.3-1.2 1.2-3.1 1.2-4.3 0l-.6-.6-.6.6c-1.2 1.2-3.1 1.2-4.3 0-1.2-1.1-1.3-3-.2-4.3z"
+          stroke={`url(#${loopId})`}
+          strokeWidth="1.5"
+        />
+        <path
+          d="M12 3.3l.9 2.6 2.5.9-2.5.9-.9 2.6-.9-2.6-2.5-.9 2.5-.9z"
+          fill={`url(#${sparkId})`}
+          stroke={`url(#${loopId})`}
+          strokeWidth="1"
+        />
+        <path d="M12 7.6v3.1" stroke="hsl(var(--card))" strokeWidth="1" />
+        <path d="M9.6 16.3l-1.8 2.8" stroke="hsl(var(--card))" strokeWidth="0.9" opacity="0.8" />
+        <path d="M14.4 16.3l1.8 2.8" stroke="hsl(var(--card))" strokeWidth="0.9" opacity="0.8" />
+        <circle cx="12" cy="12" r="1.8" fill={`url(#${sparkId})`} opacity="0.9" />
+      </g>
+    </svg>
+  );
+};
+
+export const LoopConstructIcon: React.FC<IconProps> = ({ className, title }) => {
+  const gradientId = React.useId();
+  const loopId = `${gradientId}-loop`;
+  const panelId = `${gradientId}-panel`;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      focusable="false"
+      {...getAccessibilityProps(title)}
+    >
+      {renderTitle(title)}
+      <defs>
+        <linearGradient id={loopId} x1="0%" y1="0%" x2="100%" y2="100%">
+          {loopGradientStops}
+        </linearGradient>
+        <linearGradient id={panelId} x1="20%" y1="0%" x2="80%" y2="100%">
+          <stop offset="0%" stopColor="hsl(var(--card))" />
+          <stop offset="100%" stopColor="hsl(var(--secondary))" />
+        </linearGradient>
+      </defs>
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M6.4 10.1c1.1-1.3 3-1.5 4.3-.4l1.3 1.1 1.3-1.1c1.3-1.1 3.2-.9 4.3.4 1.1 1.3.9 3.3-.4 4.4-1.3 1.1-3.1 1.1-4.3-.1l-.9-.8-.9.8c-1.2 1.2-3 .1-4.3.1-1.3-1.1-1.5-3.1-.4-4.4z"
+          stroke={`url(#${loopId})`}
+          strokeWidth="1.6"
+        />
+        <path
+          d="M9.8 9.7l2.2-1.2 2.2 1.2v2.4l-2.2 1.2-2.2-1.2z"
+          fill={`url(#${panelId})`}
+          stroke="hsl(var(--ink))"
+          strokeWidth="0.9"
+        />
+        <path d="M9.8 12.1v2.4l2.2 1.2 2.2-1.2v-2.4" stroke="hsl(var(--card))" strokeWidth="0.9" />
+        <path d="M8.4 16.3l3.6 2.1 3.6-2.1" stroke={`url(#${loopId})`} strokeWidth="1.1" />
+        <path d="M7.2 11.6l-1.4-.8" stroke="hsl(var(--card))" strokeWidth="0.9" opacity="0.8" />
+        <path d="M16.8 11.6l1.4-.8" stroke="hsl(var(--card))" strokeWidth="0.9" opacity="0.8" />
+      </g>
+    </svg>
+  );
+};
+
+export const LoopPersonaIcon: React.FC<IconProps> = ({ className, title }) => {
+  const gradientId = React.useId();
+  const loopId = `${gradientId}-loop`;
+  const fillId = `${gradientId}-fill`;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      focusable="false"
+      {...getAccessibilityProps(title)}
+    >
+      {renderTitle(title)}
+      <defs>
+        <linearGradient id={loopId} x1="0%" y1="0%" x2="100%" y2="100%">
+          {loopGradientStops}
+        </linearGradient>
+        <linearGradient id={fillId} x1="40%" y1="0%" x2="60%" y2="100%">
+          <stop offset="0%" stopColor="hsl(var(--card))" />
+          <stop offset="100%" stopColor="hsl(var(--secondary))" />
+        </linearGradient>
+      </defs>
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M6.1 10.1c1-1.4 3-1.8 4.5-.8l1.4.9 1.4-.9c1.5-1 3.5-.6 4.5.8 1 1.4.7 3.3-.7 4.3-1.4 1-3.1.8-4.3-.4l-.9-.9-.9.9c-1.2 1.2-2.9 1.4-4.3.4-1.4-1-1.7-2.9-.7-4.3z"
+          stroke={`url(#${loopId})`}
+          strokeWidth="1.5"
+        />
+        <path
+          d="M12 7.2a2.7 2.7 0 110 5.4 2.7 2.7 0 010-5.4z"
+          fill={`url(#${fillId})`}
+          stroke="hsl(var(--ink))"
+          strokeWidth="0.9"
+        />
+        <path
+          d="M7.2 17.4c.4-2.2 2.3-3.8 4.8-3.8s4.4 1.6 4.8 3.8"
+          stroke={`url(#${loopId})`}
+          strokeWidth="1.1"
+        />
+        <path
+          d="M9 17.2c.3-1.2 1.5-2.1 3-2.1s2.7.9 3 2.1"
+          stroke="hsl(var(--card))"
+          strokeWidth="0.9"
+        />
+        <circle cx="6" cy="7.6" r="0.9" fill={`url(#${loopId})`} />
+        <circle cx="18" cy="7.2" r="0.7" fill={`url(#${loopId})`} opacity="0.7" />
+      </g>
+    </svg>
+  );
+};
+
 export const ChatBubbleLeftRightIcon: React.FC<IconProps> = ({ className, title }) => {
   const gradientId = React.useId();
   const fillId = `${gradientId}-chat-fill`;

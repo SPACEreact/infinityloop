@@ -11,8 +11,6 @@ import type {
 import { generateSandboxResponse } from '../services/geminiService';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
-import { MultiShotCreationModal } from './MultiShotCreationModal';
-import { BatchStyleModal } from './BatchStyleModal';
 import { ApiConfig } from './ApiConfig';
 import { AssetLibraryPanel } from './AssetLibraryPanel';
 import { AssetDetailsPanel } from './AssetDetailsPanel';
@@ -100,21 +98,11 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isReferenceViewerOpen, setIsReferenceViewerOpen] = useState(false);
   const [isApiConfigOpen, setIsApiConfigOpen] = useState(false);
-  const [isMultiShotModalOpen, setIsMultiShotModalOpen] = useState(false);
-  const [isBatchStyleModalOpen, setIsBatchStyleModalOpen] = useState(false);
   const [isOutputModalOpen, setIsOutputModalOpen] = useState(false);
   const [isMcpLoading, setIsMcpLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  const handleOpenMultiShotModal = useCallback(() => {
-    setIsMultiShotModalOpen(true);
-  }, [setIsMultiShotModalOpen]);
-
-  const handleOpenBatchStyleModal = useCallback(() => {
-    setIsBatchStyleModalOpen(true);
-  }, [setIsBatchStyleModalOpen]);
 
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
     if (!message.trim()) return null;
@@ -186,14 +174,14 @@ const Workspace: React.FC<WorkspaceProps> = ({
     shotDetails?: ShotDetails,
     structuredData?: StructuredInputData,
     individualShots?: IndividualShot[]
-  ) => {
+  ): boolean => {
     if (selectedStoryAssets.length === 0) {
       setToastState({
         id: crypto.randomUUID(),
         message: 'Select at least one master story asset to build a multi-shot plan.',
         kind: 'warning'
       });
-      return;
+      return false;
     }
 
     const normalizedIndividualShots = individualShots && individualShots.length > 0
@@ -334,11 +322,10 @@ const Workspace: React.FC<WorkspaceProps> = ({
         message: 'Select master story assets to create a multi-shot plan.',
         kind: 'warning'
       });
-      return;
+      return false;
     }
 
     setSelectedStoryAssets([]);
-    setIsMultiShotModalOpen(false);
     setActiveTimeline('secondary');
     setSelectedAssetId(createdMultiShotIds[0] ?? null);
     setToastState({
@@ -346,6 +333,11 @@ const Workspace: React.FC<WorkspaceProps> = ({
       message: `Created ${createdCount} multi-shot ${createdCount === 1 ? 'plan' : 'plans'} from master stories.`,
       kind: 'success'
     });
+    return true;
+  };
+
+  const handleCancelMultiShot = () => {
+    setSelectedStoryAssets([]);
   };
 
   const handleToggleMultiShotSelection = (assetId: string) => {
@@ -360,14 +352,14 @@ const Workspace: React.FC<WorkspaceProps> = ({
     setSelectedMasterImage(assetId);
   };
 
-  const handleConfirmBatchStyle = () => {
+  const handleConfirmBatchStyle = (): boolean => {
     if (selectedMultiShots.length === 0) {
       setToastState({
         id: crypto.randomUUID(),
         message: 'Select multi-shot plans to apply batch styling.',
         kind: 'warning'
       });
-      return;
+      return false;
     }
 
     if (!selectedMasterImage) {
@@ -376,7 +368,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
         message: 'Choose a master visual style before applying batch styling.',
         kind: 'warning'
       });
-      return;
+      return false;
     }
 
     let totalStyledShots = 0;
@@ -496,12 +488,11 @@ const Workspace: React.FC<WorkspaceProps> = ({
         message: 'Select multi-shot plans that contain shots before applying styling.',
         kind: 'warning'
       });
-      return;
+      return false;
     }
 
     setSelectedMultiShots([]);
     setSelectedMasterImage(null);
-    setIsBatchStyleModalOpen(false);
     setActiveTimeline('third');
     setSelectedAssetId(createdBatchAssetIds[0] ?? null);
     setToastState({
@@ -509,6 +500,12 @@ const Workspace: React.FC<WorkspaceProps> = ({
       message: `Styled ${totalStyledShots} ${totalStyledShots === 1 ? 'shot' : 'shots'} using the selected master visual.`,
       kind: 'success'
     });
+    return true;
+  };
+
+  const handleCancelBatchStyle = () => {
+    setSelectedMultiShots([]);
+    setSelectedMasterImage(null);
   };
 
   const handleSyncAssetsToMcp = async () => {
@@ -566,9 +563,16 @@ const Workspace: React.FC<WorkspaceProps> = ({
               onWeightingToggle={onWeightingToggle}
               styleRigidity={styleRigidity}
               onStyleRigidityChange={onStyleRigidityChange}
-              setIsOutputModalOpen={setIsOutputModalOpen}
-              onOpenMultiShotModal={handleOpenMultiShotModal}
-              onOpenBatchStyleModal={handleOpenBatchStyleModal}
+              selectedStoryAssets={selectedStoryAssets}
+              onToggleStoryAsset={handleToggleMasterStorySelection}
+              onConfirmMultiShot={handleConfirmMultiShot}
+              onCancelMultiShot={handleCancelMultiShot}
+              selectedMultiShots={selectedMultiShots}
+              selectedMasterImage={selectedMasterImage}
+              onToggleMultiShot={handleToggleMultiShotSelection}
+              onSelectMasterImage={handleSelectMasterImage}
+              onConfirmBatchStyle={handleConfirmBatchStyle}
+              onCancelBatchStyle={handleCancelBatchStyle}
             />
           </div>
         </main>
@@ -634,33 +638,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
         isOpen={isOutputModalOpen}
         finalAssets={project.assets}
         onClose={() => setIsOutputModalOpen(false)}
-      />
-
-      <MultiShotCreationModal
-        isOpen={isMultiShotModalOpen}
-        assets={project.assets}
-        selectedAssets={selectedStoryAssets}
-        onToggleAsset={handleToggleMasterStorySelection}
-        onConfirm={handleConfirmMultiShot}
-        onCancel={() => {
-          setIsMultiShotModalOpen(false);
-          setSelectedStoryAssets([]);
-        }}
-      />
-
-      <BatchStyleModal
-        isOpen={isBatchStyleModalOpen}
-        assets={project.assets}
-        selectedMultiShots={selectedMultiShots}
-        selectedMasterImage={selectedMasterImage}
-        onToggleMultiShot={handleToggleMultiShotSelection}
-        onSelectMasterImage={handleSelectMasterImage}
-        onConfirm={handleConfirmBatchStyle}
-        onCancel={() => {
-          setIsBatchStyleModalOpen(false);
-          setSelectedMultiShots([]);
-          setSelectedMasterImage(null);
-        }}
       />
 
       <UserGuide 

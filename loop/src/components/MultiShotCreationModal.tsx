@@ -7,7 +7,13 @@ interface MultiShotModalProps {
   assets: Asset[];
   selectedAssets: string[];
   onToggleAsset: (assetId: string) => void;
-  onConfirm: (numberOfShots: number, shotType: string, shotDetails?: any, structuredData?: StructuredInputData, individualShots?: IndividualShot[]) => void;
+  onConfirm: (
+    numberOfShots: number,
+    shotType: string,
+    shotDetails?: any,
+    structuredData?: StructuredInputData,
+    individualShots?: IndividualShot[]
+  ) => boolean | void;
   onCancel: () => void;
 }
 
@@ -180,7 +186,7 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        style={{ maxWidth: '700px', maxHeight: '85vh' }}
+        style={{ maxWidth: '95vw', width: '1400px', maxHeight: '95vh', minHeight: '720px' }}
       >
         <div className="glass-modal__header">
           <h2 id={titleId} className="glass-modal__title ink-strong">Create Multi-Shot Asset</h2>
@@ -188,35 +194,40 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
         <p id={descriptionId} className="glass-modal__description">
           Create comprehensive multi-shot assets with detailed configuration and per-shot customization.
         </p>
+
+        <div
+          className="flex-1 overflow-y-auto custom-scrollbar px-8 py-6 space-y-8"
+          style={{ maxHeight: 'calc(95vh - 220px)' }}
+        >
         
         {/* Tab Navigation */}
-        <div className="flex border-b border-white/20">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setActiveTab('basic')}
-            className={`px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'basic' 
-                ? 'border-b-2 border-blue-500 text-blue-600 ink-strong' 
-                : 'text-gray-400 hover:text-gray-200'
+            className={`px-4 py-2.5 text-sm font-semibold rounded-full transition-colors ${
+              activeTab === 'basic'
+                ? 'bg-blue-500/20 text-blue-100 border border-blue-400/40'
+                : 'text-gray-400 border border-transparent hover:text-gray-200 hover:border-white/20'
             }`}
           >
             📋 Basic Setup
           </button>
           <button
             onClick={() => setActiveTab('structured')}
-            className={`px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'structured' 
-                ? 'border-b-2 border-blue-500 text-blue-600 ink-strong' 
-                : 'text-gray-400 hover:text-gray-200'
+            className={`px-4 py-2.5 text-sm font-semibold rounded-full transition-colors ${
+              activeTab === 'structured'
+                ? 'bg-blue-500/20 text-blue-100 border border-blue-400/40'
+                : 'text-gray-400 border border-transparent hover:text-gray-200 hover:border-white/20'
             }`}
           >
             🎬 Structured Data
           </button>
           <button
             onClick={() => setActiveTab('individual')}
-            className={`px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'individual' 
-                ? 'border-b-2 border-blue-500 text-blue-600 ink-strong' 
-                : 'text-gray-400 hover:text-gray-200'
+            className={`px-4 py-2.5 text-sm font-semibold rounded-full transition-colors ${
+              activeTab === 'individual'
+                ? 'bg-blue-500/20 text-blue-100 border border-blue-400/40'
+                : 'text-gray-400 border border-transparent hover:text-gray-200 hover:border-white/20'
             }`}
           >
             🎯 Per-Shot Config
@@ -224,10 +235,12 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 space-y-6 max-h-96 overflow-y-auto custom-scrollbar" style={{ borderBottom: '1px solid hsl(var(--border))' }}>
+        <div
+          className="p-6 space-y-6 max-h-[28rem] overflow-y-auto custom-scrollbar bg-white/5 border border-white/10 rounded-2xl"
+        >
           {/* Basic Setup Tab */}
           {activeTab === 'basic' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium ink-strong mb-2">
               Number of Shots per Scene
@@ -349,7 +362,7 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
 
           {/* Structured Data Tab */}
           {activeTab === 'structured' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <p className="text-sm ink-subtle mb-4">
                 Create comprehensive structured data that will be included in all generated shots for better context and consistency.
               </p>
@@ -501,7 +514,7 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
 
           {/* Individual Shot Configuration Tab */}
           {activeTab === 'individual' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <p className="text-sm ink-subtle">
                   Configure each shot individually with specific parameters.
@@ -637,55 +650,97 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
           )}
         </div>
 
-        {/* Asset Selection - moved outside of tab content */}
-        <div className="border-t border-white/20">
-          <div className="max-h-64 overflow-y-auto custom-scrollbar p-4 space-y-2">
-          <h3 className="font-medium ink-strong mb-2">Select Master Story Assets</h3>
-          {masterStoryAssets.length === 0 ? (
-            <p className="text-sm ink-subtle text-center py-4">No master story assets available. Create master story assets first.</p>
-          ) : (
-            masterStoryAssets.map(asset => (
-              <label key={asset.id} className="flex items-start gap-3 p-3 cursor-pointer hover:bg-white/5 rounded-lg transition-colors border border-white/10">
-                <input
-                  type="checkbox"
-                  checked={selectedAssets.includes(asset.id)}
-                  onChange={() => onToggleAsset(asset.id)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="font-medium ink-strong">{asset.name}</div>
-                  <div className="text-xs ink-subtle mt-1">
-                    Seed: {asset.seedId.slice(0, 8)}...
-                  </div>
-                  {asset.content && (
-                    <div className="text-xs ink-subtle mt-2 p-2 bg-white/5 rounded">
-                      {asset.content.substring(0, 150)}...
-                    </div>
-                  )}
-                </div>
-              </label>
-            ))
+        <div className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold ink-strong">Generation Overview</h3>
+            <span className="text-xs ink-subtle">{selectedAssets.length} scene{selectedAssets.length === 1 ? '' : 's'} selected</span>
+          </div>
+          <div className="grid gap-4 text-sm ink-subtle sm:grid-cols-2">
+            <div className="space-y-1">
+              <p><strong>Total shots planned:</strong> {selectedAssets.length * numberOfShots}</p>
+              <p><strong>Shot emphasis:</strong> {shotType.replace('_', ' ')}</p>
+              <p><strong>Duration:</strong> {shotDetails.duration}</p>
+            </div>
+            <div className="space-y-1">
+              <p><strong>Camera movement:</strong> {shotDetails.cameraMovement.replace('_', ' ')}</p>
+              <p><strong>Lighting:</strong> {shotDetails.lightingStyle.replace('_', ' ')}</p>
+              {structuredData.sceneDescription && (
+                <p>
+                  <strong>Scene focus:</strong> {structuredData.sceneDescription.substring(0, 120)}
+                  {structuredData.sceneDescription.length > 120 ? '...' : ''}
+                </p>
+              )}
+            </div>
+          </div>
+          {enablePerShotConfig && individualShots.length > 0 && (
+            <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
+              <strong>Per-shot configuration enabled.</strong> Customize each shot below.
+            </div>
           )}
+        </div>
+
+        {/* Asset Selection - moved outside of tab content */}
+        <div className="border border-white/10 rounded-2xl p-6 bg-white/5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-medium ink-strong">Select Master Story Assets</h3>
+            <span className="text-xs ink-subtle">{selectedAssets.length} selected</span>
+          </div>
+          <div className="max-h-72 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+            {masterStoryAssets.length === 0 ? (
+              <p className="text-sm ink-subtle text-center py-6 bg-white/5 rounded-xl">
+                No master story assets available. Create master story assets first.
+              </p>
+            ) : (
+              masterStoryAssets.map(asset => (
+                <label
+                  key={asset.id}
+                  className="flex items-start gap-3 p-4 cursor-pointer hover:bg-white/10 rounded-xl transition-colors border border-white/10"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedAssets.includes(asset.id)}
+                    onChange={() => onToggleAsset(asset.id)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium ink-strong">{asset.name}</div>
+                    <div className="text-xs ink-subtle mt-1">
+                      Seed: {asset.seedId.slice(0, 8)}...
+                    </div>
+                    {asset.content && (
+                      <div className="text-xs ink-subtle mt-2 p-3 bg-white/5 rounded-lg">
+                        {asset.content.substring(0, 180)}...
+                      </div>
+                    )}
+                  </div>
+                </label>
+              ))
+            )}
           </div>
         </div>
 
         {/* Summary Section */}
         {selectedMasterStories.length > 0 && (
-          <div className="p-4 bg-blue-50/50 border-t border-white/20">
-            <h3 className="font-medium ink-strong mb-2">Multi-Shot Configuration Summary</h3>
-            <div className="text-sm ink-subtle space-y-1">
+          <div className="p-6 bg-blue-500/10 border border-blue-300/30 rounded-2xl space-y-3">
+            <h3 className="font-medium ink-strong">Multi-Shot Configuration Summary</h3>
+            <div className="grid gap-2 sm:grid-cols-2 text-sm ink-subtle">
               <p>• Selected Scenes: {selectedMasterStories.length}</p>
               <p>• Shots per Scene: {numberOfShots}</p>
               <p>• Shot Type: {shotType.replace('_', ' ')}</p>
               <p>• Duration: {shotDetails.duration}</p>
               <p>• Camera Movement: {shotDetails.cameraMovement.replace('_', ' ')}</p>
               <p>• Lighting: {shotDetails.lightingStyle.replace('_', ' ')}</p>
-              {shotDetails.shotDescription && <p>• Custom Notes: {shotDetails.shotDescription.substring(0, 50)}{shotDetails.shotDescription.length > 50 ? '...' : ''}</p>}
+              {shotDetails.shotDescription && (
+                <p className="sm:col-span-2">
+                  • Custom Notes: {shotDetails.shotDescription.substring(0, 160)}
+                  {shotDetails.shotDescription.length > 160 ? '...' : ''}
+                </p>
+              )}
               <p>• Total Shots to Generate: {selectedMasterStories.length * numberOfShots}</p>
             </div>
-            <div className="mt-3 p-3 bg-white/20 rounded text-xs ink-subtle">
-              <strong>Selected Stories:</strong>
-              <ul className="mt-1 space-y-1">
+            <div className="p-4 bg-white/10 rounded-xl text-xs ink-subtle space-y-1">
+              <strong className="block text-sm ink-strong">Selected Stories:</strong>
+              <ul className="space-y-1">
                 {selectedMasterStories.map(asset => (
                   <li key={asset.id}>• {asset.name}</li>
                 ))}
@@ -694,7 +749,9 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
           </div>
         )}
 
-        <div className="glass-modal__actions">
+        </div>
+
+        <div className="glass-modal__actions px-8 pb-8">
           <button
             ref={confirmButtonRef}
             className="modal-button modal-button--primary"

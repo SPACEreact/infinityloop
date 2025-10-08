@@ -1725,32 +1725,54 @@ textarea:focus-visible {
 
 .chat-icon-button {
   align-items: center;
-  background: transparent;
+  background:
+      radial-gradient(circle at 18% 20%, hsl(var(--chat-highlight, var(--muted)) / 0.75) 0%, transparent 55%),
+      radial-gradient(circle at 80% 80%, hsl(var(--chat-edge, var(--ring)) / 0.2) 0%, transparent 65%),
+      linear-gradient(145deg, hsl(var(--chat-surface, var(--card)) / 0.88) 0%, hsl(var(--chat-highlight, var(--muted)) / 0.95) 55%, hsl(var(--chat-edge, var(--ring)) / 0.65) 100%);
   border-radius: 9999px;
-  border: 1px solid transparent;
+  border: 1px solid hsl(var(--chat-edge, var(--ring)) / 0.4);
   color: hsl(var(--muted-foreground));
   display: inline-flex;
   justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, background 0.2s ease;
+  box-shadow:
+    0 10px 24px hsl(var(--chat-accent, var(--primary)) / 0.24),
+    0 2px 6px hsl(var(--ink) / 0.08),
+    inset 0 2px 3px hsl(var(--chat-highlight, var(--muted)) / 0.85),
+    inset 0 -3px 6px hsl(var(--chat-edge, var(--ring)) / 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .chat-icon-button:hover:not(:disabled) {
-  background: hsl(var(--chat-accent, var(--primary)) / 0.18);
+  transform: translateY(-1px);
+  background:
+      radial-gradient(circle at 22% 22%, hsl(var(--chat-highlight, var(--muted)) / 0.9) 0%, transparent 60%),
+      radial-gradient(circle at 78% 78%, hsl(var(--chat-accent, var(--primary)) / 0.3) 0%, transparent 70%),
+      linear-gradient(150deg, hsl(var(--chat-surface, var(--card)) / 0.95) 0%, hsl(var(--chat-highlight, var(--muted)) / 1) 55%, hsl(var(--chat-accent, var(--primary)) / 0.75) 100%);
   color: hsl(var(--chat-accent, var(--primary)));
-  box-shadow: 0 12px 32px hsl(var(--chat-accent, var(--primary)) / 0.28);
-  outline: 1px solid hsl(var(--ink) / 0.25);
+  border-color: hsl(var(--chat-accent, var(--primary)) / 0.55);
+  box-shadow:
+    0 14px 32px hsl(var(--chat-accent, var(--primary)) / 0.32),
+    0 4px 12px hsl(var(--ink) / 0.12),
+    inset 0 3px 6px hsl(var(--chat-highlight, var(--muted)) / 0.95),
+    inset 0 -3px 8px hsl(var(--chat-accent, var(--primary)) / 0.45);
 }
 
 .chat-icon-button:focus-visible {
   outline: 2px solid hsl(var(--ink));
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px hsl(var(--chat-accent, var(--primary)) / 0.25);
+  border-color: hsl(var(--ink));
+  box-shadow:
+    0 0 0 4px hsl(var(--chat-accent, var(--primary)) / 0.28),
+    0 12px 28px hsl(var(--chat-accent, var(--primary)) / 0.28),
+    inset 0 2px 4px hsl(var(--chat-highlight, var(--muted)) / 0.9);
 }
 
 .chat-icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
   box-shadow: none;
+  background: linear-gradient(145deg, hsl(var(--chat-surface, var(--card)) / 0.75), hsl(var(--chat-surface, var(--card)) / 0.85));
+  border-color: hsl(var(--chat-edge, var(--ring)) / 0.25);
 }
 
 .chat-meta {
