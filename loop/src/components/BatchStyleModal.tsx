@@ -145,7 +145,7 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
                     <div className="flex-1 space-y-2">
                       <div className="font-medium ink-strong text-base">{asset.name}</div>
                       <div className="text-xs ink-subtle">
-                        Seed: {asset.seedId.slice(0, 8)}... • Shots: {asset.metadata?.configuration?.totalShots || 'N/A'}
+                        Seed: {asset.seedId ? `${asset.seedId.slice(0, 8)}...` : 'Not provided'} • Shots: {asset.metadata?.configuration?.totalShots || 'N/A'}
                       </div>
                       {asset.summary && (
                         <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
@@ -187,7 +187,7 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
                     <div className="flex-1 space-y-2">
                       <div className="font-medium ink-strong text-base">{asset.name}</div>
                       <div className="text-xs ink-subtle">
-                        Seed: {asset.seedId.slice(0, 8)}... • Type: {asset.type}
+                        Seed: {asset.seedId ? `${asset.seedId.slice(0, 8)}...` : 'Not provided'} • Type: {asset.type}
                       </div>
                       {asset.content && (
                         <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">

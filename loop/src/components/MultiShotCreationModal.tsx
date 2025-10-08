@@ -705,7 +705,7 @@ export const MultiShotCreationModal: React.FC<MultiShotModalProps> = ({
                   <div className="flex-1">
                     <div className="font-medium ink-strong">{asset.name}</div>
                     <div className="text-xs ink-subtle mt-1">
-                      Seed: {asset.seedId.slice(0, 8)}...
+                      Seed: {asset.seedId ? `${asset.seedId.slice(0, 8)}...` : 'Not provided'}
                     </div>
                     {asset.content && (
                       <div className="text-xs ink-subtle mt-2 p-3 bg-white/5 rounded-lg">
