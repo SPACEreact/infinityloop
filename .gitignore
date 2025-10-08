@@ -29,3 +29,6 @@ replit.nix
 .config/
 .upm/
 .pythonlibs/
+
+# Local Netlify folder
+.netlify

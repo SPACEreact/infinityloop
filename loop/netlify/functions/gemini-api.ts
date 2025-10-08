@@ -1,16 +1,11 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import dotenv from 'dotenv';
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_API_URLS = {
-  'gemini-1.5-flash': `${GEMINI_API_BASE_URL}/models/gemini-1.5-flash:generateContent`,
-  'gemini-2.5-flash-nano': `${GEMINI_API_BASE_URL}/models/gemini-2.5-flash-nano:generateContent`,
-  'banana': `${GEMINI_API_BASE_URL}/models/banana:generateContent`,
-  'imagen': `${GEMINI_API_BASE_URL}/models/imagen-3.0-generate-001:generateImages`
-};
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
 
 // Rate limiting: simple in-memory store (for serverless, consider Redis for production)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -30,19 +25,7 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com;",
 };
 
-export interface GenerationRequest {
-  contents: Array<{
-    parts: Array<{ text: string }>;
-  }>;
-}
 
-export interface GenerationResponse {
-  candidates: Array<{
-    content: {
-      parts: Array<{ text: string }>;
-    };
-  }>;
-}
 
 // Retry utility function
 async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> {
@@ -156,93 +139,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     switch (action) {
       case 'generateContent': {
-        const { prompt, model = 'gemini-1.5-flash' } = requestData;
-        
-        const modelKey = model as keyof typeof GEMINI_API_URLS;
-        if (!GEMINI_API_URLS[modelKey]) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: `Invalid model specified: ${model}` })
-          };
-        }
+        const { prompt, model = 'gemini-2.5-flash' } = requestData;
 
         const data = await retryApiCall(async () => {
-          const request: GenerationRequest = {
-            contents: [{
-              parts: [{ text: prompt }]
-            }]
-          };
-
-          const response = await fetch(`${GEMINI_API_URLS[modelKey]}?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request)
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-          }
-
-          const json: GenerationResponse = await response.json();
-          return json.candidates[0]?.content.parts[0]?.text?.trim() ?? '';
-        });
-
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            success: true,
-            data: data,
-            isMock: false 
-          })
-        };
-      }
-
-      case 'generateImage': {
-        const { prompt, model = 'imagen' } = requestData;
-
-        const modelKey = model as keyof typeof GEMINI_API_URLS;
-        if (!GEMINI_API_URLS[modelKey]) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: `Invalid model specified for image generation: ${model}` })
-          };
-        }
-
-        const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
-
-        const base64Image = await retryApiCall(async () => {
-          const request = {
-            instances: [{
-              prompt: enhancedPrompt,
-              sampleCount: 1
-            }],
-            parameters: {
-              aspectRatio: "1:1",
-              safetyFilterLevel: "block_some",
-              personGeneration: "allow_adult"
-            }
-          };
-
-          const response = await fetch(`${GEMINI_API_URLS[modelKey]}?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request)
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Image API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          if (data.predictions && data.predictions.length > 0) {
-            return data.predictions[0].bytesBase64Encoded as string;
-          }
-          throw new Error('No image returned from model');
+          const generativeModel = genAI.getGenerativeModel({ model: model });
+          const result = await generativeModel.generateContent(prompt);
+          const response = await result.response;
+          return response.text().trim();
         });
 
         return {
@@ -250,14 +153,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           headers,
           body: JSON.stringify({
             success: true,
-            data: base64Image,
+            data: data,
             isMock: false
           })
         };
       }
 
       case 'listModels': {
-        const response = await fetch(`${GEMINI_API_BASE_URL}/models?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -271,9 +174,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             success: true,
-            data: data 
+            data: data
           })
         };
       }

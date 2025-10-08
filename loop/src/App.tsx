@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import type { Project } from './types';
 import Workspace from './components/Workspace';
 import { useProject } from './hooks/useProject';
+import GeminiTest from './components/GeminiTest';
 
 const App: React.FC = () => {
   const appLabel = 'Loop';
@@ -11,7 +12,6 @@ const App: React.FC = () => {
     name: 'Untitled Project',
     assets: [],
     primaryTimeline: {
-      blocks: [],
       folders: {
         story: [],
         image: [],
