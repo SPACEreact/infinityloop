@@ -343,7 +343,7 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
           </div>
         </div>
 
-        <div className="flex flex-col gap-5 px-6 py-5">
+        <div className="max-h-[calc(100vh-4rem)] overflow-y-auto px-6 py-5">
           <div className="flex flex-col gap-4 rounded-2xl border-2 border-border bg-card/80 p-4 shadow-inner backdrop-blur-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-xs uppercase tracking-[0.35em] text-primary/80">
@@ -445,38 +445,40 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {!hasResults ? (
               <div className="col-span-full rounded-2xl border border-border bg-card/80 p-10 text-center text-sm text-muted-foreground">
                 No quick-reference results. Try a different term or view the full notes below.
               </div>
             ) : (
               filteredCategories.map((category) => (
-                <section
-                  key={category.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-border bg-card/80 p-4"
-                >
-                  <header className="flex items-start gap-3">
-                    <div className="mt-1 shrink-0">{category.icon}</div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-semibold text-foreground">{category.label}</h3>
-                      <p className="text-xs text-muted-foreground">{category.description}</p>
-                    </div>
-                  </header>
-                  <ul className="space-y-2 text-sm text-foreground">
-                    {category.items.map((item) => (
-                      <li
-                        key={item}
-                        className="rounded-xl border border-border bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 px-3 py-2 cursor-pointer transition-all duration-200 transform hover:scale-105 hover:shadow-md"
-                        onClick={() => handleTopicClick(item, category.id)}
-                      >
-                        <div className="font-medium text-white">
-                          {highlightMatches(item)}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+                category.items.length > 0 && (
+                  <section
+                    key={category.id}
+                    className="flex flex-col gap-2 rounded-2xl border border-border bg-card/80 p-4"
+                  >
+                    <header className="flex items-start gap-3">
+                      <div className="mt-1 shrink-0">{category.icon}</div>
+                      <div className="space-y-1">
+                        <h3 className="text-base font-semibold text-foreground">{category.label}</h3>
+                        <p className="text-xs text-muted-foreground">{category.description}</p>
+                      </div>
+                    </header>
+                    <ul className="space-y-1.5 text-sm text-foreground">
+                      {category.items.map((item) => (
+                        <li
+                          key={item}
+                          className="rounded-xl border border-border bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 px-3 py-2 cursor-pointer transition-all duration-200 transform hover:scale-105 hover:shadow-md"
+                          onClick={() => handleTopicClick(item, category.id)}
+                        >
+                          <div className="font-medium text-white">
+                            {highlightMatches(item)}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
               ))
             )}
           </div>
