@@ -131,30 +131,33 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
               </p>
             ) : (
               <div className="max-h-72 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-                {multiShotAssets.map(asset => (
-                  <label
-                    key={asset.id}
-                    className="flex items-start gap-4 p-4 cursor-pointer hover:bg-white/10 rounded-xl transition-colors border border-blue-200/60"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedMultiShots.includes(asset.id)}
-                      onChange={() => onToggleMultiShot(asset.id)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 space-y-2">
-                      <div className="font-medium ink-strong text-base">{asset.name}</div>
-                      <div className="text-xs ink-subtle">
-                        Seed: {asset.seedId ? `${asset.seedId.slice(0, 8)}...` : 'Not provided'} • Shots: {asset.metadata?.configuration?.totalShots || 'N/A'}
-                      </div>
-                      {asset.summary && (
-                        <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
-                          {asset.summary}
+                {multiShotAssets.map(asset => {
+                  const truncatedSeed = asset.seedId?.slice(0, 8);
+                  return (
+                    <label
+                      key={asset.id}
+                      className="flex items-start gap-4 p-4 cursor-pointer hover:bg-white/10 rounded-xl transition-colors border border-blue-200/60"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMultiShots.includes(asset.id)}
+                        onChange={() => onToggleMultiShot(asset.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 space-y-2">
+                        <div className="font-medium ink-strong text-base">{asset.name}</div>
+                        <div className="text-xs ink-subtle">
+                          Seed: {truncatedSeed ? `${truncatedSeed}...` : 'Not provided'} • Shots: {asset.metadata?.configuration?.totalShots || 'N/A'}
                         </div>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                        {asset.summary && (
+                          <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
+                            {asset.summary}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -172,31 +175,34 @@ export const BatchStyleModal: React.FC<BatchStyleModalProps> = ({
               </p>
             ) : (
               <div className="max-h-72 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-                {masterImageAssets.map(asset => (
-                  <label
-                    key={asset.id}
-                    className="flex items-start gap-4 p-4 cursor-pointer hover:bg-white/10 rounded-xl transition-colors border border-purple-200/60"
-                  >
-                    <input
-                      type="radio"
-                      name="masterImage"
-                      checked={selectedMasterImage === asset.id}
-                      onChange={() => onSelectMasterImage(asset.id)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 space-y-2">
-                      <div className="font-medium ink-strong text-base">{asset.name}</div>
-                      <div className="text-xs ink-subtle">
-                        Seed: {asset.seedId ? `${asset.seedId.slice(0, 8)}...` : 'Not provided'} • Type: {asset.type}
-                      </div>
-                      {asset.content && (
-                        <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
-                          {asset.content.substring(0, 180)}...
+                {masterImageAssets.map(asset => {
+                  const truncatedSeed = asset.seedId?.slice(0, 8);
+                  return (
+                    <label
+                      key={asset.id}
+                      className="flex items-start gap-4 p-4 cursor-pointer hover:bg-white/10 rounded-xl transition-colors border border-purple-200/60"
+                    >
+                      <input
+                        type="radio"
+                        name="masterImage"
+                        checked={selectedMasterImage === asset.id}
+                        onChange={() => onSelectMasterImage(asset.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 space-y-2">
+                        <div className="font-medium ink-strong text-base">{asset.name}</div>
+                        <div className="text-xs ink-subtle">
+                          Seed: {truncatedSeed ? `${truncatedSeed}...` : 'Not provided'} • Type: {asset.type}
                         </div>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                        {asset.content && (
+                          <div className="text-xs ink-subtle p-3 bg-white/10 rounded-lg">
+                            {asset.content.substring(0, 180)}...
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
