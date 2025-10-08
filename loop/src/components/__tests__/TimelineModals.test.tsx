@@ -12,11 +12,10 @@ vi.mock('../../services/config', () => ({
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import Workspace from '../../components/Workspace';
 import type { Project, Asset } from '../../types';
 import { useProject } from '../../hooks/useProject';
 
-const MultiShotModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
+function MultiShotModalStub({ isOpen, onCancel }: any) {
   if (!isOpen) return null;
   return (
     <div role="dialog" aria-label="Create Multi-Shot Asset">
@@ -25,9 +24,9 @@ const MultiShotModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
       </button>
     </div>
   );
-};
+}
 
-const BatchStyleModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
+function BatchStyleModalStub({ isOpen, onCancel }: any) {
   if (!isOpen) return null;
   return (
     <div role="dialog" aria-label="Create Batch Style Application">
@@ -36,10 +35,17 @@ const BatchStyleModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
       </button>
     </div>
   );
-};
+}
 
-vi.stubGlobal('MultiShotCreationModal', MultiShotModalStub);
-vi.stubGlobal('BatchStyleModal', BatchStyleModalStub);
+vi.mock('../../components/MultiShotCreationModal', () => ({
+  MultiShotCreationModal: MultiShotModalStub,
+}));
+
+vi.mock('../../components/BatchStyleModal', () => ({
+  BatchStyleModal: BatchStyleModalStub,
+}));
+
+import Workspace from '../../components/Workspace';
 
 describe('timeline modal triggers', () => {
   const baseAssets: Asset[] = [
