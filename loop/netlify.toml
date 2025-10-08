@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "20.19"
+  GEMINI_API_KEY = "AIzaSyBD5wS3hwL4zRiAs5tAaxfH8YNZ3efqT3U"
 
 [dev]
 targetPort = 5173
