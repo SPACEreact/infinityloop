@@ -1,9 +1,7 @@
 import React from 'react';
 import type { Asset, Project, TimelineBlock, StructuredInputData, IndividualShot, ShotDetails } from '../types';
 import { ASSET_TEMPLATES } from '../constants';
-import { MagicWandIcon, PlusIcon, SparklesIcon } from './IconComponents';
-import { MultiShotCreationModal } from './MultiShotCreationModal';
-import { BatchStyleModal } from './BatchStyleModal';
+import { MagicWandIcon, PlusIcon, QuestionMarkCircleIcon, SparklesIcon } from './IconComponents';
 
 // @ts-ignore
 export const Timeline = ({
@@ -264,7 +262,18 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
         <div className="flex justify-center">
           <div className="p-2 max-w-lg w-full bg-white/10 rounded-full backdrop-blur-sm border border-white/20">
             <div className="flex items-center gap-2 px-2">
-              <label htmlFor="weighting-enabled-timeline" className="text-xs font-medium ink-strong whitespace-nowrap">Tag</label>
+              <div className="flex items-center gap-1">
+                <label
+                  htmlFor="weighting-enabled-timeline"
+                  className="text-xs font-medium ink-strong whitespace-nowrap"
+                >
+                  Style Weighting
+                </label>
+                <QuestionMarkCircleIcon
+                  className="w-3.5 h-3.5 opacity-70"
+                  title="Style weighting balances AI creativity with adherence to your selected references."
+                />
+              </div>
               <button
                 role="switch"
                 aria-checked={isWeightingEnabled}
@@ -275,22 +284,39 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                 <span className={`inline-block h-2.5 w-2.5 transform rounded-full toggle-thumb ${isWeightingEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
               </button>
               
-              <div className={`flex items-center gap-2 flex-1 ${isWeightingEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                <label htmlFor="style-rigidity-timeline" className="text-xs ink-strong whitespace-nowrap">Style</label>
-                <input
-                  id="style-rigidity-timeline"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={styleRigidity}
-                  onChange={(e) => onStyleRigidityChange(parseInt(e.target.value, 10))}
-                  className="flex-1 h-1 bg-white/30 rounded-full appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${styleRigidity}%, rgba(255,255,255,0.3) ${styleRigidity}%, rgba(255,255,255,0.3) 100%)`
-                  }}
-                  disabled={!isWeightingEnabled}
-                />
-                <span className="text-xs ink-subtle min-w-[2rem] text-center">{styleRigidity}%</span>
+              <div className={`flex items-start gap-3 flex-1 ${isWeightingEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1">
+                    <label htmlFor="style-rigidity-timeline" className="text-xs ink-strong whitespace-nowrap">
+                      Style Rigidity
+                    </label>
+                  </div>
+                  <div className="mt-1">
+                    <div className="relative">
+                      <input
+                        id="style-rigidity-timeline"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={styleRigidity}
+                        onChange={(e) => onStyleRigidityChange(parseInt(e.target.value, 10))}
+                        className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${styleRigidity}%, rgba(255,255,255,0.3) ${styleRigidity}%, rgba(255,255,255,0.3) 100%)`
+                        }}
+                        disabled={!isWeightingEnabled}
+                      />
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <span className="w-px h-3 bg-white/70 rounded-full" />
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-[10px] uppercase ink-subtle tracking-wide mt-1">
+                      <span>Creativity</span>
+                      <span>Adherence</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs ink-subtle min-w-[2.5rem] text-right">{styleRigidity}%</span>
               </div>
             </div>
           </div>

@@ -124,8 +124,11 @@ const WeightsView: React.FC<Omit<ContextPanelProps, 'mode' | 'buildContext' | 's
             <div className="panel-section p-3">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                        <label htmlFor="enable-weighting" className="font-bold ink-strong">Enable Tag Weighting</label>
-                        <QuestionMarkCircleIcon className="w-4 h-4 opacity-70" title="Weighting help" />
+                        <label htmlFor="enable-weighting" className="font-bold ink-strong">Enable Style Weighting</label>
+                        <QuestionMarkCircleIcon
+                            className="w-4 h-4 opacity-70"
+                            title="Style weighting lets you prioritize adherence to your selected references."
+                        />
                     </div>
                     <button
                         role="switch"
@@ -145,20 +148,30 @@ const WeightsView: React.FC<Omit<ContextPanelProps, 'mode' | 'buildContext' | 's
 
             <div className={`transition-opacity duration-300 ${isWeightingEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                  <div className="panel-section p-3 mb-4">
-                    <label htmlFor="style-rigidity" className="block font-bold ink-strong mb-2">Style Rigidity</label>
-                    <input
-                        id="style-rigidity"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={styleRigidity}
-                        onChange={(e) => onStyleRigidityChange?.(parseInt(e.target.value, 10))}
-                        className="w-full"
-                        disabled={!isWeightingEnabled}
-                    />
-                     <div className="text-xs ink-subtle flex justify-between">
-                        <span>More AI Freedom</span>
-                        <span>Strict Adherence</span>
+                    <label htmlFor="style-rigidity" className="block font-bold ink-strong">Style Rigidity</label>
+                    <div className="mt-2">
+                        <div className="relative">
+                            <input
+                                id="style-rigidity"
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={styleRigidity ?? 0}
+                                onChange={(e) => onStyleRigidityChange?.(parseInt(e.target.value, 10))}
+                                className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                                style={{
+                                    background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${styleRigidity ?? 0}%, rgba(255,255,255,0.3) ${styleRigidity ?? 0}%, rgba(255,255,255,0.3) 100%)`
+                                }}
+                                disabled={!isWeightingEnabled}
+                            />
+                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <span className="w-px h-3 bg-white/70 rounded-full" />
+                            </div>
+                        </div>
+                        <div className="text-[10px] ink-subtle flex justify-between uppercase tracking-wide mt-1">
+                            <span>Creativity</span>
+                            <span>Adherence</span>
+                        </div>
                     </div>
                 </div>
 
@@ -203,12 +216,12 @@ const ContextPanel: React.FC<ContextPanelProps> = (props) => {
   const TABS = {
       build: [
           {id: 'seeds', label: 'Project Seeds'},
-          {id: 'weights', label: 'Tag Weights'},
+          {id: 'weights', label: 'Style Weights'},
           {id: 'knowledge', label: 'Knowledge'}
       ],
       sandbox: [
           {id: 'tags', label: 'Sandbox Context'},
-          {id: 'weights', label: 'Tag Weights'},
+          {id: 'weights', label: 'Style Weights'},
           {id: 'knowledge', label: 'Knowledge'}
       ]
   };

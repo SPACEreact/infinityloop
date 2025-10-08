@@ -51,7 +51,7 @@ const App: React.FC = () => {
     handleGenerateOutput
   } = useProject(initialProject);
 
-  // Global state for Tag Weighting System
+  // Global state for Style Weighting System
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
   const [styleRigidity, setStyleRigidity] = useState<number>(50);
   const [isWeightingEnabled, setIsWeightingEnabled] = useState<boolean>(false);
