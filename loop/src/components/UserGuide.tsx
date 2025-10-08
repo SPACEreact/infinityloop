@@ -312,7 +312,7 @@ const UserGuide: React.FC<UserGuideProps> = ({ isOpen, onClose }) => {
                   Select any block to open the frosted inspector on the right. Adjust fields with dropdowns, fine-tune weights, or add tags without losing seed lineage.
                 </p>
                 <p className="text-sm ink-subtle leading-relaxed">
-                  The Control deck beneath lets you toggle Tag Weighting, tweak Style Rigidity, and trigger Generate for rapid iterations.
+                  The Control deck beneath lets you toggle Style Weighting, tweak Style Rigidity, and trigger Generate for rapid iterations.
                 </p>
               </div>
             </div>
