@@ -1,9 +1,19 @@
+import { vi } from 'vitest';
+
+vi.mock('../../services/config', () => ({
+  apiConfig: {
+    getConfigs: vi.fn(() => []),
+    addConfig: vi.fn(),
+    updateConfigByName: vi.fn(),
+    removeConfigByName: vi.fn(),
+  },
+}));
+
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Workspace from '../../components/Workspace';
 import type { Project, Asset } from '../../types';
-import { vi } from 'vitest';
 import { useProject } from '../../hooks/useProject';
 
 const MultiShotModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
@@ -44,7 +54,7 @@ describe('timeline modal triggers', () => {
       summary: 'A hero begins the journey',
       isMaster: true,
       lineage: [],
-      metadata: {}
+      metadata: {},
     },
     {
       id: 'multi-shot-1',
@@ -56,9 +66,9 @@ describe('timeline modal triggers', () => {
       createdAt: new Date('2024-01-02T00:00:00Z'),
       summary: 'Planned multi shot sequence',
       metadata: {
-        configuration: { totalShots: 3 }
+        configuration: { totalShots: 3 },
       },
-      lineage: []
+      lineage: [],
     },
     {
       id: 'image-1',
@@ -71,8 +81,8 @@ describe('timeline modal triggers', () => {
       summary: 'Primary visual tone',
       isMaster: true,
       lineage: [],
-      metadata: {}
-    }
+      metadata: {},
+    },
   ];
 
   const baseProject: Project = {
@@ -84,21 +94,21 @@ describe('timeline modal triggers', () => {
       folders: {
         story: [],
         image: [],
-        text_to_video: []
-      }
+        text_to_video: [],
+      },
     },
     secondaryTimeline: {
       masterAssets: [baseAssets[0]],
       shotLists: [],
-      appliedStyles: {}
+      appliedStyles: {},
     },
     thirdTimeline: {
       styledShots: [],
       videoPrompts: [],
-      batchStyleAssets: []
+      batchStyleAssets: [],
     },
     createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-04T00:00:00Z')
+    updatedAt: new Date('2024-01-04T00:00:00Z'),
   };
 
   const defaultHandlers = {
@@ -120,10 +130,12 @@ describe('timeline modal triggers', () => {
     onStyleRigidityChange: vi.fn(),
     onWeightingToggle: vi.fn(),
     onGenerate: vi.fn(),
-    onGenerateOutput: vi.fn()
+    onGenerateOutput: vi.fn(),
   } as const;
 
-  const renderWorkspace = (overrides: Partial<React.ComponentProps<typeof Workspace>> = {}) => {
+  const renderWorkspace = (
+    overrides: Partial<React.ComponentProps<typeof Workspace>> = {},
+  ) => {
     const props: React.ComponentProps<typeof Workspace> = {
       appLabel: 'Loop',
       project: baseProject,
@@ -157,7 +169,7 @@ describe('timeline modal triggers', () => {
       isGenerating: false,
       onGenerate: defaultHandlers.onGenerate,
       onGenerateOutput: defaultHandlers.onGenerateOutput,
-      ...overrides
+      ...overrides,
     };
 
     return render(<Workspace {...props} />);
@@ -167,18 +179,28 @@ describe('timeline modal triggers', () => {
     const user = userEvent.setup();
     renderWorkspace({ activeTimeline: 'secondary' });
 
-    await user.click(screen.getByRole('button', { name: /create multi-shot/i }));
+    await user.click(
+      screen.getByRole('button', { name: /create multi-shot/i }),
+    );
 
-    expect(await screen.findByRole('dialog', { name: /create multi-shot asset/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: /create multi-shot asset/i }),
+    ).toBeInTheDocument();
   });
 
   it('opens the batch style modal from the batch style timeline', async () => {
     const user = userEvent.setup();
     renderWorkspace({ activeTimeline: 'third' });
 
-    await user.click(screen.getByRole('button', { name: /create batch style/i }));
+    await user.click(
+      screen.getByRole('button', { name: /create batch style/i }),
+    );
 
-    expect(await screen.findByRole('dialog', { name: /create batch style application/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', {
+        name: /create batch style application/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it('normalizes missing seed IDs before rendering timeline modals', async () => {
@@ -190,7 +212,11 @@ describe('timeline modal triggers', () => {
 
     const projectWithMissingSeeds: Project = {
       ...baseProject,
-      assets: [masterStoryWithoutSeed, multiShotWithoutSeed, masterImageWithoutSeed],
+      assets: [
+        masterStoryWithoutSeed,
+        multiShotWithoutSeed,
+        masterImageWithoutSeed,
+      ],
       secondaryTimeline: {
         masterAssets: [masterImageWithoutSeed],
         shotLists: [
@@ -198,16 +224,16 @@ describe('timeline modal triggers', () => {
             id: 'shotlist-1',
             masterAssetId: masterStoryWithoutSeed.id,
             shots: [multiShotWithoutSeed],
-            createdAt: new Date('2024-01-05T00:00:00Z')
-          }
+            createdAt: new Date('2024-01-05T00:00:00Z'),
+          },
         ],
-        appliedStyles: {}
+        appliedStyles: {},
       },
       thirdTimeline: {
         styledShots: [multiShotWithoutSeed],
         videoPrompts: [],
-        batchStyleAssets: [masterImageWithoutSeed]
-      }
+        batchStyleAssets: [masterImageWithoutSeed],
+      },
     };
 
     const Harness: React.FC = () => {
@@ -236,12 +262,15 @@ describe('timeline modal triggers', () => {
         setActiveTimeline,
         isGenerating,
         handleGenerate,
-        handleGenerateOutput
+        handleGenerateOutput,
       } = useProject(projectWithMissingSeeds);
 
-      const [tagWeights, setTagWeights] = React.useState<Record<string, number>>({});
+      const [tagWeights, setTagWeights] = React.useState<
+        Record<string, number>
+      >({});
       const [styleRigidity, setStyleRigidity] = React.useState<number>(50);
-      const [isWeightingEnabled, setIsWeightingEnabled] = React.useState<boolean>(false);
+      const [isWeightingEnabled, setIsWeightingEnabled] =
+        React.useState<boolean>(false);
 
       return (
         <Workspace
@@ -269,7 +298,9 @@ describe('timeline modal triggers', () => {
           tagWeights={tagWeights}
           styleRigidity={styleRigidity}
           isWeightingEnabled={isWeightingEnabled}
-          onTagWeightChange={(tagId, weight) => setTagWeights(prev => ({ ...prev, [tagId]: weight }))}
+          onTagWeightChange={(tagId, weight) =>
+            setTagWeights((prev) => ({ ...prev, [tagId]: weight }))
+          }
           onStyleRigidityChange={setStyleRigidity}
           onWeightingToggle={setIsWeightingEnabled}
           activeTimeline={activeTimeline}
@@ -283,15 +314,112 @@ describe('timeline modal triggers', () => {
 
     render(<Harness />);
 
-    await user.click(await screen.findByRole('button', { name: /multi-shot/i }));
-    await user.click(await screen.findByRole('button', { name: /create multi-shot/i }));
-    expect(await screen.findByRole('dialog', { name: /create multi-shot asset/i })).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('button', { name: /multi-shot/i }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /create multi-shot/i }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: /create multi-shot asset/i }),
+    ).toBeInTheDocument();
 
-    await user.click(await screen.findByRole('button', { name: /close multi-shot modal/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /close multi-shot modal/i }),
+    );
 
-    await user.click(await screen.findByRole('button', { name: /batch style/i }));
-    await user.click(await screen.findByRole('button', { name: /create batch style/i }));
-    expect(await screen.findByRole('dialog', { name: /create batch style application/i })).toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: /close batch style modal/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /batch style/i }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /create batch style/i }),
+    );
+    expect(
+      await screen.findByRole('dialog', {
+        name: /create batch style application/i,
+      }),
+    ).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('button', { name: /close batch style modal/i }),
+    );
+  });
+
+  it('maintains canonical seed IDs across all timelines for shared assets', async () => {
+    const sharedAssetBase: Asset = {
+      id: 'shared-asset',
+      seedId: '',
+      type: 'master_image',
+      name: 'Shared Asset',
+      content: 'Shared content',
+      tags: ['shared'],
+      createdAt: new Date('2024-02-01T00:00:00Z'),
+      summary: 'A shared asset',
+      isMaster: true,
+      lineage: [],
+      metadata: {},
+    };
+
+    const projectWithSharedAssets: Project = {
+      ...baseProject,
+      assets: [{ ...sharedAssetBase }, { ...baseAssets[1] }],
+      secondaryTimeline: {
+        masterAssets: [{ ...sharedAssetBase, seedId: '' }],
+        shotLists: [
+          {
+            id: 'shotlist-canonical',
+            masterAssetId: sharedAssetBase.id,
+            shots: [{ ...sharedAssetBase, seedId: '' }],
+            createdAt: new Date('2024-02-10T00:00:00Z'),
+          },
+        ],
+        appliedStyles: {},
+      },
+      thirdTimeline: {
+        styledShots: [{ ...sharedAssetBase, seedId: 'styled-seed' }],
+        videoPrompts: [],
+        batchStyleAssets: [{ ...sharedAssetBase, seedId: '' }],
+      },
+    };
+
+    const onProjectNormalized = vi.fn();
+
+    const CaptureProject: React.FC<{ initialProject: Project }> = ({
+      initialProject,
+    }) => {
+      const { project } = useProject(initialProject);
+
+      React.useEffect(() => {
+        onProjectNormalized(project);
+      }, [onProjectNormalized, project]);
+
+      return null;
+    };
+
+    render(<CaptureProject initialProject={projectWithSharedAssets} />);
+
+    await waitFor(() => {
+      expect(onProjectNormalized).toHaveBeenCalled();
+    });
+
+    const normalizedProject = onProjectNormalized.mock.calls.at(
+      -1,
+    )![0] as Project;
+    const canonicalSeed = normalizedProject.assets.find(
+      (asset) => asset.id === sharedAssetBase.id,
+    )?.seedId;
+
+    expect(canonicalSeed).toBe('styled-seed');
+    expect(normalizedProject.secondaryTimeline?.masterAssets[0]?.seedId).toBe(
+      canonicalSeed,
+    );
+    expect(
+      normalizedProject.secondaryTimeline?.shotLists[0]?.shots[0]?.seedId,
+    ).toBe(canonicalSeed);
+    expect(normalizedProject.thirdTimeline?.styledShots[0]?.seedId).toBe(
+      canonicalSeed,
+    );
+    expect(normalizedProject.thirdTimeline?.batchStyleAssets?.[0]?.seedId).toBe(
+      canonicalSeed,
+    );
   });
 });
