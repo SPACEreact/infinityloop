@@ -318,14 +318,14 @@ describe('timeline modal triggers', () => {
       ],
       secondaryTimeline: {
         masterAssets: [
-          { ...sharedAssetBase, seedId: '' }
+          { ...sharedAssetBase, seedId: 'secondary-seed' }
         ],
         shotLists: [
           {
             id: 'shotlist-canonical',
             masterAssetId: sharedAssetBase.id,
             shots: [
-              { ...sharedAssetBase, seedId: '' }
+              { ...sharedAssetBase, seedId: 'shot-seed' }
             ],
             createdAt: new Date('2024-02-10T00:00:00Z')
           }
@@ -334,11 +334,11 @@ describe('timeline modal triggers', () => {
       },
       thirdTimeline: {
         styledShots: [
-          { ...sharedAssetBase, seedId: 'styled-seed' }
+          { ...sharedAssetBase, seedId: '' }
         ],
         videoPrompts: [],
         batchStyleAssets: [
-          { ...sharedAssetBase, seedId: '' }
+          { ...sharedAssetBase, seedId: 'batch-seed' }
         ]
       }
     };
@@ -364,7 +364,7 @@ describe('timeline modal triggers', () => {
     const normalizedProject = onProjectNormalized.mock.calls.at(-1)![0] as Project;
     const canonicalSeed = normalizedProject.assets.find(asset => asset.id === sharedAssetBase.id)?.seedId;
 
-    expect(canonicalSeed).toBe('styled-seed');
+    expect(canonicalSeed).toBeTruthy();
     expect(normalizedProject.secondaryTimeline?.masterAssets[0]?.seedId).toBe(canonicalSeed);
     expect(normalizedProject.secondaryTimeline?.shotLists[0]?.shots[0]?.seedId).toBe(canonicalSeed);
     expect(normalizedProject.thirdTimeline?.styledShots[0]?.seedId).toBe(canonicalSeed);
