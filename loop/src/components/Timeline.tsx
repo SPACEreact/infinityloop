@@ -2,6 +2,8 @@ import React from 'react';
 import type { Asset, Project, TimelineBlock, StructuredInputData, IndividualShot, ShotDetails } from '../types';
 import { ASSET_TEMPLATES } from '../constants';
 import { MagicWandIcon, PlusIcon, QuestionMarkCircleIcon, SparklesIcon } from './IconComponents';
+import { MultiShotCreationModal } from './MultiShotCreationModal';
+import { BatchStyleModal } from './BatchStyleModal';
 
 // @ts-ignore
 export const Timeline = ({
