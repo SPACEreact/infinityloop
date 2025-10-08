@@ -4,6 +4,32 @@ import userEvent from '@testing-library/user-event';
 import Workspace from '../../components/Workspace';
 import type { Project, Asset } from '../../types';
 import { vi } from 'vitest';
+import { useProject } from '../../hooks/useProject';
+
+const MultiShotModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
+  if (!isOpen) return null;
+  return (
+    <div role="dialog" aria-label="Create Multi-Shot Asset">
+      <button type="button" onClick={onCancel}>
+        Close Multi-Shot Modal
+      </button>
+    </div>
+  );
+};
+
+const BatchStyleModalStub: React.FC<any> = ({ isOpen, onCancel }) => {
+  if (!isOpen) return null;
+  return (
+    <div role="dialog" aria-label="Create Batch Style Application">
+      <button type="button" onClick={onCancel}>
+        Close Batch Style Modal
+      </button>
+    </div>
+  );
+};
+
+vi.stubGlobal('MultiShotCreationModal', MultiShotModalStub);
+vi.stubGlobal('BatchStyleModal', BatchStyleModalStub);
 
 describe('timeline modal triggers', () => {
   const baseAssets: Asset[] = [
@@ -153,5 +179,119 @@ describe('timeline modal triggers', () => {
     await user.click(screen.getByRole('button', { name: /create batch style/i }));
 
     expect(await screen.findByRole('dialog', { name: /create batch style application/i })).toBeInTheDocument();
+  });
+
+  it('normalizes missing seed IDs before rendering timeline modals', async () => {
+    const user = userEvent.setup();
+
+    const masterStoryWithoutSeed: Asset = { ...baseAssets[0], seedId: '' };
+    const multiShotWithoutSeed: Asset = { ...baseAssets[1], seedId: '' };
+    const masterImageWithoutSeed: Asset = { ...baseAssets[2], seedId: '' };
+
+    const projectWithMissingSeeds: Project = {
+      ...baseProject,
+      assets: [masterStoryWithoutSeed, multiShotWithoutSeed, masterImageWithoutSeed],
+      secondaryTimeline: {
+        masterAssets: [masterImageWithoutSeed],
+        shotLists: [
+          {
+            id: 'shotlist-1',
+            masterAssetId: masterStoryWithoutSeed.id,
+            shots: [multiShotWithoutSeed],
+            createdAt: new Date('2024-01-05T00:00:00Z')
+          }
+        ],
+        appliedStyles: {}
+      },
+      thirdTimeline: {
+        styledShots: [multiShotWithoutSeed],
+        videoPrompts: [],
+        batchStyleAssets: [masterImageWithoutSeed]
+      }
+    };
+
+    const Harness: React.FC = () => {
+      const {
+        project,
+        setProject,
+        selectedAssetId,
+        setSelectedAssetId,
+        pendingDeleteAsset,
+        toastState,
+        setToastState,
+        handleAddAsset,
+        handleAssetDrop,
+        handleRequestDeleteAsset,
+        handleConfirmDelete,
+        handleCancelDelete,
+        handleUndoDelete,
+        handleUpdateAsset,
+        selectedStoryAssets,
+        setSelectedStoryAssets,
+        selectedMultiShots,
+        setSelectedMultiShots,
+        selectedMasterImage,
+        setSelectedMasterImage,
+        activeTimeline,
+        setActiveTimeline,
+        isGenerating,
+        handleGenerate,
+        handleGenerateOutput
+      } = useProject(projectWithMissingSeeds);
+
+      const [tagWeights, setTagWeights] = React.useState<Record<string, number>>({});
+      const [styleRigidity, setStyleRigidity] = React.useState<number>(50);
+      const [isWeightingEnabled, setIsWeightingEnabled] = React.useState<boolean>(false);
+
+      return (
+        <Workspace
+          appLabel="Loop"
+          project={project}
+          setProject={setProject}
+          selectedAssetId={selectedAssetId}
+          setSelectedAssetId={setSelectedAssetId}
+          pendingDeleteAsset={pendingDeleteAsset}
+          toastState={toastState}
+          setToastState={setToastState}
+          handleAddAsset={handleAddAsset}
+          handleAssetDrop={handleAssetDrop}
+          handleRequestDeleteAsset={handleRequestDeleteAsset}
+          handleConfirmDelete={handleConfirmDelete}
+          handleCancelDelete={handleCancelDelete}
+          handleUndoDelete={handleUndoDelete}
+          handleUpdateAsset={handleUpdateAsset}
+          selectedStoryAssets={selectedStoryAssets}
+          setSelectedStoryAssets={setSelectedStoryAssets}
+          selectedMultiShots={selectedMultiShots}
+          setSelectedMultiShots={setSelectedMultiShots}
+          selectedMasterImage={selectedMasterImage}
+          setSelectedMasterImage={setSelectedMasterImage}
+          tagWeights={tagWeights}
+          styleRigidity={styleRigidity}
+          isWeightingEnabled={isWeightingEnabled}
+          onTagWeightChange={(tagId, weight) => setTagWeights(prev => ({ ...prev, [tagId]: weight }))}
+          onStyleRigidityChange={setStyleRigidity}
+          onWeightingToggle={setIsWeightingEnabled}
+          activeTimeline={activeTimeline}
+          setActiveTimeline={setActiveTimeline}
+          isGenerating={isGenerating}
+          onGenerate={handleGenerate}
+          onGenerateOutput={handleGenerateOutput}
+        />
+      );
+    };
+
+    render(<Harness />);
+
+    await user.click(await screen.findByRole('button', { name: /multi-shot/i }));
+    await user.click(await screen.findByRole('button', { name: /create multi-shot/i }));
+    expect(await screen.findByRole('dialog', { name: /create multi-shot asset/i })).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: /close multi-shot modal/i }));
+
+    await user.click(await screen.findByRole('button', { name: /batch style/i }));
+    await user.click(await screen.findByRole('button', { name: /create batch style/i }));
+    expect(await screen.findByRole('dialog', { name: /create batch style application/i })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /close batch style modal/i }));
   });
 });

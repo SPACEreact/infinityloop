@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { SetStateAction } from 'react';
 import type { Project, Asset, TimelineBlock } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
@@ -30,8 +31,116 @@ const restoreBlocksWithPositions = (
   return reindexBlocks(mergedBlocks);
 };
 
+const ensureAssetSeeds = <T extends Asset>(assets?: T[] | null): T[] | undefined => {
+  if (!assets || assets.length === 0) {
+    return assets ?? undefined;
+  }
+
+  let normalized: T[] | undefined;
+
+  assets.forEach((asset, index) => {
+    if (!asset.seedId) {
+      if (!normalized) {
+        normalized = [...assets];
+      }
+      normalized[index] = { ...asset, seedId: crypto.randomUUID() } as T;
+    }
+  });
+
+  return normalized ?? assets;
+};
+
+const normalizeSeeds = (project: Project): Project => {
+  let normalizedProject = project;
+
+  const normalizedAssets = ensureAssetSeeds(project.assets);
+  if (normalizedAssets && normalizedAssets !== project.assets) {
+    normalizedProject = {
+      ...normalizedProject,
+      assets: normalizedAssets
+    };
+  }
+
+  if (project.secondaryTimeline) {
+    const secondary = project.secondaryTimeline;
+    let normalizedSecondary: typeof secondary | undefined;
+
+    const normalizedMasterAssets = ensureAssetSeeds(secondary.masterAssets);
+    if (normalizedMasterAssets && normalizedMasterAssets !== secondary.masterAssets) {
+      normalizedSecondary = {
+        ...(normalizedSecondary ?? { ...secondary }),
+        masterAssets: normalizedMasterAssets
+      };
+    }
+
+    const shotLists = secondary.shotLists ?? [];
+    const normalizedShotLists = shotLists.map(shotList => {
+      const normalizedShots = ensureAssetSeeds(shotList.shots);
+      return normalizedShots && normalizedShots !== shotList.shots
+        ? { ...shotList, shots: normalizedShots }
+        : shotList;
+    });
+
+    const shotListsChanged = normalizedShotLists.some((shotList, index) => shotList !== shotLists[index]);
+    if (shotListsChanged) {
+      normalizedSecondary = {
+        ...(normalizedSecondary ?? { ...secondary }),
+        shotLists: normalizedShotLists
+      };
+    }
+
+    if (normalizedSecondary) {
+      normalizedProject = {
+        ...normalizedProject,
+        secondaryTimeline: normalizedSecondary
+      };
+    }
+  }
+
+  if (project.thirdTimeline) {
+    const third = project.thirdTimeline;
+    let normalizedThird: typeof third | undefined;
+
+    const normalizedStyledShots = ensureAssetSeeds(third.styledShots);
+    if (normalizedStyledShots && normalizedStyledShots !== third.styledShots) {
+      normalizedThird = {
+        ...(normalizedThird ?? { ...third }),
+        styledShots: normalizedStyledShots
+      };
+    }
+
+    const normalizedBatchAssets = ensureAssetSeeds(third.batchStyleAssets);
+    if (normalizedBatchAssets && normalizedBatchAssets !== third.batchStyleAssets) {
+      normalizedThird = {
+        ...(normalizedThird ?? { ...third }),
+        batchStyleAssets: normalizedBatchAssets
+      };
+    }
+
+    if (normalizedThird) {
+      normalizedProject = {
+        ...normalizedProject,
+        thirdTimeline: normalizedThird
+      };
+    }
+  }
+
+  return normalizedProject;
+};
+
 export const useProject = (initialProject: Project) => {
-  const [project, setProject] = useState<Project>(initialProject);
+  const [project, setProjectState] = useState<Project>(() => normalizeSeeds(initialProject));
+  const setProject = useCallback(
+    (update: SetStateAction<Project>) => {
+      setProjectState(prev => {
+        const next = typeof update === 'function'
+          ? (update as (value: Project) => Project)(prev)
+          : update;
+        return normalizeSeeds(next);
+      });
+    },
+    [setProjectState]
+  );
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [pendingDeleteAsset, setPendingDeleteAsset] = useState<Asset | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
