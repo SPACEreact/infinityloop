@@ -31,25 +31,51 @@ const restoreBlocksWithPositions = (
   return reindexBlocks(mergedBlocks);
 };
 
-const ensureAssetSeeds = <T extends Asset>(assets?: T[] | null): T[] | undefined => {
+const ensureAssetSeeds = <T extends Asset>(
+  assets?: T[] | null,
+  canonicalSeeds?: Map<string, string>
+): T[] | undefined => {
   if (!assets) {
     return assets ?? undefined;
   }
 
-  const needsSeeds = assets.some(asset => !asset.seedId);
-  if (!needsSeeds) {
-    return assets;
-  }
+  let updatedAssets: T[] | undefined;
 
-  return assets.map(asset =>
-    asset.seedId ? asset : ({ ...asset, seedId: crypto.randomUUID() } as T)
-  );
+  assets.forEach((asset, index) => {
+    let desiredSeedId = asset.seedId || undefined;
+
+    if (canonicalSeeds) {
+      const canonicalSeedId = canonicalSeeds.get(asset.id);
+
+      if (canonicalSeedId) {
+        if (desiredSeedId !== canonicalSeedId) {
+          desiredSeedId = canonicalSeedId;
+        }
+      } else {
+        desiredSeedId = desiredSeedId ?? crypto.randomUUID();
+        canonicalSeeds.set(asset.id, desiredSeedId);
+      }
+    } else if (!desiredSeedId) {
+      desiredSeedId = crypto.randomUUID();
+    }
+
+    if (desiredSeedId && desiredSeedId !== asset.seedId) {
+      if (!updatedAssets) {
+        updatedAssets = [...assets];
+      }
+
+      updatedAssets[index] = { ...asset, seedId: desiredSeedId } as T;
+    }
+  });
+
+  return updatedAssets ?? assets;
 };
 
 const normalizeSeeds = (project: Project): Project => {
   let normalizedProject = project;
+  const canonicalSeeds = new Map<string, string>();
 
-  const normalizedAssets = ensureAssetSeeds(project.assets)!;
+  const normalizedAssets = ensureAssetSeeds(project.assets, canonicalSeeds)!;
   if (normalizedAssets !== project.assets) {
     normalizedProject = {
       ...normalizedProject,
@@ -61,7 +87,7 @@ const normalizeSeeds = (project: Project): Project => {
     const secondary = project.secondaryTimeline;
     let normalizedSecondary: typeof secondary | undefined;
 
-    const normalizedMasterAssets = ensureAssetSeeds(secondary.masterAssets)!;
+    const normalizedMasterAssets = ensureAssetSeeds(secondary.masterAssets, canonicalSeeds)!;
     if (normalizedMasterAssets !== secondary.masterAssets) {
       normalizedSecondary = {
         ...(normalizedSecondary ?? { ...secondary }),
@@ -71,7 +97,7 @@ const normalizeSeeds = (project: Project): Project => {
 
     let shotListsUpdated: typeof secondary.shotLists | undefined;
     secondary.shotLists.forEach((shotList, index) => {
-      const normalizedShots = ensureAssetSeeds(shotList.shots)!;
+      const normalizedShots = ensureAssetSeeds(shotList.shots, canonicalSeeds)!;
       if (normalizedShots !== shotList.shots) {
         if (!shotListsUpdated) {
           shotListsUpdated = [...secondary.shotLists];
@@ -99,7 +125,7 @@ const normalizeSeeds = (project: Project): Project => {
     const third = project.thirdTimeline;
     let normalizedThird: typeof third | undefined;
 
-    const normalizedStyledShots = ensureAssetSeeds(third.styledShots)!;
+    const normalizedStyledShots = ensureAssetSeeds(third.styledShots, canonicalSeeds)!;
     if (normalizedStyledShots !== third.styledShots) {
       normalizedThird = {
         ...(normalizedThird ?? { ...third }),
@@ -107,7 +133,7 @@ const normalizeSeeds = (project: Project): Project => {
       };
     }
 
-    const normalizedBatchAssets = ensureAssetSeeds(third.batchStyleAssets);
+    const normalizedBatchAssets = ensureAssetSeeds(third.batchStyleAssets, canonicalSeeds);
     if (normalizedBatchAssets && normalizedBatchAssets !== third.batchStyleAssets) {
       normalizedThird = {
         ...(normalizedThird ?? { ...third }),
