@@ -13,21 +13,25 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onToggleChat
 }) => {
   return (
-    <header className="flex items-center justify-between p-4 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg">
-      <div></div>
-      
-      <div className="flex items-center gap-3 px-6 py-3 rounded-2xl">
-        <h1 className="text-4xl font-bold text-white/90 tracking-wide">
-          L<span className="inline-block mx-1 text-5xl bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">∞</span>P
-          <span className="text-xs block text-center text-white/60 font-light tracking-wider uppercase">Idea to Visualization</span>
+    <header className="flex items-center p-4 bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg">
+      <div className="flex-1" />
+
+      <div className="flex flex-col items-center gap-3 px-6 py-3 rounded-2xl">
+        <h1 className="text-5xl font-bold text-center text-white/90 tracking-wide">
+          L
+          <span className="inline-block mx-1 text-6xl bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">∞</span>
+          P
         </h1>
+        <span className="text-sm md:text-base lg:text-lg text-center text-white/70 font-light tracking-wider uppercase">
+          Idea to Visualization
+        </span>
       </div>
-      
-      <div className="flex items-center gap-2">
+
+      <div className="flex-1 flex items-center justify-end gap-2">
         <button
           onClick={onToggleChat}
           className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
-            isChatOpen 
+            isChatOpen
               ? 'bg-gradient-to-r from-pink-400/80 to-purple-400/80 text-white shadow-lg hover:shadow-xl' 
               : 'bg-gradient-to-r from-pink-300/60 to-purple-300/60 text-gray-700 hover:from-pink-400/70 hover:to-purple-400/70 hover:text-white shadow-md hover:shadow-lg'
           }`}
