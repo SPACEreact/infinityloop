@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Workspace from '../../components/Workspace';
 import type { Project, Asset } from '../../types';
@@ -293,5 +293,81 @@ describe('timeline modal triggers', () => {
     await user.click(await screen.findByRole('button', { name: /create batch style/i }));
     expect(await screen.findByRole('dialog', { name: /create batch style application/i })).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: /close batch style modal/i }));
+  });
+
+  it('maintains canonical seed IDs across all timelines for shared assets', async () => {
+    const sharedAssetBase: Asset = {
+      id: 'shared-asset',
+      seedId: '',
+      type: 'master_image',
+      name: 'Shared Asset',
+      content: 'Shared content',
+      tags: ['shared'],
+      createdAt: new Date('2024-02-01T00:00:00Z'),
+      summary: 'A shared asset',
+      isMaster: true,
+      lineage: [],
+      metadata: {}
+    };
+
+    const projectWithSharedAssets: Project = {
+      ...baseProject,
+      assets: [
+        { ...sharedAssetBase },
+        { ...baseAssets[1] }
+      ],
+      secondaryTimeline: {
+        masterAssets: [
+          { ...sharedAssetBase, seedId: 'secondary-seed' }
+        ],
+        shotLists: [
+          {
+            id: 'shotlist-canonical',
+            masterAssetId: sharedAssetBase.id,
+            shots: [
+              { ...sharedAssetBase, seedId: 'shot-seed' }
+            ],
+            createdAt: new Date('2024-02-10T00:00:00Z')
+          }
+        ],
+        appliedStyles: {}
+      },
+      thirdTimeline: {
+        styledShots: [
+          { ...sharedAssetBase, seedId: '' }
+        ],
+        videoPrompts: [],
+        batchStyleAssets: [
+          { ...sharedAssetBase, seedId: 'batch-seed' }
+        ]
+      }
+    };
+
+    const onProjectNormalized = vi.fn();
+
+    const CaptureProject: React.FC<{ initialProject: Project }> = ({ initialProject }) => {
+      const { project } = useProject(initialProject);
+
+      React.useEffect(() => {
+        onProjectNormalized(project);
+      }, [onProjectNormalized, project]);
+
+      return null;
+    };
+
+    render(<CaptureProject initialProject={projectWithSharedAssets} />);
+
+    await waitFor(() => {
+      expect(onProjectNormalized).toHaveBeenCalled();
+    });
+
+    const normalizedProject = onProjectNormalized.mock.calls.at(-1)![0] as Project;
+    const canonicalSeed = normalizedProject.assets.find(asset => asset.id === sharedAssetBase.id)?.seedId;
+
+    expect(canonicalSeed).toBeTruthy();
+    expect(normalizedProject.secondaryTimeline?.masterAssets[0]?.seedId).toBe(canonicalSeed);
+    expect(normalizedProject.secondaryTimeline?.shotLists[0]?.shots[0]?.seedId).toBe(canonicalSeed);
+    expect(normalizedProject.thirdTimeline?.styledShots[0]?.seedId).toBe(canonicalSeed);
+    expect(normalizedProject.thirdTimeline?.batchStyleAssets?.[0]?.seedId).toBe(canonicalSeed);
   });
 });
