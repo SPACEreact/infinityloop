@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { SetStateAction } from 'react';
 import type { Project, Asset, TimelineBlock } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
@@ -30,8 +31,114 @@ const restoreBlocksWithPositions = (
   return reindexBlocks(mergedBlocks);
 };
 
+const ensureAssetSeeds = <T extends Asset>(assets?: T[] | null): T[] | undefined => {
+  if (!assets) {
+    return assets ?? undefined;
+  }
+
+  const needsSeeds = assets.some(asset => !asset.seedId);
+  if (!needsSeeds) {
+    return assets;
+  }
+
+  return assets.map(asset =>
+    asset.seedId ? asset : ({ ...asset, seedId: crypto.randomUUID() } as T)
+  );
+};
+
+const normalizeSeeds = (project: Project): Project => {
+  let normalizedProject = project;
+
+  const normalizedAssets = ensureAssetSeeds(project.assets)!;
+  if (normalizedAssets !== project.assets) {
+    normalizedProject = {
+      ...normalizedProject,
+      assets: normalizedAssets
+    };
+  }
+
+  if (project.secondaryTimeline) {
+    const secondary = project.secondaryTimeline;
+    let normalizedSecondary: typeof secondary | undefined;
+
+    const normalizedMasterAssets = ensureAssetSeeds(secondary.masterAssets)!;
+    if (normalizedMasterAssets !== secondary.masterAssets) {
+      normalizedSecondary = {
+        ...(normalizedSecondary ?? { ...secondary }),
+        masterAssets: normalizedMasterAssets
+      };
+    }
+
+    let shotListsUpdated: typeof secondary.shotLists | undefined;
+    secondary.shotLists.forEach((shotList, index) => {
+      const normalizedShots = ensureAssetSeeds(shotList.shots)!;
+      if (normalizedShots !== shotList.shots) {
+        if (!shotListsUpdated) {
+          shotListsUpdated = [...secondary.shotLists];
+        }
+        shotListsUpdated[index] = { ...shotList, shots: normalizedShots };
+      }
+    });
+
+    if (shotListsUpdated) {
+      normalizedSecondary = {
+        ...(normalizedSecondary ?? { ...secondary }),
+        shotLists: shotListsUpdated
+      };
+    }
+
+    if (normalizedSecondary) {
+      normalizedProject = {
+        ...normalizedProject,
+        secondaryTimeline: normalizedSecondary
+      };
+    }
+  }
+
+  if (project.thirdTimeline) {
+    const third = project.thirdTimeline;
+    let normalizedThird: typeof third | undefined;
+
+    const normalizedStyledShots = ensureAssetSeeds(third.styledShots)!;
+    if (normalizedStyledShots !== third.styledShots) {
+      normalizedThird = {
+        ...(normalizedThird ?? { ...third }),
+        styledShots: normalizedStyledShots
+      };
+    }
+
+    const normalizedBatchAssets = ensureAssetSeeds(third.batchStyleAssets);
+    if (normalizedBatchAssets && normalizedBatchAssets !== third.batchStyleAssets) {
+      normalizedThird = {
+        ...(normalizedThird ?? { ...third }),
+        batchStyleAssets: normalizedBatchAssets
+      };
+    }
+
+    if (normalizedThird) {
+      normalizedProject = {
+        ...normalizedProject,
+        thirdTimeline: normalizedThird
+      };
+    }
+  }
+
+  return normalizedProject;
+};
+
 export const useProject = (initialProject: Project) => {
-  const [project, setProject] = useState<Project>(initialProject);
+  const [project, setProjectState] = useState<Project>(() => normalizeSeeds(initialProject));
+  const setProject = useCallback(
+    (update: SetStateAction<Project>) => {
+      setProjectState(prev => {
+        const next = typeof update === 'function'
+          ? (update as (value: Project) => Project)(prev)
+          : update;
+        return normalizeSeeds(next);
+      });
+    },
+    [setProjectState]
+  );
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [pendingDeleteAsset, setPendingDeleteAsset] = useState<Asset | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
