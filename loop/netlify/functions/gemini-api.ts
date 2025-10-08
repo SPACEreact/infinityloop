@@ -1,8 +1,16 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_API_URL = `${GEMINI_API_BASE_URL}/models/gemini-1.5-flash:generateContent`;
+const GEMINI_API_URLS = {
+  'gemini-1.5-flash': `${GEMINI_API_BASE_URL}/models/gemini-1.5-flash:generateContent`,
+  'gemini-2.5-flash-nano': `${GEMINI_API_BASE_URL}/models/gemini-2.5-flash-nano:generateContent`,
+  'banana': `${GEMINI_API_BASE_URL}/models/banana:generateContent`,
+  'imagen': `${GEMINI_API_BASE_URL}/models/imagen-3.0-generate-001:generateImages`
+};
 
 // Rate limiting: simple in-memory store (for serverless, consider Redis for production)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -86,7 +94,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         statusCode: 429,
         headers: {
           'Content-Type': 'application/json',
-          'Retry-After': retryAfter.toString()
+          'Retry-After': retryAfter.toString(),
+          ...SECURITY_HEADERS
         },
         body: JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' })
       };
@@ -147,8 +156,17 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     switch (action) {
       case 'generateContent': {
-        const { prompt } = requestData;
+        const { prompt, model = 'gemini-1.5-flash' } = requestData;
         
+        const modelKey = model as keyof typeof GEMINI_API_URLS;
+        if (!GEMINI_API_URLS[modelKey]) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: `Invalid model specified: ${model}` })
+          };
+        }
+
         const data = await retryApiCall(async () => {
           const request: GenerationRequest = {
             contents: [{
@@ -156,7 +174,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             }]
           };
 
-          const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          const response = await fetch(`${GEMINI_API_URLS[modelKey]}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request)
@@ -182,15 +200,17 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         };
       }
 
-      /*
       case 'generateImage': {
-        //- FIXME: This endpoint is incorrect for Imagen 3 on Vertex AI.
-        //- The correct endpoint is likely on the us-central1-aiplatform.googleapis.com domain.
-        //- This needs to be updated to a valid Vertex AI endpoint for Imagen 3.
-        //- Commenting out this section to prevent runtime errors.
-        const { prompt } = requestData;
-        // Use Imagen 3 through the correct Vertex AI endpoint
-        const IMAGEN_API_URL = `${GEMINI_API_URL}/models/imagen-3.0-generate-001:generateImages`;
+        const { prompt, model = 'imagen' } = requestData;
+
+        const modelKey = model as keyof typeof GEMINI_API_URLS;
+        if (!GEMINI_API_URLS[modelKey]) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: `Invalid model specified for image generation: ${model}` })
+          };
+        }
 
         const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
@@ -207,7 +227,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             }
           };
 
-          const response = await fetch(`${IMAGEN_API_URL}?key=${GEMINI_API_KEY}`, {
+          const response = await fetch(`${GEMINI_API_URLS[modelKey]}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request)
@@ -235,7 +255,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           })
         };
       }
-      */
 
       case 'listModels': {
         const response = await fetch(`${GEMINI_API_BASE_URL}/models?key=${GEMINI_API_KEY}`, {
