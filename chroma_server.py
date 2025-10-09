@@ -1,9 +1,10 @@
 import logging
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 import chromadb
 from chromadb.errors import InternalError, NotFoundError
 import uvicorn
@@ -13,10 +14,34 @@ app = FastAPI(title="ChromaDB MCP Server", description="REST API for ChromaDB op
 logger = logging.getLogger(__name__)
 
 # Add CORS middleware to allow requests from the React app
+def _determine_allowed_origins(raw_origins: Optional[str]) -> Tuple[List[str], bool]:
+    """Return the parsed origins and whether we should allow all origins."""
+
+    if raw_origins:
+        origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+        allow_all = "*" in origins
+        if allow_all:
+            origins = ["*"]
+    else:
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+        ]
+        allow_all = False
+
+    return origins, allow_all
+
+
+# Determine the list of allowed origins for CORS. This allows deployments to
+# configure their frontend domain via the CHROMA_SERVER_ALLOWED_ORIGINS env var.
+_origins, _allow_all_origins = _determine_allowed_origins(
+    os.getenv("CHROMA_SERVER_ALLOWED_ORIGINS")
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
-    allow_credentials=True,
+    allow_origins=["*"] if _allow_all_origins else _origins,
+    allow_credentials=not _allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
