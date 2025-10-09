@@ -23,78 +23,51 @@ import WorkspaceHeader from './WorkspaceHeader';
 import FloatingOutputButton from './FloatingOutputButton';
 import { apiConfig } from '../services/config';
 import { syncAssetsToMcp } from '../services/mcpService';
+import { useWorkspace } from '../state/WorkspaceContext';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
 interface WorkspaceProps {
   appLabel: string;
-  project: Project;
-  setProject: React.Dispatch<React.SetStateAction<Project>>;
-  selectedAssetId: string | null;
-  setSelectedAssetId: (id: string | null) => void;
-  pendingDeleteAsset: Asset | null;
-  toastState: ToastState | null;
-  setToastState: (toast: ToastState | null) => void;
-  handleAddAsset: (templateType: string) => void;
-  handleAssetDrop: (templateType: string, folder?: string) => void;
-  handleRequestDeleteAsset: (asset: Asset) => void;
-  handleConfirmDelete: () => void;
-  handleCancelDelete: () => void;
-  handleUndoDelete: () => void;
-  handleUpdateAsset: (assetId: string, updates: Partial<Asset>) => void;
-  selectedStoryAssets: string[];
-  setSelectedStoryAssets: (assets: string[]) => void;
-  selectedMultiShots: string[];
-  setSelectedMultiShots: (assets: string[]) => void;
-  selectedMasterImage: string | null;
-  setSelectedMasterImage: (id: string | null) => void;
-  tagWeights: Record<string, number>;
-  styleRigidity: number;
-  isWeightingEnabled: boolean;
-  onTagWeightChange: (tagId: string, weight: number) => void;
-  onStyleRigidityChange: (value: number) => void;
-  onWeightingToggle: (enabled: boolean) => void;
-  activeTimeline: 'primary' | 'secondary' | 'third' | 'fourth';
-  setActiveTimeline: (timeline: 'primary' | 'secondary' | 'third' | 'fourth') => void;
-  isGenerating: boolean;
-  onGenerate: () => void;
-  onGenerateOutput: (folder: 'story' | 'image' | 'all') => void;
 }
 
-const Workspace: React.FC<WorkspaceProps> = ({
-  appLabel,
-  project,
-  setProject,
-  selectedAssetId,
-  setSelectedAssetId,
-  pendingDeleteAsset,
-  toastState,
-  setToastState,
-  handleAddAsset,
-  handleAssetDrop,
-  handleRequestDeleteAsset,
-  handleConfirmDelete,
-  handleCancelDelete,
-  handleUndoDelete,
-  handleUpdateAsset,
-  selectedStoryAssets,
-  setSelectedStoryAssets,
-  selectedMultiShots,
-  setSelectedMultiShots,
-  selectedMasterImage,
-  setSelectedMasterImage,
-  tagWeights,
-  styleRigidity,
-  isWeightingEnabled,
-  onTagWeightChange,
-  onStyleRigidityChange,
-  onWeightingToggle,
-  activeTimeline,
-  setActiveTimeline,
-  isGenerating,
-  onGenerate,
-  onGenerateOutput
-}) => {
+const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
+  const {
+    project,
+    setProject,
+    selectedAssetId,
+    setSelectedAssetId,
+    pendingDeleteAsset,
+    toastState,
+    setToastState,
+    handleAddAsset,
+    handleAssetDrop,
+    handleRequestDeleteAsset,
+    handleConfirmDelete,
+    handleCancelDelete,
+    handleUndoDelete,
+    handleUpdateAsset,
+    selectedStoryAssets,
+    setSelectedStoryAssets,
+    selectedMultiShots,
+    setSelectedMultiShots,
+    selectedMasterImage,
+    setSelectedMasterImage,
+    activeTimeline,
+    setActiveTimeline,
+    isGenerating,
+    handleGenerate,
+    handleGenerateOutput
+  } = useWorkspace();
+
+  const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
+  const [styleRigidity, setStyleRigidity] = useState<number>(50);
+  const [isWeightingEnabled, setIsWeightingEnabled] = useState<boolean>(false);
+
+  const handleTagWeightChange = useCallback((tagId: string, newWeight: number) => {
+    setTagWeights(prevWeights => ({ ...prevWeights, [tagId]: newWeight }));
+  }, []);
+
   const [generatedOutput, setGeneratedOutput] = useState<string>('');
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isReferenceViewerOpen, setIsReferenceViewerOpen] = useState(false);
@@ -585,14 +558,14 @@ const Workspace: React.FC<WorkspaceProps> = ({
               selectedAssetId={selectedAssetId}
               setSelectedAssetId={setSelectedAssetId}
               onAssetDrop={handleAssetDrop}
-              onGenerateOutput={onGenerateOutput}
-              onGenerate={onGenerate}
+              onGenerateOutput={handleGenerateOutput}
+              onGenerate={handleGenerate}
               activeTimeline={activeTimeline}
               setActiveTimeline={setActiveTimeline}
               isWeightingEnabled={isWeightingEnabled}
-              onWeightingToggle={onWeightingToggle}
+              onWeightingToggle={(enabled) => setIsWeightingEnabled(enabled)}
               styleRigidity={styleRigidity}
-              onStyleRigidityChange={onStyleRigidityChange}
+              onStyleRigidityChange={(value) => setStyleRigidity(value)}
               selectedStoryAssets={selectedStoryAssets}
               onToggleStoryAsset={handleToggleMasterStorySelection}
               onConfirmMultiShot={handleConfirmMultiShot}
@@ -635,8 +608,8 @@ const Workspace: React.FC<WorkspaceProps> = ({
             ) : (
               <ControlPanel
                 tagWeights={tagWeights}
-                onTagWeightChange={onTagWeightChange}
-                onGenerate={onGenerate}
+                onTagWeightChange={handleTagWeightChange}
+                onGenerate={handleGenerate}
                 isGenerating={isGenerating}
                 onSyncAssetsToMcp={handleSyncAssetsToMcp}
                 isMcpLoading={isMcpLoading}
