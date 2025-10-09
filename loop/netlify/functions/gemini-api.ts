@@ -4,6 +4,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
 
+const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
+const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
+const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
+const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
+
 // Rate limiting: simple in-memory store (for serverless, consider Redis for production)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -41,6 +46,47 @@ async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 10
   }
   throw lastError!;
 }
+
+const extractErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+
+  return 'Unknown error occurred';
+};
+
+const isQuotaExceededError = (error: unknown): boolean => {
+  const message = extractErrorMessage(error).toLowerCase();
+  if (message.includes('quota') && (message.includes('exceeded') || message.includes('exceed') || message.includes('exhausted'))) {
+    return true;
+  }
+
+  const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
+  if (status === 429) {
+    return true;
+  }
+
+  const errorPayload = typeof error === 'object' && error ? (error as { error?: { status?: string; code?: number } }).error : undefined;
+  if (errorPayload) {
+    if (typeof errorPayload.status === 'string' && errorPayload.status.toLowerCase().includes('resource_exhausted')) {
+      return true;
+    }
+
+    if (typeof errorPayload.code === 'number' && errorPayload.code === 429) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   // Validate API key on startup
@@ -136,50 +182,117 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     switch (action) {
       case 'generateContent': {
-        const { prompt, model = 'gemini-2.5-flash' } = requestData;
+        const { prompt, model = DEFAULT_TEXT_MODEL } = requestData as { prompt?: string; model?: string };
 
-        const data = await retryApiCall(async () => {
-          const generativeModel = genAI.getGenerativeModel({ model: model });
+        if (!prompt || typeof prompt !== 'string') {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Prompt is required for text generation.' })
+          };
+        }
+
+        if (prompt.length > MAX_PROMPT_LENGTH) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Prompt exceeds maximum length.' })
+          };
+        }
+
+        const primaryModel = typeof model === 'string' ? model : DEFAULT_TEXT_MODEL;
+        let finalModel = primaryModel;
+        let usedFallback = false;
+
+        const invokeModel = async (modelName: string) => {
+          const generativeModel = genAI.getGenerativeModel({ model: modelName });
           const result = await generativeModel.generateContent(prompt);
           const response = await result.response;
           return response.text().trim();
-        });
-
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: true,
-            data: data,
-            isMock: false
-          })
         };
+
+        try {
+          const data = await retryApiCall(() => invokeModel(primaryModel));
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              data,
+              isMock: false,
+              modelUsed: finalModel,
+              usedFallback
+            })
+          };
+        } catch (error: unknown) {
+          if (!isQuotaExceededError(error) || primaryModel === FALLBACK_TEXT_MODEL) {
+            throw error;
+          }
+
+          console.warn(`Quota exceeded for model "${primaryModel}". Falling back to free tier model "${FALLBACK_TEXT_MODEL}".`);
+          usedFallback = true;
+          finalModel = FALLBACK_TEXT_MODEL;
+
+          const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              data,
+              isMock: false,
+              modelUsed: finalModel,
+              usedFallback
+            })
+          };
+        }
       }
 
       case 'generateImage': {
-        const { prompt, model = 'imagen-4.5-ultra' } = requestData;
+        const { prompt, model = DEFAULT_IMAGE_MODEL } = requestData as { prompt?: string; model?: string };
 
-        try {
-          const data = await retryApiCall(async () => {
-            // For Imagen models, we use a different generation approach
-            const imageModel = genAI.getGenerativeModel({ model: model });
-            const result = await imageModel.generateContent([prompt]);
-            const response = await result.response;
-            
-            // The response should contain image data
-            const candidates = response.candidates;
-            if (candidates && candidates.length > 0) {
-              const candidate = candidates[0];
-              if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-                const part = candidate.content.parts[0];
-                if (part.inlineData && part.inlineData.data) {
-                  return part.inlineData.data;
-                }
+        if (!prompt || typeof prompt !== 'string') {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Prompt is required for image generation.' })
+          };
+        }
+
+        if (prompt.length > MAX_PROMPT_LENGTH) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'Prompt exceeds maximum length.' })
+          };
+        }
+
+        const primaryModel = typeof model === 'string' ? model : DEFAULT_IMAGE_MODEL;
+        let finalModel = primaryModel;
+        let usedFallback = false;
+
+        const invokeModel = async (modelName: string) => {
+          const imageModel = genAI.getGenerativeModel({ model: modelName });
+          const result = await imageModel.generateContent([prompt]);
+          const response = await result.response;
+
+          const candidates = response.candidates;
+          if (candidates && candidates.length > 0) {
+            const candidate = candidates[0];
+            if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+              const part = candidate.content.parts[0];
+              if (part.inlineData && part.inlineData.data) {
+                return part.inlineData.data;
               }
             }
-            
-            throw new Error('No image data returned from model');
-          });
+          }
+
+          throw new Error('No image data returned from model');
+        };
+
+        try {
+          const data = await retryApiCall(() => invokeModel(primaryModel));
 
           return {
             statusCode: 200,
@@ -187,20 +300,55 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             body: JSON.stringify({
               success: true,
               data: data,
-              isMock: false
+              isMock: false,
+              modelUsed: finalModel,
+              usedFallback
             })
           };
         } catch (error: unknown) {
-          console.error('Image generation error:', error);
-          return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({
-              success: false,
-              error: error instanceof Error ? error.message : 'Image generation failed',
-              isMock: false
-            })
-          };
+          if (!isQuotaExceededError(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
+            console.error('Image generation error:', error);
+            return {
+              statusCode: 500,
+              headers,
+              body: JSON.stringify({
+                success: false,
+                error: error instanceof Error ? error.message : 'Image generation failed',
+                isMock: false
+              })
+            };
+          }
+
+          console.warn(`Quota exceeded for image model "${primaryModel}". Falling back to free tier model "${FALLBACK_IMAGE_MODEL}".`);
+          usedFallback = true;
+          finalModel = FALLBACK_IMAGE_MODEL;
+
+          try {
+            const data = await retryApiCall(() => invokeModel(FALLBACK_IMAGE_MODEL));
+
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                success: true,
+                data,
+                isMock: false,
+                modelUsed: finalModel,
+                usedFallback
+              })
+            };
+          } catch (fallbackError: unknown) {
+            console.error('Fallback image generation error:', fallbackError);
+            return {
+              statusCode: 500,
+              headers,
+              body: JSON.stringify({
+                success: false,
+                error: fallbackError instanceof Error ? fallbackError.message : 'Image generation failed',
+                isMock: false
+              })
+            };
+          }
         }
       }
 
@@ -259,9 +407,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               capabilities: ["image"]
             },
             {
-              name: "models/gemini-1.5-flash-free",
-              displayName: "Gemini 1.5 Flash - Free Tier",
-              description: "Free tier for text generation with limited quota",
+              name: "models/gemini-1.5-flash-latest",
+              displayName: "Gemini 1.5 Flash (Free Tier - Latest)",
+              description: "Latest free tier text generation model for quota fallbacks",
               supportedGenerationMethods: ["generateContent"],
               capabilities: ["text"]
             },
@@ -271,6 +419,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               description: "Free tier for text generation with limited quota",
               supportedGenerationMethods: ["generateContent"],
               capabilities: ["text"]
+            },
+            {
+              name: "models/imagen-3.0-latest",
+              displayName: "Imagen 3.0 (Free Tier - Latest)",
+              description: "Latest free tier image generation model for quota fallbacks",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
             },
             {
               name: "models/stable-diffusion-3-free",

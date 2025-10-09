@@ -9,7 +9,7 @@ export const TEXT_GENERATION_MODELS = [
     { id: 'gpt-4o', name: 'GPT-4o' },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
-    { id: 'gemini-1.5-flash-free', name: 'Gemini 1.5 Flash - Free Tier', quota: 'free' },
+    { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash - Free Tier (Latest)', quota: 'free' },
     { id: 'claude-3.5-sonnet-free', name: 'Claude 3.5 Sonnet - Free Tier', quota: 'free' },
 ];
 
@@ -18,6 +18,7 @@ export const IMAGE_GENERATION_MODELS = [
     { id: 'midjourney', name: 'Midjourney' },
     { id: 'stable-diffusion-3', name: 'Stable Diffusion 3' },
     { id: 'imagen-2', name: 'Imagen 2' },
+    { id: 'imagen-3.0-latest', name: 'Imagen 3.0 - Free Tier (Latest)', quota: 'free' },
     { id: 'stable-diffusion-3-free', name: 'Stable Diffusion 3 - Free Tier', quota: 'free' },
     { id: 'dall-e-3-free', name: 'DALL-E 3 - Free Tier', quota: 'free' },
 ];

@@ -140,11 +140,17 @@ const friendlyErrorMessage = (error: unknown, fallback: string) => {
     if (error.message.includes('429') || error.message.includes('rate limit')) {
       return 'Rate limit exceeded. Please wait a moment before trying again.';
     }
+    if (error.message.toLowerCase().includes('quota')) {
+      return 'Quota exceeded for the requested model. The service attempted to fall back to the free tier.';
+    }
     return `${fallback} (${error.message})`;
   }
   if (typeof error === 'string') {
     if (error.includes('429') || error.includes('rate limit')) {
       return 'Rate limit exceeded. Please wait a moment before trying again.';
+    }
+    if (error.toLowerCase().includes('quota')) {
+      return 'Quota exceeded for the requested model. The service attempted to fall back to the free tier.';
     }
     return `${fallback} (${error})`;
   }

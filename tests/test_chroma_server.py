@@ -88,3 +88,55 @@ def test_create_collection_duplicate_returns_conflict(api_client):
     assert duplicate_response.json() == {
         "detail": f"Collection [{collection_name}] already exists"
     }
+
+
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        (
+            "post",
+            "/collections/missing/documents",
+            {
+                "documents": ["test"],
+                "metadatas": None,
+                "ids": ["1"],
+            },
+        ),
+        (
+            "post",
+            "/collections/missing/query",
+            {"query_texts": ["hello"], "n_results": 1},
+        ),
+        ("get", "/collections/missing", None),
+    ],
+)
+def test_collection_not_found_returns_404(api_client, method, path, payload):
+    client, _ = api_client
+
+    request_method = getattr(client, method)
+    response = request_method(path, json=payload) if payload else request_method(path)
+
+    assert response.status_code == 404
+    assert "missing" in response.json()["detail"].lower()
+
+
+def test_determine_allowed_origins_defaults():
+    origins, allow_all = chroma_server._determine_allowed_origins(None)
+
+    assert origins == ["http://localhost:3000", "http://localhost:5173"]
+    assert allow_all is False
+
+
+def test_determine_allowed_origins_from_env(monkeypatch):
+    raw = "https://example.com, https://app.netlify.app"
+    origins, allow_all = chroma_server._determine_allowed_origins(raw)
+
+    assert origins == ["https://example.com", "https://app.netlify.app"]
+    assert allow_all is False
+
+
+def test_determine_allowed_origins_allow_all():
+    origins, allow_all = chroma_server._determine_allowed_origins("*, https://other.com")
+
+    assert origins == ["*"]
+    assert allow_all is True
