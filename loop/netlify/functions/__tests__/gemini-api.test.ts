@@ -178,6 +178,30 @@ describe('gemini-api quota fallback', () => {
     expect(payload.detail).toContain('Model not found');
   });
 
+  it('returns a mock response when the fallback text model also fails', async () => {
+    mockModelImplementations.set('gemini-2.5-flash', async () => {
+      throw createQuotaError();
+    });
+
+    mockModelImplementations.set('gemini-1.5-flash-latest', async () => {
+      throw createAccessDeniedError(404, 'Model not found');
+    });
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(false);
+    expect(payload.isMock).toBe(true);
+    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.usedFallback).toBe(true);
+    expect(payload.error).toBe('Gemini text generation failed after fallback. Using mock response.');
+    expect(payload.detail).toContain('Model not found');
+  });
+
   it('falls back to the free tier image model when quota is exceeded', async () => {
     mockModelImplementations.set('imagen-3.0-generate-001', async () => {
       throw createQuotaError();
