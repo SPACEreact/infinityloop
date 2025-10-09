@@ -1,7 +1,21 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Try multiple possible environment variable names to handle configuration issues
+// If the API key was mistakenly set as the variable name, use the key name itself
+let GEMINI_API_KEY = process.env.GEMINI_API_KEY || 
+                     process.env.AIzaSyBD5wS3hwL4zRiAs5tAaxfH8YNZ3efqT3U ||
+                     process.env['AIzaSyBD5wS3hwL4zRiAs5tAaxfH8YNZ3efqT3U'];
+
+// If the API key is still not found, check if it was set as the variable name itself
+if (!GEMINI_API_KEY) {
+  const apiKeyAsVarName = Object.keys(process.env).find(key => key.startsWith('AIza'));
+  if (apiKeyAsVarName && apiKeyAsVarName.length > 30) { // Gemini API keys are longer than 30 chars
+    GEMINI_API_KEY = apiKeyAsVarName;
+    console.log('Using API key from variable name:', apiKeyAsVarName.substring(0, 10) + '...');
+  }
+}
+
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
 
 // Rate limiting: simple in-memory store (for serverless, consider Redis for production)
@@ -46,13 +60,19 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   // Validate API key on startup
   if (!GEMINI_API_KEY) {
     console.error('GEMINI_API_KEY environment variable is not set.');
+    console.error('Available environment variables:', Object.keys(process.env).filter(key => key.includes('API') || key.includes('GEMINI') || key.includes('AIza')));
+    console.error('All environment variable keys:', Object.keys(process.env).sort());
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         ...SECURITY_HEADERS
       },
-      body: JSON.stringify({ error: 'The GEMINI_API_KEY environment variable is not set. Please configure it in your Netlify settings.' })
+      body: JSON.stringify({ 
+        error: 'The GEMINI_API_KEY environment variable is not set. Please configure it in your Netlify settings.',
+        debug: `Available API-related env vars: ${Object.keys(process.env).filter(key => key.includes('API') || key.includes('GEMINI') || key.includes('AIza')).join(', ') || 'none'}`,
+        allKeys: Object.keys(process.env).sort()
+      })
     };
   } else {
     console.log('GEMINI_API_KEY environment variable is set.');

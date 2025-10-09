@@ -3,6 +3,7 @@ import { knowledgeBase } from './knowledgeService';
 
 // Server-side API endpoints (no API key needed on client-side)
 const NETLIFY_FUNCTION_URL = '/.netlify/functions/gemini-api';
+const ALTERNATIVE_FUNCTION_URL = '/api/gemini-api';
 export const isMockMode = false; // Always try server-side first
 
 export interface GeminiResult<T> {
@@ -16,6 +17,38 @@ const createResult = <T>(data: T | null, error: string | null, isMock: boolean):
   error,
   isMock
 });
+
+// Helper function to try both API endpoints
+const tryAPICall = async (body: any): Promise<Response> => {
+  try {
+    // Try primary endpoint first
+    const response = await fetch(NETLIFY_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    
+    if (response.ok) {
+      return response;
+    }
+    
+    // If primary fails, try alternative endpoint
+    console.warn('Primary API endpoint failed, trying alternative...');
+    return await fetch(ALTERNATIVE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    // If primary throws, try alternative endpoint
+    console.warn('Primary API endpoint threw error, trying alternative...', error);
+    return await fetch(ALTERNATIVE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+};
 
 const KNOWLEDGE_CONTEXT = `
 
@@ -154,11 +187,7 @@ const friendlyErrorMessage = (error: unknown, fallback: string) => {
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'listModels' })
-    });
+    const response = await tryAPICall({ action: 'listModels' });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -208,13 +237,9 @@ export const generateSandboxResponse = async (
   const fullPrompt = `${systemPrompt}\n\nConversation History:\n${historyText}\n\nUser: ${userMessage}\nAssistant:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
+    const response = await tryAPICall({ 
+      action: 'generateContent', 
+      prompt: fullPrompt 
     });
 
     if (!response.ok) {
@@ -286,13 +311,9 @@ export const generateFromWorkspace = async (
   const fullPrompt = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
+    const response = await tryAPICall({ 
+      action: 'generateContent', 
+      prompt: fullPrompt 
     });
 
     if (!response.ok) {
@@ -344,13 +365,9 @@ export const runBuild = async (
   const fullPrompt = `${systemPrompt}\n\nAnswers:\n${answersText}\n\nSandbox Context:\n${sandboxText}\n\nGenerate ${buildType} output:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
+    const response = await tryAPICall({ 
+      action: 'generateContent', 
+      prompt: fullPrompt 
     });
 
     if (!response.ok) {
@@ -377,14 +394,10 @@ export const generateImageFromPrompt = async (prompt: string, model: string = 'i
   const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateImage', 
-        prompt: enhancedPrompt,
-        model: model
-      })
+    const response = await tryAPICall({ 
+      action: 'generateImage', 
+      prompt: enhancedPrompt,
+      model: model
     });
 
     if (!response.ok) {
