@@ -1,4 +1,4 @@
-import { DEFAULT_GEMINI_BASE_URL } from './configDefaults';
+const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 export interface ApiServiceConfig {
   name: string; // unique service name identifier
@@ -252,4 +252,4 @@ class ApiConfigManager {
 
 export const apiConfig = ApiConfigManager.getInstance();
 
-export { DEFAULT_GEMINI_BASE_URL } from './configDefaults';
+export { DEFAULT_GEMINI_BASE_URL };
