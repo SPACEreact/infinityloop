@@ -63,24 +63,38 @@ const extractErrorMessage = (error: unknown): string => {
   return 'Unknown error occurred';
 };
 
-const isQuotaExceededError = (error: unknown): boolean => {
+const shouldUseFallbackModel = (error: unknown): boolean => {
   const message = extractErrorMessage(error).toLowerCase();
   if (message.includes('quota') && (message.includes('exceeded') || message.includes('exceed') || message.includes('exhausted'))) {
     return true;
   }
 
+  if (message.includes('permission denied') || message.includes('not found')) {
+    return true;
+  }
+
   const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
-  if (status === 429) {
+  if (status === 429 || status === 403 || status === 404) {
     return true;
   }
 
   const errorPayload = typeof error === 'object' && error ? (error as { error?: { status?: string; code?: number } }).error : undefined;
   if (errorPayload) {
-    if (typeof errorPayload.status === 'string' && errorPayload.status.toLowerCase().includes('resource_exhausted')) {
-      return true;
+    if (typeof errorPayload.status === 'string') {
+      const normalizedStatus = errorPayload.status.toLowerCase();
+      if (
+        normalizedStatus.includes('resource_exhausted') ||
+        normalizedStatus.includes('permission_denied') ||
+        normalizedStatus.includes('not_found')
+      ) {
+        return true;
+      }
     }
 
-    if (typeof errorPayload.code === 'number' && errorPayload.code === 429) {
+    if (
+      typeof errorPayload.code === 'number' &&
+      (errorPayload.code === 429 || errorPayload.code === 403 || errorPayload.code === 404)
+    ) {
       return true;
     }
   }
@@ -225,7 +239,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             })
           };
         } catch (error: unknown) {
-          if (!isQuotaExceededError(error) || primaryModel === FALLBACK_TEXT_MODEL) {
+          if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_TEXT_MODEL) {
             throw error;
           }
 
@@ -306,7 +320,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             })
           };
         } catch (error: unknown) {
-          if (!isQuotaExceededError(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
+          if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
             console.error('Image generation error:', error);
             return {
               statusCode: 500,

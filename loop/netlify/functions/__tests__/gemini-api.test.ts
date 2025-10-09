@@ -55,6 +55,12 @@ const createQuotaError = () => {
   return error;
 };
 
+const createAccessDeniedError = (status: number, message: string) => {
+  const error = new Error(message);
+  (error as any).status = status;
+  return error;
+};
+
 describe('gemini-api quota fallback', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
@@ -136,5 +142,65 @@ describe('gemini-api quota fallback', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Quota exceeded for image model "imagen-4.5-ultra". Falling back to free tier model "imagen-3.0-latest".'
     );
+  });
+
+  it('falls back to the free tier text model when access is denied', async () => {
+    mockModelImplementations.set('gemini-2.5-flash', async () => {
+      throw createAccessDeniedError(403, 'Permission denied for project');
+    });
+
+    mockModelImplementations.set('gemini-1.5-flash-latest', async () => ({
+      response: Promise.resolve({
+        text: () => 'fallback text response'
+      })
+    }));
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(true);
+    expect(payload.data).toBe('fallback text response');
+    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.usedFallback).toBe(true);
+  });
+
+  it('falls back to the free tier image model when the primary is not found', async () => {
+    mockModelImplementations.set('imagen-4.5-ultra', async () => {
+      throw createAccessDeniedError(404, 'Model not found');
+    });
+
+    mockModelImplementations.set('imagen-3.0-latest', async () => ({
+      response: Promise.resolve({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: 'image-data'
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      })
+    }));
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateImage', prompt: 'Image prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(true);
+    expect(payload.data).toBe('image-data');
+    expect(payload.modelUsed).toBe('imagen-3.0-latest');
+    expect(payload.usedFallback).toBe(true);
   });
 });
