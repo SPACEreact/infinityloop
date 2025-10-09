@@ -1,19 +1,19 @@
-"""Project management API endpoints."""
+"""Flask blueprint exposing project operations."""
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from src.api.errors import ValidationError
-from src.services.projects import ProjectService
+from ...project_service import ProjectService
+from ..errors import ValidationError
 
 
 def _json_body() -> dict:
-    body = request.get_json(silent=True)
-    if body is None:
+    payload = request.get_json(silent=True)
+    if payload is None:
         raise ValidationError("Request body must be valid JSON.")
-    if not isinstance(body, dict):
+    if not isinstance(payload, dict):
         raise ValidationError("JSON payload must be an object.")
-    return body
+    return payload
 
 
 def create_projects_blueprint(service: ProjectService) -> Blueprint:
@@ -83,6 +83,7 @@ def create_projects_blueprint(service: ProjectService) -> Blueprint:
     def generate_outline(project_id: str) -> tuple:
         payload = _json_body()
         result = service.generate_outline(project_id, payload)
-        return jsonify(result), 200
+        return jsonify(result), 202
 
     return bp
+

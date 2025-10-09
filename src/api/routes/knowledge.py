@@ -1,9 +1,10 @@
 """Knowledge base API endpoints."""
 from __future__ import annotations
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
-from src.services.knowledge import KnowledgeService
+from ...knowledge_service import KnowledgeService
+from ..errors import ValidationError
 
 
 def create_knowledge_blueprint(service: KnowledgeService) -> Blueprint:
@@ -11,7 +12,16 @@ def create_knowledge_blueprint(service: KnowledgeService) -> Blueprint:
 
     @bp.get("/")
     def get_knowledge() -> tuple:
-        payload = service.load()
+        payload = service.all()
         return jsonify(payload), 200
 
+    @bp.get("/search")
+    def search_knowledge() -> tuple:
+        query = request.args.get("q", "").strip()
+        if not query:
+            raise ValidationError("Query parameter 'q' is required.")
+        results = service.search(query)
+        return jsonify(results), 200
+
     return bp
+

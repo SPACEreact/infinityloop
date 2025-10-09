@@ -7,10 +7,10 @@ from src.api.errors import ApiError, ErrorDetail, NotFoundError
 from src.api.routes.knowledge import create_knowledge_blueprint
 from src.api.routes.projects import create_projects_blueprint
 from src.api.routes.status import create_status_blueprint
+from src.knowledge_service import KnowledgeService
 from src.logger import setup_logger
-from src.repositories.project_repository import ProjectRepository
-from src.services.knowledge import KnowledgeService
-from src.services.projects import ProjectService
+from src.project_service import ProjectService
+from src.store import ProjectStore
 
 
 def create_app() -> Flask:
@@ -19,8 +19,8 @@ def create_app() -> Flask:
     app = Flask(__name__)
     logger = setup_logger()
 
-    repository = ProjectRepository()
-    project_service = ProjectService(repository)
+    store = ProjectStore()
+    project_service = ProjectService(store)
     knowledge_service = KnowledgeService()
 
     app.register_blueprint(create_status_blueprint())
