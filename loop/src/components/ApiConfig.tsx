@@ -28,13 +28,18 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
   const handleSaveConfig = () => {
     if (!editingConfig) return;
 
+    const normalizedName = editingConfig.name.trim().toLowerCase();
+    const baseUrl = editingConfig.baseUrl.trim();
+    const apiKey = editingConfig.apiKey?.trim() || undefined;
+    const description = editingConfig.description?.trim();
+
     if (editingConfig.isNew) {
       try {
         apiConfig.addConfig({
-          name: editingConfig.name.trim(),
-          baseUrl: editingConfig.baseUrl.trim(),
-          apiKey: editingConfig.apiKey?.trim() || undefined,
-          description: editingConfig.description?.trim(),
+          name: normalizedName,
+          baseUrl,
+          apiKey,
+          description,
           enabled: editingConfig.enabled,
         });
       } catch (error) {
@@ -42,10 +47,11 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
         return;
       }
     } else {
-      apiConfig.updateConfigByName(editingConfig.name, {
-        baseUrl: editingConfig.baseUrl.trim(),
-        apiKey: editingConfig.apiKey?.trim() || undefined,
-        description: editingConfig.description?.trim(),
+      const existingName = editingConfig.name.trim();
+      apiConfig.updateConfigByName(existingName, {
+        baseUrl,
+        apiKey,
+        description,
         enabled: editingConfig.enabled,
       });
     }
@@ -126,6 +132,10 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                   className="panel-input w-full px-3 py-2"
                   disabled={!editingConfig.isNew}
                 />
+                <p className="mt-1 text-xs ink-subtle">
+                  Use the canonical identifier for the service (for example, <code>gemini</code>, <code>chromadb</code>, or
+                  <code>openai</code>). This name must match the integration ID used elsewhere in the app.
+                </p>
               </div>
 
               <div>
