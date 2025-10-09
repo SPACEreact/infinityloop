@@ -1,7 +1,7 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -159,6 +159,54 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         };
       }
 
+      case 'generateImage': {
+        const { prompt, model = 'imagen-4.5-ultra' } = requestData;
+
+        try {
+          const data = await retryApiCall(async () => {
+            // For Imagen models, we use a different generation approach
+            const imageModel = genAI.getGenerativeModel({ model: model });
+            const result = await imageModel.generateContent([prompt]);
+            const response = await result.response;
+            
+            // The response should contain image data
+            const candidates = response.candidates;
+            if (candidates && candidates.length > 0) {
+              const candidate = candidates[0];
+              if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+                const part = candidate.content.parts[0];
+                if (part.inlineData && part.inlineData.data) {
+                  return part.inlineData.data;
+                }
+              }
+            }
+            
+            throw new Error('No image data returned from model');
+          });
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              data: data,
+              isMock: false
+            })
+          };
+        } catch (error: unknown) {
+          console.error('Image generation error:', error);
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : 'Image generation failed',
+              isMock: false
+            })
+          };
+        }
+      }
+
       case 'listModels': {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`, {
           method: 'GET',
@@ -171,12 +219,57 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
 
         const data = await response.json();
+        
+        // Add our high-quota and image generation models to the response
+        const enhancedModels = {
+          models: [
+            ...(data.models || []),
+            {
+              name: "models/gemini-2.5-pro",
+              displayName: "Gemini 2.5 Pro",
+              description: "High-performance model with increased quota for text generation",
+              supportedGenerationMethods: ["generateContent"],
+              maxTokens: 2097152,
+              capabilities: ["text"]
+            },
+            {
+              name: "models/gemini-2.5-flash",
+              displayName: "Gemini 2.5 Flash",
+              description: "Fast model with high quota for quick responses",
+              supportedGenerationMethods: ["generateContent"],
+              maxTokens: 1048576,
+              capabilities: ["text"]
+            },
+            {
+              name: "models/imagen-4.5-ultra",
+              displayName: "Imagen 4.5 Ultra",
+              description: "Ultra-high quality image generation model",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
+            },
+            {
+              name: "models/imagen-4.5-pro",
+              displayName: "Imagen 4.5 Pro",
+              description: "Professional image generation with high quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
+            },
+            {
+              name: "models/imagen-4.5-flash",
+              displayName: "Imagen 4.5 Flash",
+              description: "Fast image generation with good quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
+            }
+          ]
+        };
+        
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
             success: true,
-            data: data
+            data: enhancedModels
           })
         };
       }

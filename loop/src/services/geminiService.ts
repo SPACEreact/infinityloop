@@ -373,7 +373,7 @@ export const runBuild = async (
   }
 };
 
-export const generateImageFromPrompt = async (prompt: string): Promise<GeminiResult<string>> => {
+export const generateImageFromPrompt = async (prompt: string, model: string = 'imagen-4.5-ultra'): Promise<GeminiResult<string>> => {
   const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
   try {
@@ -382,7 +382,8 @@ export const generateImageFromPrompt = async (prompt: string): Promise<GeminiRes
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         action: 'generateImage', 
-        prompt: enhancedPrompt 
+        prompt: enhancedPrompt,
+        model: model
       })
     });
 
@@ -401,10 +402,11 @@ export const generateImageFromPrompt = async (prompt: string): Promise<GeminiRes
         `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
         'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
         `Prompt captured: ${prompt}`,
+        `Model: ${model}`,
         '',
         'Swap in a valid API key to stream real renders.'
       ].join('\n');
-      return createResult(JSON.stringify({ prompt, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
+      return createResult(JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
     }
   } catch (error: unknown) {
     // Fallback to mock mode on error
@@ -413,9 +415,10 @@ export const generateImageFromPrompt = async (prompt: string): Promise<GeminiRes
       `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
       'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
       `Prompt captured: ${prompt}`,
+      `Model: ${model}`,
       '',
       'Swap in a valid API key to stream real renders.'
     ].join('\n');
-    return createResult(JSON.stringify({ prompt, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
+    return createResult(JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
   }
 };
