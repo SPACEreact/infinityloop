@@ -7,7 +7,7 @@ const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
 const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
 const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
 
-export const isMockMode = false; // Always use the Netlify function endpoint
+export const isMockMode = !apiConfig.isConfigured('gemini');
 
 export interface GeminiResult<T> {
   data: T | null;
@@ -190,64 +190,67 @@ const extractImageDataFromResponse = (data: any): string => {
 };
 
 const requestGeminiContent = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+  const normalizedBase = credentials.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateContent?key=${encodeURIComponent(credentials.apiKey)}`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action: 'generateContent',
-      prompt: prompt,
-      model: model
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ]
     })
   });
 
-  const data = await parseResponseJson(response, 'Gemini text request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate content');
-  }
+  const data = await parseResponseJson(response, 'Gemini text request');
+  return extractTextFromResponse(data);
 };
 
 const requestGeminiImage = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+  const normalizedBase = credentials.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(credentials.apiKey)}`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action: 'generateImage',
-      prompt: prompt,
-      model: model
+      prompt: {
+        text: prompt
+      },
+      imageGenerationConfig: {
+        numberOfImages: 1
+      }
     })
   });
 
-  const data = await parseResponseJson(response, 'Gemini image request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate image');
-  }
+  const data = await parseResponseJson(response, 'Gemini image request');
+  return extractImageDataFromResponse(data);
 };
 
 const requestTextWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_TEXT_MODEL
 ): Promise<{ text: string; modelUsed: string; usedFallback: boolean }> => {
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
+
   try {
-    const text = await requestGeminiContent({} as GeminiCredentials, prompt, preferredModel);
+    const text = await requestGeminiContent(credentials, prompt, preferredModel);
     return { text, modelUsed: preferredModel, usedFallback: false };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_TEXT_MODEL) {
       throw error;
     }
 
-    const fallbackText = await requestGeminiContent({} as GeminiCredentials, prompt, FALLBACK_TEXT_MODEL);
+    const fallbackText = await requestGeminiContent(credentials, prompt, FALLBACK_TEXT_MODEL);
     return { text: fallbackText, modelUsed: FALLBACK_TEXT_MODEL, usedFallback: true };
   }
 };
@@ -256,15 +259,20 @@ const requestImageWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_IMAGE_MODEL
 ): Promise<{ image: string; modelUsed: string; usedFallback: boolean }> => {
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
+
   try {
-    const image = await requestGeminiImage({} as GeminiCredentials, prompt, preferredModel);
+    const image = await requestGeminiImage(credentials, prompt, preferredModel);
     return { image, modelUsed: preferredModel, usedFallback: false };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_IMAGE_MODEL) {
       throw error;
     }
 
-    const fallbackImage = await requestGeminiImage({} as GeminiCredentials, prompt, FALLBACK_IMAGE_MODEL);
+    const fallbackImage = await requestGeminiImage(credentials, prompt, FALLBACK_IMAGE_MODEL);
     return { image: fallbackImage, modelUsed: FALLBACK_IMAGE_MODEL, usedFallback: true };
   }
 };
@@ -463,25 +471,25 @@ const createMockBuildResponse = (
 
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
 
   try {
+    const baseUrl = credentials.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/models?key=${encodeURIComponent(credentials.apiKey)}`;
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'listModels'
-      })
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    const data = await parseResponseJson(response, 'Gemini models request via Netlify function');
-    
-    if (data.success && data.data) {
-      return data.data;
-    } else {
-      throw new Error(data.error || 'Failed to list models');
-    }
+    const data = await parseResponseJson(response, 'Gemini models request');
+    const models = Array.isArray(data?.models) ? data.models : [];
+
+    return {
+      models: [...models, ...ADDITIONAL_MODELS]
+    };
   } catch (error: unknown) {
     console.error('ListModels API Error:', error);
     if (error instanceof Error) {
