@@ -1,4 +1,24 @@
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const NETLIFY_FUNCTION_PATH = '/.netlify/functions/gemini-api';
+
+const normalizeString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const isLikelyGeminiProxyUrl = (url: string | undefined): boolean => {
+  if (!url) return false;
+
+  const normalized = url.trim().toLowerCase();
+  if (!normalized) return false;
+
+  if (normalized.startsWith('/.netlify/functions/')) {
+    return true;
+  }
+
+  if (normalized.includes('.netlify/functions/')) {
+    return true;
+  }
+
+  return false;
+};
 
 export interface ApiServiceConfig {
   name: string; // unique service name identifier
@@ -16,12 +36,13 @@ class ApiConfigManager {
     // Load configs from storage and enrich them with any build-time defaults
     this.loadFromStorage();
     const didApplyEnvDefaults = this.applyEnvDefaults();
+    const didEnsureNetlifyProxy = this.ensureNetlifyProxyConfig();
 
     if (this.configs.length === 0) {
       // No stored configs and no environment defaults – fall back to a local ChromaDB server
       this.configs = [this.createLocalChromaConfig()];
       this.saveToStorage();
-    } else if (didApplyEnvDefaults) {
+    } else if (didApplyEnvDefaults || didEnsureNetlifyProxy) {
       // Persist any environment-derived defaults for future sessions
       this.saveToStorage();
     }
@@ -45,15 +66,20 @@ class ApiConfigManager {
   private applyEnvDefaults(): boolean {
     let didMutate = false;
 
-    const envChromaBaseUrl = (import.meta.env.VITE_CHROMA_API_BASE_URL
-      || import.meta.env.VITE_CHROMADB_API_BASE_URL
-      || '').trim();
-    const envChromaApiKey = (import.meta.env.VITE_CHROMA_API_KEY
-      || import.meta.env.VITE_CHROMADB_API_KEY
-      || '').trim();
-    const envGeminiBaseUrl =
-      (import.meta.env.VITE_GEMINI_API_BASE_URL || '').trim() || DEFAULT_GEMINI_BASE_URL;
-    const envGeminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+    const envChromaBaseUrl =
+      normalizeString(import.meta.env.VITE_CHROMA_API_BASE_URL) ||
+      normalizeString(import.meta.env.VITE_CHROMADB_API_BASE_URL);
+    const envChromaApiKey =
+      normalizeString(import.meta.env.VITE_CHROMA_API_KEY) ||
+      normalizeString(import.meta.env.VITE_CHROMADB_API_KEY);
+
+    const envGeminiApiKey = normalizeString(import.meta.env.VITE_GEMINI_API_KEY);
+    const envGeminiBaseUrl = normalizeString(import.meta.env.VITE_GEMINI_API_BASE_URL);
+    const envGeminiProxyUrl =
+      normalizeString(import.meta.env.VITE_GEMINI_PROXY_URL) ||
+      (!envGeminiApiKey && envGeminiBaseUrl && !envGeminiBaseUrl.includes('generativelanguage.googleapis.com')
+        ? envGeminiBaseUrl
+        : '');
 
     const envDefaults: ApiServiceConfig[] = [];
 
@@ -70,8 +96,15 @@ class ApiConfigManager {
     if (envGeminiApiKey) {
       envDefaults.push({
         name: 'gemini',
-        baseUrl: envGeminiBaseUrl,
-        apiKey: envGeminiApiKey || undefined,
+        baseUrl: envGeminiBaseUrl || DEFAULT_GEMINI_BASE_URL,
+        apiKey: envGeminiApiKey,
+        description: 'Gemini direct endpoint',
+        enabled: true,
+      });
+    } else if (envGeminiProxyUrl) {
+      envDefaults.push({
+        name: 'gemini',
+        baseUrl: envGeminiProxyUrl,
         description: 'Gemini proxy endpoint',
         enabled: true,
       });
@@ -108,6 +141,56 @@ class ApiConfigManager {
     }
 
     return didMutate;
+  }
+
+  private ensureNetlifyProxyConfig(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const hostname = window.location?.hostname ?? '';
+    if (!hostname) {
+      return false;
+    }
+
+    const isNetlifyHost = hostname.endsWith('.netlify.app') || hostname.endsWith('.netlify.dev');
+    if (!isNetlifyHost) {
+      return false;
+    }
+
+    const existingIndex = this.configs.findIndex(config => config.name === 'gemini');
+    const proxyDescription = 'Netlify Gemini proxy endpoint';
+
+    if (existingIndex === -1) {
+      this.configs.push({
+        name: 'gemini',
+        baseUrl: NETLIFY_FUNCTION_PATH,
+        description: proxyDescription,
+        enabled: true,
+      });
+      return true;
+    }
+
+    const existing = this.configs[existingIndex];
+
+    if (existing.apiKey) {
+      return false;
+    }
+
+    if (existing.baseUrl && isLikelyGeminiProxyUrl(existing.baseUrl) && existing.enabled) {
+      return false;
+    }
+
+    this.configs[existingIndex] = {
+      ...existing,
+      baseUrl: existing.baseUrl && isLikelyGeminiProxyUrl(existing.baseUrl)
+        ? existing.baseUrl
+        : NETLIFY_FUNCTION_PATH,
+      description: existing.description || proxyDescription,
+      enabled: true,
+    };
+
+    return true;
   }
 
   static getInstance(): ApiConfigManager {
@@ -243,7 +326,11 @@ class ApiConfigManager {
     }
 
     if (name === 'gemini') {
-      return !!config.apiKey;
+      if (config?.apiKey) {
+        return true;
+      }
+
+      return !!config?.baseUrl && isLikelyGeminiProxyUrl(config.baseUrl);
     }
 
     return !!config.baseUrl || !!config.apiKey;

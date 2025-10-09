@@ -26,18 +26,25 @@ The Loop Studio application integrates with Google's Gemini AI API through a sec
 
 ### 2. Configure Netlify Environment Variable
 
-1. Go to your Netlify dashboard
-2. Navigate to your site settings
-3. Go to "Environment variables" in the Build & deploy section
-4. Add a new environment variable:
+Follow these exact clicks in the Netlify UI:
+
+1. Sign in to the [Netlify dashboard](https://app.netlify.com/) and open the site that hosts Loop Studio.
+2. In the left sidebar choose **Site configuration → Environment variables** (older UIs display this under **Site settings → Build & deploy → Environment**).
+3. Click **Add a variable** and fill in the fields:
    - **Key**: `GEMINI_API_KEY`
-   - **Value**: Your Gemini API key (paste the full key)
-   - **Scopes**: Check "Builds" and "Functions" (or "All scopes" for simplicity)
+   - **Value**: paste your Gemini API key (no quotes or spaces).
+   - **Scopes**: enable both **Builds** and **Functions** so the key is injected during deploys *and* available to the serverless proxy at runtime.
+4. Press **Save**. Netlify stores the key immediately; you can confirm it was saved by expanding the new entry (the value will show as hidden).
+
+> **Tip:** The proxy also accepts the alternate names `GOOGLE_API_KEY`, `GOOGLE_AI_API_KEY`, `GOOGLE_GENAI_API_KEY`, or `VITE_GEMINI_API_KEY`. Stick with `GEMINI_API_KEY` unless you have an existing convention.
 
 ### 3. Deploy Your Changes
 
-1. Commit and push your changes to your repository
-2. Netlify will automatically rebuild and deploy with the new environment variable
+1. Commit and push any code changes to your repository.
+2. Back in Netlify, click **Deploys → Trigger deploy → Deploy site** (or trigger a new build from your Git provider). This ensures the fresh environment variable is available to the frontend.
+3. Wait for the deploy to finish; the deploy log will include a line noting environment variables were injected.
+
+If you only added the environment variable (no code changes), you can still use **Trigger deploy → Clear cache and deploy site** to force a rebuild with the new secret.
 
 ### 4. Test the Integration
 
@@ -45,6 +52,12 @@ The Loop Studio application integrates with Google's Gemini AI API through a sec
 2. Try using a feature that calls the Gemini API (like the sandbox chat)
 3. Check that responses are generated (not mock mode)
 4. Verify that rate limiting works by making multiple rapid requests
+
+### 5. Double-check in Netlify Logs
+
+1. In Netlify, open **Deploys → Production → View function logs** (or go straight to **Functions → gemini-api**).
+2. Make a request from the deployed site and refresh the logs; you should see `Resolved Gemini API key...` if the secret loaded correctly.
+3. If you still see the "Service configuration error" entry, confirm the environment variable scopes include **Functions** and redeploy.
 
 ## Security Best Practices
 

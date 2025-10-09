@@ -2,12 +2,264 @@ import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
 
-const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
-const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
-const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
-const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
+const MODEL_NAMESPACE_PREFIX = 'models/';
 
-export const isMockMode = false; // Always use the Netlify function endpoint
+const DEFAULT_TEXT_MODEL = 'gemini-1.5-pro-latest';
+const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
+const DEFAULT_IMAGE_MODEL = 'imagen-3.0-generate-001';
+const FALLBACK_IMAGE_MODEL = 'imagen-2.0-generate-001';
+
+type GeminiModel = {
+  name: string;
+  displayName?: string;
+  supportedGenerationMethods?: string[];
+  description?: string;
+};
+
+type ModelSelection = {
+  primary: string | null;
+  fallback: string | null;
+};
+
+const NETLIFY_FUNCTION_PATH = '/.netlify/functions/gemini-api';
+
+type DirectGeminiEndpoint = {
+  type: 'direct';
+  baseUrl: string;
+  apiKey: string;
+};
+
+type ProxyGeminiEndpoint = {
+  type: 'proxy';
+  baseUrl: string;
+};
+
+type GeminiEndpoint = DirectGeminiEndpoint | ProxyGeminiEndpoint;
+
+const TEXT_MODEL_PRIORITY = [
+  DEFAULT_TEXT_MODEL,
+  FALLBACK_TEXT_MODEL,
+  'gemini-1.0-pro',
+  'gemini-1.0-pro-001'
+];
+
+const IMAGE_MODEL_PRIORITY = [
+  DEFAULT_IMAGE_MODEL,
+  FALLBACK_IMAGE_MODEL,
+  'imagegeneration'
+];
+
+const MOCK_MODEL_ENTRIES: GeminiModel[] = [
+  {
+    name: `${MODEL_NAMESPACE_PREFIX}${DEFAULT_TEXT_MODEL}`,
+    displayName: 'Gemini 1.5 Pro',
+    description: 'Primary text generation model optimized for high quality story outputs.',
+    supportedGenerationMethods: ['generateContent']
+  },
+  {
+    name: `${MODEL_NAMESPACE_PREFIX}${FALLBACK_TEXT_MODEL}`,
+    displayName: 'Gemini 1.5 Flash',
+    description: 'Fast text generation model suitable for quota-limited environments.',
+    supportedGenerationMethods: ['generateContent']
+  },
+  {
+    name: `${MODEL_NAMESPACE_PREFIX}${DEFAULT_IMAGE_MODEL}`,
+    displayName: 'Imagen 3.0',
+    description: 'High fidelity image generation tuned for cinematic concept frames.',
+    supportedGenerationMethods: ['generateImage']
+  },
+  {
+    name: `${MODEL_NAMESPACE_PREFIX}${FALLBACK_IMAGE_MODEL}`,
+    displayName: 'Imagen 2.0',
+    description: 'Fallback image generator with broad availability and lower quota requirements.',
+    supportedGenerationMethods: ['generateImage']
+  }
+];
+
+const MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type ModelCacheEntry = {
+  timestamp: number;
+  models: GeminiModel[];
+};
+
+const modelCatalogCache = new Map<string, ModelCacheEntry>();
+
+const normalizeModelName = (model: string): string =>
+  model.startsWith(MODEL_NAMESPACE_PREFIX) ? model : `${MODEL_NAMESPACE_PREFIX}${model}`;
+
+const trimModelNamespace = (model: string): string =>
+  model.startsWith(MODEL_NAMESPACE_PREFIX) ? model.slice(MODEL_NAMESPACE_PREFIX.length) : model;
+
+const supportsTextGeneration = (model: GeminiModel): boolean => {
+  const methods = (model.supportedGenerationMethods ?? []).map(method => method.toLowerCase());
+  return methods.some(method => method.includes('generatecontent') || method.includes('createcontent'));
+};
+
+const supportsImageGeneration = (model: GeminiModel): boolean => {
+  const normalizedName = model.name.toLowerCase();
+  if (normalizedName.includes('imagen')) {
+    return true;
+  }
+
+  const methods = (model.supportedGenerationMethods ?? []).map(method => method.toLowerCase());
+  return methods.some(method => method.includes('generateimage') || method.includes('createimage'));
+};
+
+const selectModel = (
+  models: GeminiModel[],
+  type: 'text' | 'image',
+  requested?: string | null
+): ModelSelection => {
+  const predicate = type === 'text' ? supportsTextGeneration : supportsImageGeneration;
+  const availableModels = models.filter(model => predicate(model));
+
+  if (!availableModels.length) {
+    return { primary: null, fallback: null };
+  }
+
+  const requestedName = requested ? normalizeModelName(requested) : null;
+  const priorityList = type === 'text' ? TEXT_MODEL_PRIORITY : IMAGE_MODEL_PRIORITY;
+
+  const orderedCandidates = [
+    ...(requestedName ? [requestedName] : []),
+    ...priorityList,
+    ...availableModels.map(model => model.name)
+  ];
+
+  const seen = new Set<string>();
+  const resolved = orderedCandidates.filter(name => {
+    const normalized = normalizeModelName(name);
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return availableModels.some(model => model.name === normalized);
+  });
+
+  const [primary = null, fallback = null] = resolved;
+  const trimmedPrimary = primary ? trimModelNamespace(primary) : null;
+  const trimmedFallback = fallback ? trimModelNamespace(fallback) : null;
+
+  return {
+    primary: trimmedPrimary,
+    fallback: trimmedFallback && trimmedFallback === trimmedPrimary ? null : trimmedFallback
+  };
+};
+
+const getModelCacheKey = (endpoint: GeminiEndpoint): string =>
+  endpoint.type === 'direct' ? `direct:${endpoint.apiKey}` : `proxy:${endpoint.baseUrl}`;
+
+const isCacheEntryFresh = (entry: ModelCacheEntry | undefined): boolean =>
+  !!entry && Date.now() - entry.timestamp < MODEL_CACHE_TTL_MS;
+
+const fetchModelCatalogDirect = async (endpoint: DirectGeminiEndpoint): Promise<GeminiModel[]> => {
+  const baseUrl = endpoint.baseUrl.replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}/models?key=${encodeURIComponent(endpoint.apiKey)}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  const data = await parseResponseJson(response, 'Gemini models request');
+  return Array.isArray((data as { models?: GeminiModel[] })?.models)
+    ? ((data as { models?: GeminiModel[] }).models as GeminiModel[])
+    : [];
+};
+
+const fetchModelCatalogViaProxy = async (endpoint: ProxyGeminiEndpoint): Promise<GeminiModel[]> => {
+  const proxyResponse = await requestGeminiProxy(
+    endpoint,
+    'listModels',
+    {},
+    'Gemini proxy models request'
+  );
+
+  if (Array.isArray(proxyResponse?.data?.models)) {
+    return proxyResponse.data.models as GeminiModel[];
+  }
+
+  if (Array.isArray(proxyResponse?.data)) {
+    return proxyResponse.data as GeminiModel[];
+  }
+
+  return [];
+};
+
+const fetchModelCatalogForEndpoint = async (endpoint: GeminiEndpoint): Promise<GeminiModel[]> => {
+  const cacheKey = getModelCacheKey(endpoint);
+  const cachedEntry = modelCatalogCache.get(cacheKey);
+  if (isCacheEntryFresh(cachedEntry)) {
+    return cachedEntry!.models;
+  }
+
+  const models = endpoint.type === 'proxy'
+    ? await fetchModelCatalogViaProxy(endpoint)
+    : await fetchModelCatalogDirect(endpoint);
+
+  modelCatalogCache.set(cacheKey, { timestamp: Date.now(), models });
+  return models;
+};
+
+const resolveModelSelectionForEndpoint = async (
+  endpoint: GeminiEndpoint,
+  type: 'text' | 'image',
+  requested?: string | null
+): Promise<ModelSelection> => {
+  const catalog = await fetchModelCatalogForEndpoint(endpoint);
+  return selectModel(catalog, type, requested);
+};
+
+const readEnvString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const resolveProxyBaseUrl = (configuredBaseUrl?: string): string | null => {
+  const envProxyRaw = (import.meta.env.VITE_GEMINI_PROXY_URL ?? '') as string | undefined;
+  const envProxy = readEnvString(envProxyRaw);
+
+  if (envProxy) {
+    return envProxy;
+  }
+
+  const normalizedConfigured = readEnvString(configuredBaseUrl);
+  if (normalizedConfigured && !normalizedConfigured.includes('generativelanguage.googleapis.com')) {
+    return normalizedConfigured;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location?.hostname ?? '';
+    if (hostname && (hostname.endsWith('.netlify.app') || hostname.endsWith('.netlify.dev'))) {
+      return NETLIFY_FUNCTION_PATH;
+    }
+  }
+
+  return null;
+};
+
+const getGeminiEndpoint = (): GeminiEndpoint | null => {
+  const config = apiConfig.getConfigByName('gemini');
+  const apiKey = readEnvString(config?.apiKey);
+  const configuredBase = readEnvString(config?.baseUrl);
+
+  if (apiKey) {
+    const normalizedBase = (configuredBase || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, '');
+    return {
+      type: 'direct',
+      baseUrl: normalizedBase || DEFAULT_GEMINI_BASE_URL,
+      apiKey,
+    };
+  }
+
+  const proxyBaseUrl = resolveProxyBaseUrl(configuredBase);
+  if (!proxyBaseUrl) {
+    return null;
+  }
+
+  return {
+    type: 'proxy',
+    baseUrl: proxyBaseUrl.replace(/\/$/, ''),
+  };
+};
+
+export const isMockMode = !getGeminiEndpoint();
 
 export interface GeminiResult<T> {
   data: T | null;
@@ -20,27 +272,6 @@ const createResult = <T>(data: T | null, error: string | null, isMock: boolean):
   error,
   isMock
 });
-
-type GeminiCredentials = {
-  baseUrl: string;
-  apiKey: string;
-};
-
-const getGeminiCredentials = (): GeminiCredentials | null => {
-  const config = apiConfig.getConfigByName('gemini');
-  const apiKey = config?.apiKey?.trim();
-
-  if (!apiKey) {
-    return null;
-  }
-
-  const baseUrl = (config?.baseUrl?.trim() || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, '');
-
-  return {
-    baseUrl: baseUrl || DEFAULT_GEMINI_BASE_URL,
-    apiKey
-  };
-};
 
 const parseResponseJson = async (response: Response, requestDescription: string): Promise<any> => {
   const rawText = await response.text();
@@ -109,8 +340,6 @@ const shouldUseFallbackModel = (error: unknown): boolean => {
 
   return false;
 };
-
-const normalizeModelName = (model: string): string => (model.startsWith('models/') ? model : `models/${model}`);
 
 const extractTextFromResponse = (data: any): string => {
   const candidates = data?.candidates;
@@ -189,66 +418,130 @@ const extractImageDataFromResponse = (data: any): string => {
   throw new Error('No image data returned from model');
 };
 
-const requestGeminiContent = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+type GeminiProxyAction = 'generateContent' | 'generateImage' | 'listModels';
 
-  const response = await fetch(url, {
+const requestGeminiProxy = async (
+  endpoint: ProxyGeminiEndpoint,
+  action: GeminiProxyAction,
+  payload: Record<string, unknown>,
+  description: string
+): Promise<any> => {
+  const response = await fetch(endpoint.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'generateContent',
-      prompt: prompt,
-      model: model
-    })
+    body: JSON.stringify({ action, ...payload })
   });
 
-  const data = await parseResponseJson(response, 'Gemini text request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate content');
+  const data = await parseResponseJson(response, description);
+
+  if (data && typeof data === 'object' && 'success' in data && data.success === false) {
+    const errorMessage =
+      typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error?: string }).error
+        : `${description} failed.`;
+    throw new Error(errorMessage);
   }
+
+  return data;
 };
 
-const requestGeminiImage = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+const requestGeminiContentDirect = async (
+  endpoint: DirectGeminiEndpoint,
+  prompt: string,
+  model: string
+): Promise<string> => {
+  const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateContent?key=${encodeURIComponent(endpoint.apiKey)}`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action: 'generateImage',
-      prompt: prompt,
-      model: model
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ]
     })
   });
 
-  const data = await parseResponseJson(response, 'Gemini image request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate image');
-  }
+  const data = await parseResponseJson(response, 'Gemini text request');
+  return extractTextFromResponse(data);
+};
+
+const requestGeminiImageDirect = async (
+  endpoint: DirectGeminiEndpoint,
+  prompt: string,
+  model: string
+): Promise<string> => {
+  const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(endpoint.apiKey)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: {
+        text: prompt
+      },
+      imageGenerationConfig: {
+        numberOfImages: 1
+      }
+    })
+  });
+
+  const data = await parseResponseJson(response, 'Gemini image request');
+  return extractImageDataFromResponse(data);
 };
 
 const requestTextWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_TEXT_MODEL
 ): Promise<{ text: string; modelUsed: string; usedFallback: boolean }> => {
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  const selection = await resolveModelSelectionForEndpoint(endpoint, 'text', preferredModel);
+  if (!selection.primary) {
+    throw new Error('No text generation models available for this API key.');
+  }
+
+  if (endpoint.type === 'proxy') {
+    const proxyResponse = await requestGeminiProxy(
+      endpoint,
+      'generateContent',
+      { prompt, model: selection.primary },
+      'Gemini proxy text request'
+    );
+
+    const text = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    if (!text) {
+      throw new Error('Gemini proxy text request returned no data');
+    }
+
+    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : selection.primary;
+    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean'
+      ? proxyResponse.usedFallback
+      : false;
+
+    return { text, modelUsed, usedFallback };
+  }
+
   try {
-    const text = await requestGeminiContent({} as GeminiCredentials, prompt, preferredModel);
-    return { text, modelUsed: preferredModel, usedFallback: false };
+    const text = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
+    return { text, modelUsed: selection.primary, usedFallback: false };
   } catch (error) {
-    if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_TEXT_MODEL) {
+    if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
       throw error;
     }
 
-    const fallbackText = await requestGeminiContent({} as GeminiCredentials, prompt, FALLBACK_TEXT_MODEL);
-    return { text: fallbackText, modelUsed: FALLBACK_TEXT_MODEL, usedFallback: true };
+    const fallbackText = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
+    return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true };
   }
 };
 
@@ -256,93 +549,49 @@ const requestImageWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_IMAGE_MODEL
 ): Promise<{ image: string; modelUsed: string; usedFallback: boolean }> => {
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  const selection = await resolveModelSelectionForEndpoint(endpoint, 'image', preferredModel);
+  if (!selection.primary) {
+    throw new Error('No image generation models available for this API key.');
+  }
+
+  if (endpoint.type === 'proxy') {
+    const proxyResponse = await requestGeminiProxy(
+      endpoint,
+      'generateImage',
+      { prompt, model: selection.primary },
+      'Gemini proxy image request'
+    );
+
+    const image = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    if (!image) {
+      throw new Error('Gemini proxy image request returned no data');
+    }
+
+    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : selection.primary;
+    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean'
+      ? proxyResponse.usedFallback
+      : false;
+
+    return { image, modelUsed, usedFallback };
+  }
+
   try {
-    const image = await requestGeminiImage({} as GeminiCredentials, prompt, preferredModel);
-    return { image, modelUsed: preferredModel, usedFallback: false };
+    const image = await requestGeminiImageDirect(endpoint, prompt, selection.primary);
+    return { image, modelUsed: selection.primary, usedFallback: false };
   } catch (error) {
-    if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_IMAGE_MODEL) {
+    if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
       throw error;
     }
 
-    const fallbackImage = await requestGeminiImage({} as GeminiCredentials, prompt, FALLBACK_IMAGE_MODEL);
-    return { image: fallbackImage, modelUsed: FALLBACK_IMAGE_MODEL, usedFallback: true };
+    const fallbackImage = await requestGeminiImageDirect(endpoint, prompt, selection.fallback);
+    return { image: fallbackImage, modelUsed: selection.fallback, usedFallback: true };
   }
 };
-
-const ADDITIONAL_MODELS = [
-  {
-    name: 'models/gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro',
-    description: 'High-performance model with increased quota for text generation',
-    supportedGenerationMethods: ['generateContent'],
-    maxTokens: 2097152,
-    capabilities: ['text']
-  },
-  {
-    name: 'models/gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash',
-    description: 'Fast model with high quota for quick responses',
-    supportedGenerationMethods: ['generateContent'],
-    maxTokens: 1048576,
-    capabilities: ['text']
-  },
-  {
-    name: 'models/imagen-4.5-ultra',
-    displayName: 'Imagen 4.5 Ultra',
-    description: 'Ultra-high quality image generation model',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  },
-  {
-    name: 'models/imagen-4.5-pro',
-    displayName: 'Imagen 4.5 Pro',
-    description: 'Professional image generation with high quota',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  },
-  {
-    name: 'models/imagen-4.5-flash',
-    displayName: 'Imagen 4.5 Flash',
-    description: 'Fast image generation with good quota',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  },
-  {
-    name: 'models/gemini-1.5-flash-latest',
-    displayName: 'Gemini 1.5 Flash (Free Tier - Latest)',
-    description: 'Latest free tier text generation model for quota fallbacks',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['text']
-  },
-  {
-    name: 'models/claude-3.5-sonnet-free',
-    displayName: 'Claude 3.5 Sonnet - Free Tier',
-    description: 'Free tier for text generation with limited quota',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['text']
-  },
-  {
-    name: 'models/imagen-3.0-latest',
-    displayName: 'Imagen 3.0 (Free Tier - Latest)',
-    description: 'Latest free tier image generation model for quota fallbacks',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  },
-  {
-    name: 'models/stable-diffusion-3-free',
-    displayName: 'Stable Diffusion 3 - Free Tier',
-    description: 'Free tier for image generation with limited quota',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  },
-  {
-    name: 'models/dall-e-3-free',
-    displayName: 'DALL-E 3 - Free Tier',
-    description: 'Free tier for image generation with limited quota',
-    supportedGenerationMethods: ['generateContent'],
-    capabilities: ['image']
-  }
-];
 
 const KNOWLEDGE_CONTEXT = `
 
@@ -463,32 +712,17 @@ const createMockBuildResponse = (
 
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    return { models: MOCK_MODEL_ENTRIES, isMock: true };
+  }
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'listModels'
-      })
-    });
-
-    const data = await parseResponseJson(response, 'Gemini models request via Netlify function');
-    
-    if (data.success && data.data) {
-      return data.data;
-    } else {
-      throw new Error(data.error || 'Failed to list models');
-    }
+    const models = await fetchModelCatalogForEndpoint(endpoint);
+    return { models, isMock: false };
   } catch (error: unknown) {
     console.error('ListModels API Error:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to list models from AI service: ${error.message}`);
-    } else {
-      throw new Error('Failed to list models from AI service: Unknown error');
-    }
+    return { models: MOCK_MODEL_ENTRIES, isMock: true };
   }
 };
 
@@ -621,7 +855,10 @@ export const runBuild = async (
   }
 };
 
-export const generateImageFromPrompt = async (prompt: string, model: string = 'imagen-4.5-ultra'): Promise<GeminiResult<string>> => {
+export const generateImageFromPrompt = async (
+  prompt: string,
+  model: string = DEFAULT_IMAGE_MODEL
+): Promise<GeminiResult<string>> => {
   const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
   try {
