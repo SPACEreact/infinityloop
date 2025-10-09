@@ -49,8 +49,9 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
       }
     } else {
       const lookupName = editingConfig.originalName ?? editingConfig.name;
+      const canonicalName = editingConfig.originalName ?? normalizedName;
       apiConfig.updateConfigByName(lookupName, {
-        name: normalizedName,
+        name: canonicalName,
         baseUrl,
         apiKey,
         description,
