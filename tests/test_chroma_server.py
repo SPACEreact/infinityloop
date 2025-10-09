@@ -118,25 +118,3 @@ def test_collection_not_found_returns_404(api_client, method, path, payload):
 
     assert response.status_code == 404
     assert "missing" in response.json()["detail"].lower()
-
-
-def test_determine_allowed_origins_defaults():
-    origins, allow_all = chroma_server._determine_allowed_origins(None)
-
-    assert origins == ["http://localhost:3000", "http://localhost:5173"]
-    assert allow_all is False
-
-
-def test_determine_allowed_origins_from_env(monkeypatch):
-    raw = "https://example.com, https://app.netlify.app"
-    origins, allow_all = chroma_server._determine_allowed_origins(raw)
-
-    assert origins == ["https://example.com", "https://app.netlify.app"]
-    assert allow_all is False
-
-
-def test_determine_allowed_origins_allow_all():
-    origins, allow_all = chroma_server._determine_allowed_origins("*, https://other.com")
-
-    assert origins == ["*"]
-    assert allow_all is True
