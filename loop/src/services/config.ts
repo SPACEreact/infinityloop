@@ -10,23 +10,96 @@ class ApiConfigManager {
   private configs: ApiServiceConfig[] = [];
 
   private constructor() {
-    // Load configs from storage or initialize with default chromadb config
+    // Load configs from storage and enrich them with any build-time defaults
     this.loadFromStorage();
+    const didApplyEnvDefaults = this.applyEnvDefaults();
+
     if (this.configs.length === 0) {
-      const replitDomain = window.location.hostname;
-      const baseUrl = replitDomain.includes('replit.dev') 
-        ? `https://${replitDomain}:8000`
-        : 'http://localhost:8000';
-      this.configs = [
-        {
-          name: 'chromadb',
-          baseUrl: baseUrl,
-          apiKey: undefined,
-          description: 'ChromaDB or compatible backend',
-        },
-      ];
+      // No stored configs and no environment defaults – fall back to a local ChromaDB server
+      this.configs = [this.createLocalChromaConfig()];
+      this.saveToStorage();
+    } else if (didApplyEnvDefaults) {
+      // Persist any environment-derived defaults for future sessions
       this.saveToStorage();
     }
+  }
+
+  private createLocalChromaConfig(): ApiServiceConfig {
+    const replitDomain = window.location.hostname;
+    const baseUrl = replitDomain.includes('replit.dev')
+      ? `https://${replitDomain}:8000`
+      : 'http://localhost:8000';
+
+    return {
+      name: 'chromadb',
+      baseUrl,
+      apiKey: undefined,
+      description: 'ChromaDB or compatible backend',
+    };
+  }
+
+  private applyEnvDefaults(): boolean {
+    let didMutate = false;
+
+    const envChromaBaseUrl = (import.meta.env.VITE_CHROMA_API_BASE_URL
+      || import.meta.env.VITE_CHROMADB_API_BASE_URL
+      || '').trim();
+    const envChromaApiKey = (import.meta.env.VITE_CHROMA_API_KEY
+      || import.meta.env.VITE_CHROMADB_API_KEY
+      || '').trim();
+    const envGeminiBaseUrl = (import.meta.env.VITE_GEMINI_API_BASE_URL || '').trim();
+
+    const envDefaults: ApiServiceConfig[] = [];
+
+    if (envChromaBaseUrl) {
+      envDefaults.push({
+        name: 'chromadb',
+        baseUrl: envChromaBaseUrl,
+        apiKey: envChromaApiKey || undefined,
+        description: 'ChromaDB or compatible backend',
+      });
+    }
+
+    if (envGeminiBaseUrl) {
+      envDefaults.push({
+        name: 'gemini',
+        baseUrl: envGeminiBaseUrl,
+        apiKey: undefined,
+        description: 'Gemini proxy endpoint',
+      });
+    }
+
+    for (const defaultConfig of envDefaults) {
+      const existingIndex = this.configs.findIndex(config => config.name === defaultConfig.name);
+
+      if (existingIndex === -1) {
+        this.configs.push(defaultConfig);
+        didMutate = true;
+        continue;
+      }
+
+      const existing = this.configs[existingIndex];
+      const localChromaBase = this.createLocalChromaConfig().baseUrl;
+
+      const shouldUpdateBaseUrl =
+        !!defaultConfig.baseUrl &&
+        (!existing.baseUrl || existing.baseUrl === localChromaBase);
+      const shouldUpdateApiKey = !!defaultConfig.apiKey && !existing.apiKey;
+      const shouldUpdateDescription =
+        !!defaultConfig.description && !existing.description;
+
+      if (shouldUpdateBaseUrl || shouldUpdateApiKey || shouldUpdateDescription) {
+        this.configs[existingIndex] = {
+          ...existing,
+          baseUrl: shouldUpdateBaseUrl ? defaultConfig.baseUrl : existing.baseUrl,
+          apiKey: shouldUpdateApiKey ? defaultConfig.apiKey : existing.apiKey,
+          description: shouldUpdateDescription ? defaultConfig.description : existing.description,
+        };
+        didMutate = true;
+      }
+    }
+
+    return didMutate;
   }
 
   static getInstance(): ApiConfigManager {
@@ -121,7 +194,13 @@ class ApiConfigManager {
   isConfigured(name: string): boolean {
     const config = this.getConfigByName(name);
     if (!config) return false;
-    return config.baseUrl !== 'http://localhost:8000' || !!config.apiKey;
+
+    if (name === 'chromadb') {
+      const localBase = this.createLocalChromaConfig().baseUrl;
+      return !!config.baseUrl && config.baseUrl !== localBase;
+    }
+
+    return !!config.baseUrl || !!config.apiKey;
   }
 }
 
