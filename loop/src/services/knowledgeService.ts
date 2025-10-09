@@ -91,4 +91,30 @@ ${fracturedLoopNotes}
   };
 };
 
-export const knowledgeBase = loadKnowledgeBase();
+// Optimized knowledge context - only essential filmmaking principles for quota efficiency
+export const getCompactKnowledgeContext = (): string => {
+  return `# Essential Film Knowledge
+
+## Story Structure
+- 3-Act: Setup (Want), Confrontation (Obstacles), Resolution (Need fulfilled)
+- Character Arc: Flat, Positive, Negative change based on Want vs Need
+- Hero's Journey: Departure → Initiation → Return with transformation
+
+## Visual Storytelling  
+- Shots: WS (context), MS (interaction), CU (emotion), ECU (detail)
+- Camera Movement: Static (formal), Tracking (following), Pan/Tilt (reveal)
+- Lighting: 3-point (key, fill, back), High-key (bright), Low-key (dramatic)
+- Composition: Rule of thirds, leading lines, depth of field
+
+## Key Principles
+- Every shot serves story and character
+- Visual subtext conveys internal state
+- Pacing matches emotional rhythm
+- Style supports theme and tone
+`;
+};
+
+export const knowledgeBase = {
+  ...loadKnowledgeBase(),
+  getCompactContext: getCompactKnowledgeContext
+};
