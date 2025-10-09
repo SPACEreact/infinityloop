@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { apiConfig } from '../services/config';
+import { apiConfig, type ApiServiceConfig } from '../services/config';
 import { XMarkIcon, Cog6ToothIcon, PlusIcon, PencilIcon, TrashIcon } from './IconComponents';
-
-interface ApiServiceConfig {
-  name: string;
-  baseUrl: string;
-  apiKey?: string;
-  description?: string;
-}
 
 interface ApiConfigProps {
   isOpen: boolean;
@@ -42,6 +35,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
           baseUrl: editingConfig.baseUrl.trim(),
           apiKey: editingConfig.apiKey?.trim() || undefined,
           description: editingConfig.description?.trim(),
+          enabled: editingConfig.enabled,
         });
       } catch (error) {
         alert(error instanceof Error ? error.message : 'Failed to add config');
@@ -52,6 +46,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
         baseUrl: editingConfig.baseUrl.trim(),
         apiKey: editingConfig.apiKey?.trim() || undefined,
         description: editingConfig.description?.trim(),
+        enabled: editingConfig.enabled,
       });
     }
 
@@ -172,6 +167,21 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium ink-strong mb-1">
+                  Service Status
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm ink-strong">
+                  <span>{editingConfig.enabled ? 'Enabled' : 'Disabled'}</span>
+                  <input
+                    type="checkbox"
+                    checked={editingConfig.enabled}
+                    onChange={(event) => setEditingConfig({ ...editingConfig, enabled: event.target.checked })}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                </label>
+              </div>
+
               <div className="flex space-x-3 pt-4">
                 <button
                   onClick={() => setEditingConfig(null)}
@@ -193,7 +203,16 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold ink-strong">Configured API Services</h3>
                 <button
-                  onClick={() => setEditingConfig({ name: '', baseUrl: '', apiKey: '', description: '', isNew: true })}
+                  onClick={() =>
+                    setEditingConfig({
+                      name: '',
+                      baseUrl: '',
+                      apiKey: '',
+                      description: '',
+                      enabled: true,
+                      isNew: true,
+                    })
+                  }
                   className="flex items-center gap-2 bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600"
                 >
                   <PlusIcon className="w-4 h-4" />
@@ -207,26 +226,46 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                 <div className="space-y-3">
                   {configs.map((config) => (
                     <div key={config.name} className="border border-[hsl(var(--border))] rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-medium ink-strong">{config.name}</h4>
-                          {config.description && <p className="text-sm ink-subtle">{config.description}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditingConfig({ ...config })}
-                            className="text-blue-500 hover:text-blue-700"
-                            title="Edit"
-                          >
-                            <PencilIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteConfig(config.name)}
-                            className="text-red-500 hover:text-red-700"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
+                      <div className="flex flex-col gap-2 mb-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium ink-strong">{config.name}</h4>
+                            {config.description && <p className="text-sm ink-subtle">{config.description}</p>}
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <label className="flex items-center gap-2 text-sm ink-strong">
+                              <span>{config.enabled ? 'Enabled' : 'Disabled'}</span>
+                              <input
+                                type="checkbox"
+                                checked={config.enabled}
+                                onChange={(event) => {
+                                  try {
+                                    apiConfig.setEnabled(config.name, event.target.checked);
+                                    setConfigs(apiConfig.getConfigs());
+                                  } catch (error) {
+                                    console.error('Failed to update service status:', error);
+                                    alert('Failed to update service status. Please try again.');
+                                  }
+                                }}
+                                className="h-4 w-4 accent-blue-500"
+                                aria-label={`Toggle ${config.name} service`}
+                              />
+                            </label>
+                            <button
+                              onClick={() => setEditingConfig({ ...config })}
+                              className="text-blue-500 hover:text-blue-700"
+                              title="Edit"
+                            >
+                              <PencilIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteConfig(config.name)}
+                              className="text-red-500 hover:text-red-700"
+                              title="Delete"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
 

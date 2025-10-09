@@ -1,6 +1,15 @@
 import { apiConfig } from './config';
 
+function assertServiceAvailable(serviceName: string): void {
+  if (!apiConfig.isConfigured(serviceName)) {
+    const friendlyName = serviceName === 'chromadb' ? 'ChromaDB' : serviceName;
+    throw new Error(`${friendlyName} service is disabled. Enable it in API Configuration to continue.`);
+  }
+}
+
 function getHeaders(serviceName: string = 'chromadb'): Record<string, string> {
+  assertServiceAvailable(serviceName);
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -14,6 +23,7 @@ function getHeaders(serviceName: string = 'chromadb'): Record<string, string> {
 }
 
 export async function createCollection(collectionName: string, serviceName: string = 'chromadb'): Promise<void> {
+  assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
     throw new Error(`API service '${serviceName}' not configured`);
@@ -37,6 +47,7 @@ export async function addDocuments(
   ids?: string[],
   serviceName: string = 'chromadb'
 ): Promise<void> {
+  assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
     throw new Error(`API service '${serviceName}' not configured`);
@@ -64,6 +75,7 @@ export async function queryDocuments(
   nResults: number = 10,
   serviceName: string = 'chromadb'
 ): Promise<any> {
+  assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
     throw new Error(`API service '${serviceName}' not configured`);
