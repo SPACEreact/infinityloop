@@ -67,14 +67,16 @@ class ApiConfigManager {
       });
     }
 
+    const geminiDefault: ApiServiceConfig = {
+      name: 'gemini',
+      baseUrl: envGeminiBaseUrl,
+      apiKey: envGeminiApiKey || undefined,
+      description: 'Gemini proxy endpoint',
+      enabled: true,
+    };
+
     if (envGeminiApiKey) {
-      envDefaults.push({
-        name: 'gemini',
-        baseUrl: envGeminiBaseUrl,
-        apiKey: envGeminiApiKey || undefined,
-        description: 'Gemini proxy endpoint',
-        enabled: true,
-      });
+      envDefaults.push(geminiDefault);
     }
 
     for (const defaultConfig of envDefaults) {
@@ -92,7 +94,10 @@ class ApiConfigManager {
       const shouldUpdateBaseUrl =
         !!defaultConfig.baseUrl &&
         (!existing.baseUrl || existing.baseUrl === localChromaBase);
-      const shouldUpdateApiKey = !!defaultConfig.apiKey && !existing.apiKey;
+      const shouldUpdateApiKey =
+        defaultConfig.apiKey !== undefined &&
+        (!existing.apiKey ||
+          (typeof existing.apiKey === 'string' && existing.apiKey.trim().length === 0));
       const shouldUpdateDescription =
         !!defaultConfig.description && !existing.description;
 
