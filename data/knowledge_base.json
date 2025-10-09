@@ -1,0 +1,32 @@
+{
+  "categories": [
+    {
+      "id": "workflows",
+      "title": "Creative Workflows",
+      "entries": [
+        {
+          "question": "How does Loop structure story assets?",
+          "answer": "Organize primary assets into story, image, and text_to_video folders. Promote assets to master story before deriving visual treatments."
+        },
+        {
+          "question": "What is the recommended iteration loop?",
+          "answer": "Draft narrative beats, lock master story assets, expand to shot lists, and finally style shots for delivery."
+        }
+      ]
+    },
+    {
+      "id": "generation",
+      "title": "Generation Tips",
+      "entries": [
+        {
+          "question": "How can I improve multi-shot generations?",
+          "answer": "Provide structured input data with scene, character, and mood details. Use the batch style controls to keep continuity."
+        },
+        {
+          "question": "When should I request director suggestions?",
+          "answer": "After styling shots, call the director advice flow to surface pacing and transition improvements before export."
+        }
+      ]
+    }
+  ]
+}

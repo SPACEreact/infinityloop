@@ -1,8 +1,47 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
+const GEMINI_KEY_ENV_CANDIDATES = [
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_AI_API_KEY',
+  'GOOGLE_GENAI_API_KEY',
+  'VITE_GEMINI_API_KEY'
+] as const;
+
+let cachedGeminiClient: GoogleGenerativeAI | null = null;
+let cachedGeminiApiKey: string | null = null;
+
+const resolveGeminiApiKey = (): string | null => {
+  for (const envName of GEMINI_KEY_ENV_CANDIDATES) {
+    const rawValue = process.env[envName];
+    if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      if (trimmed) {
+        if (envName !== 'GEMINI_API_KEY') {
+          console.info(`Resolved Gemini API key from ${envName} environment variable.`);
+        }
+        return trimmed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const getGeminiClient = (): { apiKey: string | null; client: GoogleGenerativeAI | null } => {
+  const apiKey = resolveGeminiApiKey();
+  if (!apiKey) {
+    return { apiKey: null, client: null };
+  }
+
+  if (!cachedGeminiClient || cachedGeminiApiKey !== apiKey) {
+    cachedGeminiClient = new GoogleGenerativeAI(apiKey);
+    cachedGeminiApiKey = apiKey;
+  }
+
+  return { apiKey, client: cachedGeminiClient };
+};
 
 const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
 const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
@@ -31,6 +70,18 @@ const SECURITY_HEADERS = {
 
 // Retry utility function
 async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> {
+  let effectiveBaseDelay = baseDelay;
+  if (typeof process !== 'undefined' && process.env) {
+    const override = process.env.GEMINI_PROXY_RETRY_BASE_DELAY;
+    if (override) {
+      const parsed = Number.parseInt(override, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        effectiveBaseDelay = parsed;
+      }
+    } else if (process.env.VITEST) {
+      effectiveBaseDelay = Math.min(baseDelay, 10);
+    }
+  }
   let lastError: unknown;
   for (let i = 0; i < retries; i++) {
     try {
@@ -38,7 +89,7 @@ async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 10
     } catch (error: unknown) {
       lastError = error;
       if (i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
+        const delay = effectiveBaseDelay * Math.pow(2, i);
         console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -102,17 +153,47 @@ const shouldUseFallbackModel = (error: unknown): boolean => {
   return false;
 };
 
+const buildMockFailureResponse = (
+  headers: Record<string, string>,
+  error: unknown,
+  overrideMessage?: string,
+  extra?: Record<string, unknown>
+) => {
+  const detailMessage = extractErrorMessage(error);
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: false,
+      error: overrideMessage ?? 'Gemini request failed. Using mock response.',
+      detail: detailMessage,
+      isMock: true,
+      ...extra
+    })
+  };
+};
+
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+  const { apiKey: resolvedApiKey, client } = getGeminiClient();
+
   // Validate API key on startup
-  if (!GEMINI_API_KEY) {
-    console.error('GEMINI_API_KEY environment variable is not set');
+  if (!resolvedApiKey || !client) {
+    console.error(
+      'Gemini API key environment variable is not set. Provide one of: ' +
+        GEMINI_KEY_ENV_CANDIDATES.join(', ')
+    );
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
         ...SECURITY_HEADERS
       },
-      body: JSON.stringify({ error: 'Service configuration error' })
+      body: JSON.stringify({
+        success: false,
+        error: 'Service configuration error',
+        detail: 'Gemini API key is not configured.',
+        isMock: true
+      })
     };
   }
 
@@ -219,7 +300,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         let usedFallback = false;
 
         const invokeModel = async (modelName: string) => {
-          const generativeModel = genAI.getGenerativeModel({ model: modelName });
+          const generativeModel = client.getGenerativeModel({ model: modelName });
           const result = await generativeModel.generateContent(prompt);
           const response = await result.response;
           return response.text().trim();
@@ -240,26 +321,37 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           };
         } catch (error: unknown) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_TEXT_MODEL) {
-            throw error;
+            return buildMockFailureResponse(headers, error, undefined, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
 
           console.warn(`Quota exceeded for model "${primaryModel}". Falling back to free tier model "${FALLBACK_TEXT_MODEL}".`);
           usedFallback = true;
           finalModel = FALLBACK_TEXT_MODEL;
 
-          const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
+          try {
+            const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
 
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              success: true,
-              data,
-              isMock: false,
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                success: true,
+                data,
+                isMock: false,
+                modelUsed: finalModel,
+                usedFallback
+              })
+            };
+          } catch (fallbackError: unknown) {
+            console.error('Fallback text generation error:', fallbackError);
+            return buildMockFailureResponse(headers, fallbackError, 'Gemini text generation failed after fallback. Using mock response.', {
               modelUsed: finalModel,
-              usedFallback
-            })
-          };
+              usedFallback: true
+            });
+          }
         }
       }
 
@@ -287,7 +379,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         let usedFallback = false;
 
         const invokeModel = async (modelName: string) => {
-          const imageModel = genAI.getGenerativeModel({ model: modelName });
+          const imageModel = client.getGenerativeModel({ model: modelName });
           const result = await imageModel.generateContent([prompt]);
           const response = await result.response;
 
@@ -322,15 +414,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         } catch (error: unknown) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
             console.error('Image generation error:', error);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            return buildMockFailureResponse(headers, error, undefined, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
 
           console.warn(`Quota exceeded for image model "${primaryModel}". Falling back to free tier model "${FALLBACK_IMAGE_MODEL}".`);
@@ -353,21 +440,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             };
           } catch (fallbackError: unknown) {
             console.error('Fallback image generation error:', fallbackError);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: fallbackError instanceof Error ? fallbackError.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            return buildMockFailureResponse(headers, fallbackError, 'Gemini image generation failed after fallback. Using mock response.', {
+              modelUsed: finalModel,
+              usedFallback: true
+            });
           }
         }
       }
 
       case 'listModels': {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${resolvedApiKey}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -477,17 +559,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     }
   } catch (error: unknown) {
     console.error('Function error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error occurred';
-    
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        success: false,
-        error: message,
-        isMock: false 
-      })
-    };
+    return buildMockFailureResponse(headers, error);
   }
 };
 

@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../services/config', () => ({
   apiConfig: {
@@ -17,6 +17,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Project, Asset } from '../../types';
 import { useProject } from '../../hooks/useProject';
+
+const mockUseWorkspace = vi.fn();
+
+vi.mock('../../state/WorkspaceContext', () => ({
+  useWorkspace: () => mockUseWorkspace(),
+}));
+
+vi.mock('../../services/mcpService', () => ({
+  syncAssetsToMcp: vi.fn(() => Promise.resolve({ success: true })),
+}));
 
 function MultiShotModalStub({ isOpen, onCancel }: any) {
   if (!isOpen) return null;
@@ -51,6 +61,10 @@ vi.mock('../../components/BatchStyleModal', () => ({
 import Workspace from '../../components/Workspace';
 
 describe('timeline modal triggers', () => {
+  beforeEach(() => {
+    mockUseWorkspace.mockReset();
+  });
+
   const baseAssets: Asset[] = [
     {
       id: 'story-1',
@@ -120,73 +134,54 @@ describe('timeline modal triggers', () => {
     updatedAt: new Date('2024-01-04T00:00:00Z'),
   };
 
-  const defaultHandlers = {
-    setProject: vi.fn(),
-    setSelectedAssetId: vi.fn(),
-    setToastState: vi.fn(),
-    handleAddAsset: vi.fn(),
-    handleAssetDrop: vi.fn(),
-    handleRequestDeleteAsset: vi.fn(),
-    handleConfirmDelete: vi.fn(),
-    handleCancelDelete: vi.fn(),
-    handleUndoDelete: vi.fn(),
-    handleUpdateAsset: vi.fn(),
-    setSelectedStoryAssets: vi.fn(),
-    setSelectedMultiShots: vi.fn(),
-    setSelectedMasterImage: vi.fn(),
-    setActiveTimeline: vi.fn(),
-    onTagWeightChange: vi.fn(),
-    onStyleRigidityChange: vi.fn(),
-    onWeightingToggle: vi.fn(),
-    onGenerate: vi.fn(),
-    onGenerateOutput: vi.fn(),
-  } as const;
-
-  const renderWorkspace = (
-    overrides: Partial<React.ComponentProps<typeof Workspace>> = {},
-  ) => {
-    const props: React.ComponentProps<typeof Workspace> = {
-      appLabel: 'Loop',
-      project: baseProject,
-      setProject: defaultHandlers.setProject,
+  const renderWorkspace = ({
+    project = baseProject,
+    timeline = 'secondary',
+    overrides = {},
+  }: {
+    project?: Project;
+    timeline?: 'primary' | 'secondary' | 'third' | 'fourth';
+    overrides?: Partial<ReturnType<typeof useProject>>;
+  } = {}) => {
+    const defaultWorkspace = {
+      project,
+      setProject: vi.fn(),
       selectedAssetId: null,
-      setSelectedAssetId: defaultHandlers.setSelectedAssetId,
+      setSelectedAssetId: vi.fn(),
       pendingDeleteAsset: null,
       toastState: null,
-      setToastState: defaultHandlers.setToastState,
-      handleAddAsset: defaultHandlers.handleAddAsset,
-      handleAssetDrop: defaultHandlers.handleAssetDrop,
-      handleRequestDeleteAsset: defaultHandlers.handleRequestDeleteAsset,
-      handleConfirmDelete: defaultHandlers.handleConfirmDelete,
-      handleCancelDelete: defaultHandlers.handleCancelDelete,
-      handleUndoDelete: defaultHandlers.handleUndoDelete,
-      handleUpdateAsset: defaultHandlers.handleUpdateAsset,
+      setToastState: vi.fn(),
+      handleAddAsset: vi.fn(),
+      handleAssetDrop: vi.fn(),
+      handleRequestDeleteAsset: vi.fn(),
+      handleConfirmDelete: vi.fn(),
+      handleCancelDelete: vi.fn(),
+      handleUndoDelete: vi.fn(),
+      handleUpdateAsset: vi.fn(),
       selectedStoryAssets: [],
-      setSelectedStoryAssets: defaultHandlers.setSelectedStoryAssets,
+      setSelectedStoryAssets: vi.fn(),
       selectedMultiShots: [],
-      setSelectedMultiShots: defaultHandlers.setSelectedMultiShots,
+      setSelectedMultiShots: vi.fn(),
       selectedMasterImage: null,
-      setSelectedMasterImage: defaultHandlers.setSelectedMasterImage,
-      tagWeights: {},
-      styleRigidity: 50,
-      isWeightingEnabled: false,
-      onTagWeightChange: defaultHandlers.onTagWeightChange,
-      onStyleRigidityChange: defaultHandlers.onStyleRigidityChange,
-      onWeightingToggle: defaultHandlers.onWeightingToggle,
-      activeTimeline: 'secondary',
-      setActiveTimeline: defaultHandlers.setActiveTimeline,
+      setSelectedMasterImage: vi.fn(),
+      activeTimeline: timeline,
+      setActiveTimeline: vi.fn(),
       isGenerating: false,
-      onGenerate: defaultHandlers.onGenerate,
-      onGenerateOutput: defaultHandlers.onGenerateOutput,
-      ...overrides,
-    };
+      handleGenerate: vi.fn(),
+      handleGenerateOutput: vi.fn(),
+    } as ReturnType<typeof useProject>;
 
-    return render(<Workspace {...props} />);
+    mockUseWorkspace.mockReturnValue({
+      ...defaultWorkspace,
+      ...overrides,
+    });
+
+    return render(<Workspace appLabel="Loop" />);
   };
 
   it('opens the multi-shot modal when requested from the timeline', async () => {
     const user = userEvent.setup();
-    renderWorkspace({ activeTimeline: 'secondary' });
+    renderWorkspace({ timeline: 'secondary' });
 
     await user.click(
       screen.getByRole('button', { name: /create multi-shot/i }),
@@ -199,7 +194,7 @@ describe('timeline modal triggers', () => {
 
   it('opens the batch style modal from the batch style timeline', async () => {
     const user = userEvent.setup();
-    renderWorkspace({ activeTimeline: 'third' });
+    renderWorkspace({ timeline: 'third' });
 
     await user.click(
       screen.getByRole('button', { name: /create batch style/i }),
@@ -245,83 +240,14 @@ describe('timeline modal triggers', () => {
       },
     };
 
-    const Harness: React.FC = () => {
-      const {
-        project,
-        setProject,
-        selectedAssetId,
-        setSelectedAssetId,
-        pendingDeleteAsset,
-        toastState,
-        setToastState,
-        handleAddAsset,
-        handleAssetDrop,
-        handleRequestDeleteAsset,
-        handleConfirmDelete,
-        handleCancelDelete,
-        handleUndoDelete,
-        handleUpdateAsset,
-        selectedStoryAssets,
-        setSelectedStoryAssets,
-        selectedMultiShots,
-        setSelectedMultiShots,
-        selectedMasterImage,
-        setSelectedMasterImage,
-        activeTimeline,
-        setActiveTimeline,
-        isGenerating,
-        handleGenerate,
-        handleGenerateOutput,
-      } = useProject(projectWithMissingSeeds);
-
-      const [tagWeights, setTagWeights] = React.useState<
-        Record<string, number>
-      >({});
-      const [styleRigidity, setStyleRigidity] = React.useState<number>(50);
-      const [isWeightingEnabled, setIsWeightingEnabled] =
-        React.useState<boolean>(false);
-
-      return (
-        <Workspace
-          appLabel="Loop"
-          project={project}
-          setProject={setProject}
-          selectedAssetId={selectedAssetId}
-          setSelectedAssetId={setSelectedAssetId}
-          pendingDeleteAsset={pendingDeleteAsset}
-          toastState={toastState}
-          setToastState={setToastState}
-          handleAddAsset={handleAddAsset}
-          handleAssetDrop={handleAssetDrop}
-          handleRequestDeleteAsset={handleRequestDeleteAsset}
-          handleConfirmDelete={handleConfirmDelete}
-          handleCancelDelete={handleCancelDelete}
-          handleUndoDelete={handleUndoDelete}
-          handleUpdateAsset={handleUpdateAsset}
-          selectedStoryAssets={selectedStoryAssets}
-          setSelectedStoryAssets={setSelectedStoryAssets}
-          selectedMultiShots={selectedMultiShots}
-          setSelectedMultiShots={setSelectedMultiShots}
-          selectedMasterImage={selectedMasterImage}
-          setSelectedMasterImage={setSelectedMasterImage}
-          tagWeights={tagWeights}
-          styleRigidity={styleRigidity}
-          isWeightingEnabled={isWeightingEnabled}
-          onTagWeightChange={(tagId, weight) =>
-            setTagWeights((prev) => ({ ...prev, [tagId]: weight }))
-          }
-          onStyleRigidityChange={setStyleRigidity}
-          onWeightingToggle={setIsWeightingEnabled}
-          activeTimeline={activeTimeline}
-          setActiveTimeline={setActiveTimeline}
-          isGenerating={isGenerating}
-          onGenerate={handleGenerate}
-          onGenerateOutput={handleGenerateOutput}
-        />
-      );
-    };
-
-    render(<Harness />);
+    renderWorkspace({
+      project: projectWithMissingSeeds,
+      timeline: 'secondary',
+      overrides: {
+        selectedStoryAssets: [],
+        selectedMultiShots: [],
+      },
+    });
 
     await user.click(
       await screen.findByRole('button', { name: /multi-shot/i }),
