@@ -45,25 +45,15 @@ describe('ApiConfigManager environment defaults', () => {
     expect(geminiConfig?.baseUrl).toBe('https://stored.example.com');
   });
 
-  it('fills a blank Gemini API key from the env var', async () => {
-    const existingConfigs = [
-      {
-        name: 'gemini',
-        baseUrl: 'https://stored.example.com',
-        apiKey: '   ',
-        enabled: true,
-      },
-    ];
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existingConfigs));
-
-    vi.stubEnv('VITE_GEMINI_API_KEY', 'non-empty-gemini-key');
+  it('uses the VITE_GEMINI_PROXY_URL when no Gemini key is provided', async () => {
+    vi.stubEnv('VITE_GEMINI_PROXY_URL', '/.netlify/functions/gemini-api');
 
     const { apiConfig } = await import('./config');
 
     const geminiConfig = apiConfig.getConfigByName('gemini');
 
-    expect(geminiConfig?.apiKey).toBe('non-empty-gemini-key');
-    expect(geminiConfig?.baseUrl).toBe('https://stored.example.com');
+    expect(geminiConfig?.apiKey).toBeUndefined();
+    expect(geminiConfig?.baseUrl).toBe('/.netlify/functions/gemini-api');
+    expect(geminiConfig?.enabled).toBe(true);
   });
 });
