@@ -1,9 +1,9 @@
-from flask import Flask
-from src.main import main_bp
+"""Entry point for running the Flask API service locally."""
+from __future__ import annotations
 
-app = Flask(__name__)
+from src.main import create_app
 
-app.register_blueprint(main_bp)
+app = create_app()
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=3001, debug=True)
+    app.run(host='127.0.0.1', port=3001, debug=True, use_reloader=False)
