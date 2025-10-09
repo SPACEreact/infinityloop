@@ -45,15 +45,17 @@ async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 10
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   // Validate API key on startup
   if (!GEMINI_API_KEY) {
-    console.error('GEMINI_API_KEY environment variable is not set');
+    console.error('GEMINI_API_KEY environment variable is not set.');
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         ...SECURITY_HEADERS
       },
-      body: JSON.stringify({ error: 'Service configuration error' })
+      body: JSON.stringify({ error: 'The GEMINI_API_KEY environment variable is not set. Please configure it in your Netlify settings.' })
     };
+  } else {
+    console.log('GEMINI_API_KEY environment variable is set.');
   }
 
   // Get client IP for rate limiting
