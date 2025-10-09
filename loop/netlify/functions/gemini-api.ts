@@ -162,9 +162,9 @@ const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
 
-// Input validation
-const MAX_PROMPT_LENGTH = 10000; // characters
-const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
+// Input validation - Updated to support larger prompts for comprehensive filmmaking knowledge
+const MAX_PROMPT_LENGTH = 100000; // characters (~25,000 tokens, well under Gemini 1.5 Pro's limit)
+const MAX_REQUEST_SIZE = 2 * 1024 * 1024; // 2MB
 
 // Security headers
 const SECURITY_HEADERS = {

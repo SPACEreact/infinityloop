@@ -128,8 +128,8 @@ var selectModel = (models, type, requested) => {
 var rateLimitStore = /* @__PURE__ */ new Map();
 var RATE_LIMIT_WINDOW = 60 * 1e3;
 var RATE_LIMIT_MAX_REQUESTS = 10;
-var MAX_PROMPT_LENGTH = 1e4;
-var MAX_REQUEST_SIZE = 1024 * 1024;
+var MAX_PROMPT_LENGTH = 100000;
+var MAX_REQUEST_SIZE = 2 * 1024 * 1024;
 var SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
