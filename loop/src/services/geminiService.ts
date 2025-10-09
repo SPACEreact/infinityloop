@@ -1,9 +1,13 @@
 import { MASTER_PROMPT } from '../constants';
+import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
 
-// Server-side API endpoints (no API key needed on client-side)
-const NETLIFY_FUNCTION_URL = '/.netlify/functions/gemini-api';
-export const isMockMode = false; // Always try server-side first
+const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
+const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
+const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
+const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
+
+export const isMockMode = !apiConfig.isConfigured('gemini');
 
 export interface GeminiResult<T> {
   data: T | null;
@@ -16,6 +20,337 @@ const createResult = <T>(data: T | null, error: string | null, isMock: boolean):
   error,
   isMock
 });
+
+type GeminiCredentials = {
+  baseUrl: string;
+  apiKey: string;
+};
+
+const getGeminiCredentials = (): GeminiCredentials | null => {
+  const config = apiConfig.getConfigByName('gemini');
+  const apiKey = config?.apiKey?.trim();
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const baseUrl = (config?.baseUrl?.trim() || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, '');
+
+  return {
+    baseUrl: baseUrl || DEFAULT_GEMINI_BASE_URL,
+    apiKey
+  };
+};
+
+const parseResponseJson = async (response: Response, requestDescription: string): Promise<any> => {
+  const rawText = await response.text();
+  let parsed: any;
+
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (error) {
+      parsed = undefined;
+    }
+  }
+
+  if (!response.ok) {
+    const message = `${requestDescription} failed: ${response.status} ${response.statusText}${rawText ? ` - ${rawText}` : ''}`;
+    const error = new Error(message);
+    (error as { status?: number }).status = response.status;
+    if (parsed && typeof parsed === 'object') {
+      (error as { error?: unknown }).error = parsed;
+    }
+    throw error;
+  }
+
+  if (parsed === undefined) {
+    if (!rawText.trim()) {
+      return {};
+    }
+    throw new Error(`${requestDescription} returned an unexpected response format.`);
+  }
+
+  return parsed;
+};
+
+const shouldUseFallbackModel = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+
+  if (message.includes('quota') && (message.includes('exceeded') || message.includes('exhausted'))) {
+    return true;
+  }
+
+  if (message.includes('permission denied') || message.includes('not found')) {
+    return true;
+  }
+
+  const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
+  if (status === 429 || status === 403 || status === 404) {
+    return true;
+  }
+
+  const payload = typeof error === 'object' && error ? (error as { error?: { status?: string; code?: number } }).error : undefined;
+  if (payload) {
+    const payloadStatus = payload.status?.toLowerCase();
+    if (payloadStatus && (payloadStatus.includes('resource_exhausted') || payloadStatus.includes('permission_denied') || payloadStatus.includes('not_found'))) {
+      return true;
+    }
+
+    if (typeof payload.code === 'number' && (payload.code === 429 || payload.code === 403 || payload.code === 404)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const normalizeModelName = (model: string): string => (model.startsWith('models/') ? model : `models/${model}`);
+
+const extractTextFromResponse = (data: any): string => {
+  const candidates = data?.candidates;
+  if (Array.isArray(candidates)) {
+    for (const candidate of candidates) {
+      const parts = candidate?.content?.parts;
+      if (Array.isArray(parts)) {
+        const combined = parts
+          .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        if (combined) {
+          return combined;
+        }
+      }
+      const text = typeof candidate?.content?.text === 'string' ? candidate.content.text.trim() : '';
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  if (typeof data?.text === 'string' && data.text.trim()) {
+    return data.text.trim();
+  }
+
+  throw new Error('No text content returned from model');
+};
+
+const extractImageDataFromResponse = (data: any): string => {
+  const candidates = data?.candidates;
+  if (Array.isArray(candidates)) {
+    for (const candidate of candidates) {
+      const parts = candidate?.content?.parts;
+      if (Array.isArray(parts)) {
+        for (const part of parts) {
+          const inline = part?.inlineData || part?.inline_data;
+          const base64 = inline?.data || inline?.base64Data || inline?.imageBytes;
+          if (typeof base64 === 'string' && base64.trim()) {
+            return base64;
+          }
+        }
+      }
+    }
+  }
+
+  const images = data?.images;
+  if (Array.isArray(images)) {
+    for (const image of images) {
+      const base64 = image?.imageBytes || image?.imageData || image?.base64Data;
+      if (typeof base64 === 'string' && base64.trim()) {
+        return base64;
+      }
+    }
+  }
+
+  const image = data?.image;
+  if (image) {
+    const base64 = image?.imageBytes || image?.imageData || image?.base64Data;
+    if (typeof base64 === 'string' && base64.trim()) {
+      return base64;
+    }
+  }
+
+  const dataArray = data?.data;
+  if (Array.isArray(dataArray)) {
+    for (const item of dataArray) {
+      const base64 = item?.b64_json || item?.imageBytes || item?.base64Data;
+      if (typeof base64 === 'string' && base64.trim()) {
+        return base64;
+      }
+    }
+  }
+
+  throw new Error('No image data returned from model');
+};
+
+const requestGeminiContent = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
+  const normalizedBase = credentials.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateContent?key=${encodeURIComponent(credentials.apiKey)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ]
+    })
+  });
+
+  const data = await parseResponseJson(response, 'Gemini text request');
+  return extractTextFromResponse(data);
+};
+
+const requestGeminiImage = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
+  const normalizedBase = credentials.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(credentials.apiKey)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: {
+        text: prompt
+      },
+      imageGenerationConfig: {
+        numberOfImages: 1
+      }
+    })
+  });
+
+  const data = await parseResponseJson(response, 'Gemini image request');
+  return extractImageDataFromResponse(data);
+};
+
+const requestTextWithFallback = async (
+  prompt: string,
+  preferredModel: string = DEFAULT_TEXT_MODEL
+): Promise<{ text: string; modelUsed: string; usedFallback: boolean }> => {
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  try {
+    const text = await requestGeminiContent(credentials, prompt, preferredModel);
+    return { text, modelUsed: preferredModel, usedFallback: false };
+  } catch (error) {
+    if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_TEXT_MODEL) {
+      throw error;
+    }
+
+    const fallbackText = await requestGeminiContent(credentials, prompt, FALLBACK_TEXT_MODEL);
+    return { text: fallbackText, modelUsed: FALLBACK_TEXT_MODEL, usedFallback: true };
+  }
+};
+
+const requestImageWithFallback = async (
+  prompt: string,
+  preferredModel: string = DEFAULT_IMAGE_MODEL
+): Promise<{ image: string; modelUsed: string; usedFallback: boolean }> => {
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  try {
+    const image = await requestGeminiImage(credentials, prompt, preferredModel);
+    return { image, modelUsed: preferredModel, usedFallback: false };
+  } catch (error) {
+    if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_IMAGE_MODEL) {
+      throw error;
+    }
+
+    const fallbackImage = await requestGeminiImage(credentials, prompt, FALLBACK_IMAGE_MODEL);
+    return { image: fallbackImage, modelUsed: FALLBACK_IMAGE_MODEL, usedFallback: true };
+  }
+};
+
+const ADDITIONAL_MODELS = [
+  {
+    name: 'models/gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    description: 'High-performance model with increased quota for text generation',
+    supportedGenerationMethods: ['generateContent'],
+    maxTokens: 2097152,
+    capabilities: ['text']
+  },
+  {
+    name: 'models/gemini-2.5-flash',
+    displayName: 'Gemini 2.5 Flash',
+    description: 'Fast model with high quota for quick responses',
+    supportedGenerationMethods: ['generateContent'],
+    maxTokens: 1048576,
+    capabilities: ['text']
+  },
+  {
+    name: 'models/imagen-4.5-ultra',
+    displayName: 'Imagen 4.5 Ultra',
+    description: 'Ultra-high quality image generation model',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  },
+  {
+    name: 'models/imagen-4.5-pro',
+    displayName: 'Imagen 4.5 Pro',
+    description: 'Professional image generation with high quota',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  },
+  {
+    name: 'models/imagen-4.5-flash',
+    displayName: 'Imagen 4.5 Flash',
+    description: 'Fast image generation with good quota',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  },
+  {
+    name: 'models/gemini-1.5-flash-latest',
+    displayName: 'Gemini 1.5 Flash (Free Tier - Latest)',
+    description: 'Latest free tier text generation model for quota fallbacks',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['text']
+  },
+  {
+    name: 'models/claude-3.5-sonnet-free',
+    displayName: 'Claude 3.5 Sonnet - Free Tier',
+    description: 'Free tier for text generation with limited quota',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['text']
+  },
+  {
+    name: 'models/imagen-3.0-latest',
+    displayName: 'Imagen 3.0 (Free Tier - Latest)',
+    description: 'Latest free tier image generation model for quota fallbacks',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  },
+  {
+    name: 'models/stable-diffusion-3-free',
+    displayName: 'Stable Diffusion 3 - Free Tier',
+    description: 'Free tier for image generation with limited quota',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  },
+  {
+    name: 'models/dall-e-3-free',
+    displayName: 'DALL-E 3 - Free Tier',
+    description: 'Free tier for image generation with limited quota',
+    supportedGenerationMethods: ['generateContent'],
+    capabilities: ['image']
+  }
+];
 
 const KNOWLEDGE_CONTEXT = `
 
@@ -134,49 +469,27 @@ const createMockBuildResponse = (
   ].join('\n');
 };
 
-const friendlyErrorMessage = (error: unknown, fallback: string) => {
-  if (error instanceof Error && error.message) {
-    // Handle rate limiting specifically
-    if (error.message.includes('429') || error.message.includes('rate limit')) {
-      return 'Rate limit exceeded. Please wait a moment before trying again.';
-    }
-    if (error.message.toLowerCase().includes('quota')) {
-      return 'Quota exceeded for the requested model. The service attempted to fall back to the free tier.';
-    }
-    return `${fallback} (${error.message})`;
-  }
-  if (typeof error === 'string') {
-    if (error.includes('429') || error.includes('rate limit')) {
-      return 'Rate limit exceeded. Please wait a moment before trying again.';
-    }
-    if (error.toLowerCase().includes('quota')) {
-      return 'Quota exceeded for the requested model. The service attempted to fall back to the free tier.';
-    }
-    return `${fallback} (${error})`;
-  }
-  return fallback;
-};
-
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
+  const credentials = getGeminiCredentials();
+  if (!credentials) {
+    throw new Error('Gemini API key is not configured');
+  }
+
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'listModels' })
+    const baseUrl = credentials.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/models?key=${encodeURIComponent(credentials.apiKey)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`ListModels API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
+    const data = await parseResponseJson(response, 'Gemini models request');
+    const models = Array.isArray(data?.models) ? data.models : [];
 
-    const result = await response.json();
-    if (result.success) {
-      return result.data;
-    } else {
-      throw new Error(result.error || 'Unknown error');
-    }
+    return {
+      models: [...models, ...ADDITIONAL_MODELS]
+    };
   } catch (error: unknown) {
     console.error('ListModels API Error:', error);
     if (error instanceof Error) {
@@ -214,31 +527,10 @@ export const generateSandboxResponse = async (
   const fullPrompt = `${systemPrompt}\n\nConversation History:\n${historyText}\n\nUser: ${userMessage}\nAssistant:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    
-    if (result.success && result.data) {
-      return createResult(result.data, null, result.isMock || false);
-    } else {
-      // Fallback to mock mode if server-side fails
-      return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
-    }
+    const { text } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false);
   } catch (error: unknown) {
-    // Fallback to mock mode on error
-    console.warn('Server-side generation failed, falling back to mock mode:', error);
+    console.warn('Gemini chat generation failed, falling back to mock mode:', error);
     return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
   }
 };
@@ -292,31 +584,10 @@ export const generateFromWorkspace = async (
   const fullPrompt = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    
-    if (result.success && result.data) {
-      return createResult(result.data, null, result.isMock || false);
-    } else {
-      // Fallback to mock mode if server-side fails
-      return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
-    }
+    const { text } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false);
   } catch (error: unknown) {
-    // Fallback to mock mode on error
-    console.warn('Server-side workspace generation failed, falling back to mock mode:', error);
+    console.warn('Gemini workspace generation failed, falling back to mock mode:', error);
     return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
   }
 };
@@ -350,31 +621,10 @@ export const runBuild = async (
   const fullPrompt = `${systemPrompt}\n\nAnswers:\n${answersText}\n\nSandbox Context:\n${sandboxText}\n\nGenerate ${buildType} output:`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateContent', 
-        prompt: fullPrompt 
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    
-    if (result.success && result.data) {
-      return createResult(result.data, null, result.isMock || false);
-    } else {
-      // Fallback to mock mode if server-side fails
-      return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
-    }
+    const { text } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false);
   } catch (error: unknown) {
-    // Fallback to mock mode on error
-    console.warn('Server-side build failed, falling back to mock mode:', error);
+    console.warn('Gemini build generation failed, falling back to mock mode:', error);
     return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
   }
 };
@@ -383,40 +633,10 @@ export const generateImageFromPrompt = async (prompt: string, model: string = 'i
   const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
   try {
-    const response = await fetch(NETLIFY_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        action: 'generateImage', 
-        prompt: enhancedPrompt,
-        model: model
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    
-    if (result.success && result.data) {
-      return createResult(result.data, null, result.isMock || false);
-    } else {
-      // Fallback to mock mode if server-side fails
-      const mockCaption = [
-        `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
-        'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
-        `Prompt captured: ${prompt}`,
-        `Model: ${model}`,
-        '',
-        'Swap in a valid API key to stream real renders.'
-      ].join('\n');
-      return createResult(JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
-    }
+    const { image } = await requestImageWithFallback(enhancedPrompt, model);
+    return createResult(image, null, false);
   } catch (error: unknown) {
-    // Fallback to mock mode on error
-    console.warn('Server-side image generation failed, falling back to mock mode:', error);
+    console.warn('Gemini image generation failed, falling back to mock mode:', error);
     const mockCaption = [
       `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
       'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
@@ -425,6 +645,10 @@ export const generateImageFromPrompt = async (prompt: string, model: string = 'i
       '',
       'Swap in a valid API key to stream real renders.'
     ].join('\n');
-    return createResult(JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }), null, true);
+    return createResult(
+      JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }),
+      null,
+      true
+    );
   }
 };

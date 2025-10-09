@@ -39,7 +39,7 @@ An AI-powered filmmaking assistant that integrates professional cinematography k
 - **Frontend**: React 19 with TypeScript
 - **Build System**: Vite 7.1.7 for development and building
 - **Styling**: TailwindCSS 4.1.13
-- **AI Integration**: Google Generative AI (Gemini) - requires VITE_GEMINI_API_KEY environment variable
+- **AI Integration**: Google Generative AI (Gemini) - requires `VITE_GEMINI_API_KEY` (exposed to the Vite client for direct Gemini API requests) and optionally `VITE_GEMINI_API_BASE_URL` (defaults to `https://generativelanguage.googleapis.com/v1beta`)
 - **Knowledge Base**: Markdown files in /knowledge folder provide cinematography expertise
 - **Deployment**: Autoscale deployment with Vite preview server
 
@@ -71,7 +71,7 @@ These are loaded by `knowledgeService.ts` and:
 3. Provide expert guidance for filmmaking decisions
 
 ### Setup Requirements
-1. Add Google AI API key as `VITE_GEMINI_API_KEY` environment variable
+1. Add Google AI API key as `VITE_GEMINI_API_KEY` environment variable (this value is bundled into the client build so only use keys you are comfortable exposing to the browser; optionally set `VITE_GEMINI_API_BASE_URL` to override the default Google endpoint)
 2. Dependencies are already installed
 3. Development server runs on port 5000 via workflow
 4. Run `npm run build` for production build
