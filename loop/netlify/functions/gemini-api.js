@@ -105,7 +105,19 @@ const selectModel = (models, type, requested) => {
             return false;
         }
         seen.add(normalized);
-        return availableModels.some(model => model.name === normalized);
+        
+        // Check if model is available and not in quota cooldown
+        const modelExists = availableModels.some(model => model.name === normalized);
+        if (!modelExists) return false;
+        
+        const trimmedName = trimModelNamespace(normalized);
+        const inCooldown = isModelInQuotaCooldown(trimmedName);
+        if (inCooldown) {
+            console.warn(`Skipping model ${trimmedName} due to quota cooldown`);
+            return false;
+        }
+        
+        return true;
     });
     const [primary = null, fallback = null] = resolved;
     const trimmedPrimary = primary ? trimModelNamespace(primary) : null;
@@ -119,6 +131,10 @@ const selectModel = (models, type, requested) => {
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
+
+// Quota management: track model quota status
+const quotaStatusStore = new Map();
+const QUOTA_COOLDOWN_TIME = 5 * 60 * 1000; // 5 minutes cooldown for quota exceeded models
 // Input validation - Updated to support larger prompts for comprehensive filmmaking knowledge
 const MAX_PROMPT_LENGTH = 100000; // characters (~25,000 tokens, well under Gemini 1.5 Pro's limit)
 const MAX_REQUEST_SIZE = 2 * 1024 * 1024; // 2MB
@@ -131,7 +147,7 @@ const SECURITY_HEADERS = {
     'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com;",
 };
 // Retry utility function
-async function retryApiCall(fn, retries = 3, baseDelay = 1000) {
+async function retryApiCall(fn, retries = 3, baseDelay = 1000, skipQuotaRetry = false) {
     let effectiveBaseDelay = baseDelay;
     if (typeof process !== 'undefined' && process.env) {
         const override = process.env.GEMINI_PROXY_RETRY_BASE_DELAY;
@@ -152,6 +168,13 @@ async function retryApiCall(fn, retries = 3, baseDelay = 1000) {
         }
         catch (error) {
             lastError = error;
+            
+            // Check if this is a quota error and skipQuotaRetry is enabled
+            if (skipQuotaRetry && isQuotaError(error)) {
+                console.warn(`Quota exceeded detected, skipping retries to preserve quota`);
+                throw error;
+            }
+            
             if (i < retries - 1) {
                 const delay = effectiveBaseDelay * Math.pow(2, i);
                 console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
@@ -161,6 +184,70 @@ async function retryApiCall(fn, retries = 3, baseDelay = 1000) {
     }
     throw lastError;
 }
+
+// Quota management functions
+const isQuotaError = (error) => {
+    const message = extractErrorMessage(error).toLowerCase();
+    const status = typeof error === 'object' && error ? error.status : undefined;
+    
+    // Check for quota-related messages
+    if (message.includes('quota') && (message.includes('exceeded') || message.includes('exceed') || message.includes('exhausted'))) {
+        return true;
+    }
+    
+    // Check for HTTP 429 status
+    if (status === 429) {
+        return true;
+    }
+    
+    // Check for specific Google API quota error patterns
+    if (message.includes('too many requests') || message.includes('rate limit')) {
+        return true;
+    }
+    
+    return false;
+};
+
+const markModelAsQuotaExceeded = (modelName) => {
+    const key = `quota_${modelName}`;
+    quotaStatusStore.set(key, {
+        exceededAt: Date.now(),
+        cooldownUntil: Date.now() + QUOTA_COOLDOWN_TIME
+    });
+    console.warn(`Model ${modelName} marked as quota exceeded, cooling down for ${QUOTA_COOLDOWN_TIME / 1000}s`);
+};
+
+const isModelInQuotaCooldown = (modelName) => {
+    const key = `quota_${modelName}`;
+    const status = quotaStatusStore.get(key);
+    if (!status) return false;
+    
+    const now = Date.now();
+    if (now > status.cooldownUntil) {
+        // Cooldown period has passed, remove the entry
+        quotaStatusStore.delete(key);
+        return false;
+    }
+    
+    return true;
+};
+
+const extractRetryDelay = (error) => {
+    // Extract retry delay from Google API error response
+    if (typeof error === 'object' && error && error.errorDetails) {
+        for (const detail of error.errorDetails) {
+            if (detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo' && detail.retryDelay) {
+                const delay = detail.retryDelay;
+                if (typeof delay === 'string') {
+                    // Parse duration string like "2.391964919s"
+                    const seconds = parseFloat(delay.replace('s', ''));
+                    return Math.ceil(seconds * 1000); // Convert to milliseconds
+                }
+            }
+        }
+    }
+    return null;
+};
 const extractErrorMessage = (error) => {
     if (error instanceof Error) {
         return error.message;
@@ -338,7 +425,7 @@ const handler = async (event, context) => {
                     return response.text().trim();
                 };
                 try {
-                    const data = await retryApiCall(() => invokeModel(primary));
+                    const data = await retryApiCall(() => invokeModel(primary), 3, 1000, true);
                     return {
                         statusCode: 200,
                         headers,
@@ -352,17 +439,30 @@ const handler = async (event, context) => {
                     };
                 }
                 catch (error) {
+                    // Mark model as quota exceeded if it's a quota error
+                    if (isQuotaError(error)) {
+                        markModelAsQuotaExceeded(primary);
+                        
+                        // Extract retry delay if available
+                        const apiRetryDelay = extractRetryDelay(error);
+                        if (apiRetryDelay) {
+                            console.warn(`API suggests retry in ${apiRetryDelay}ms`);
+                        }
+                    }
+                    
                     if (!shouldUseFallbackModel(error) || !fallback || fallback === primary) {
                         return buildMockFailureResponse(headers, error, undefined, {
                             modelUsed: primary,
-                            usedFallback: false
+                            usedFallback: false,
+                            quotaExceeded: isQuotaError(error),
+                            apiRetryDelay: extractRetryDelay(error)
                         });
                     }
                     console.warn(`Quota exceeded for model "${primary}". Falling back to available model "${fallback}".`);
                     usedFallback = true;
                     finalModel = fallback;
                     try {
-                        const data = await retryApiCall(() => invokeModel(fallback));
+                        const data = await retryApiCall(() => invokeModel(fallback), 3, 1000, true);
                         return {
                             statusCode: 200,
                             headers,
@@ -376,10 +476,17 @@ const handler = async (event, context) => {
                         };
                     }
                     catch (fallbackError) {
+                        // Mark fallback model as quota exceeded if it's a quota error
+                        if (isQuotaError(fallbackError)) {
+                            markModelAsQuotaExceeded(fallback);
+                        }
+                        
                         console.error('Fallback text generation error:', fallbackError);
                         return buildMockFailureResponse(headers, fallbackError, 'Gemini text generation failed after fallback. Using mock response.', {
                             modelUsed: finalModel,
-                            usedFallback: true
+                            usedFallback: true,
+                            quotaExceeded: isQuotaError(fallbackError),
+                            apiRetryDelay: extractRetryDelay(fallbackError)
                         });
                     }
                 }
