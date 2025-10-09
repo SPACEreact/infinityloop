@@ -1,1 +1,0 @@
-{"functions":[{"bundler":"esbuild","buildData":{"runtimeAPIVersion":1},"mainFile":"/opt/build/repo/loop/netlify/functions/gemini-api.ts","name":"gemini-api","priority":10,"path":"/opt/build/repo/loop/netlify/functions/gemini-api.zip","runtime":"js"}],"system":{"arch":"x64","platform":"linux"},"timestamp":1759943346913,"version":1}
