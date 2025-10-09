@@ -2,6 +2,11 @@
 
 interface ImportMetaEnv {
   readonly VITE_GEMINI_API_KEY: string
+  readonly VITE_GEMINI_API_BASE_URL?: string
+  readonly VITE_CHROMA_API_BASE_URL?: string
+  readonly VITE_CHROMADB_API_BASE_URL?: string
+  readonly VITE_CHROMA_API_KEY?: string
+  readonly VITE_CHROMADB_API_KEY?: string
   // more env variables...
 }
 
