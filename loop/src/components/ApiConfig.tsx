@@ -72,7 +72,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
     setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: 'Testing...' } }));
 
     try {
-      const normalizedBase = config.baseUrl.trim().replace(/\/$/, '');
+      const normalizedBase = (config.baseUrl?.trim() || '').replace(/\/+$/, '');
       if (!normalizedBase) {
         throw new Error('Base URL is required for testing');
       }
@@ -87,8 +87,9 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
       };
 
       if (isGeminiService) {
-        const keyParam = config.apiKey ? `?key=${encodeURIComponent(config.apiKey)}` : '';
+        const keyParam = `?key=${encodeURIComponent(config.apiKey?.trim() ?? '')}`;
         requestUrl = `${normalizedBase}/models${keyParam}`;
+        delete (requestInit.headers as Record<string, string>)['Content-Type'];
       } else if (config.apiKey) {
         (requestInit.headers as Record<string, string>)['Authorization'] = `Bearer ${config.apiKey}`;
       }
@@ -98,16 +99,21 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
       if (response.ok) {
         setTestResults(prev => ({ ...prev, [config.name]: { success: true, message: 'Connection successful!' } }));
       } else {
-        let errorMessage = `${response.status} ${response.statusText}`;
+        const statusText = `${response.status} ${response.statusText}`.trim();
+        const rawBody = await response.text();
+        let errorMessage = statusText;
 
-        try {
-          const errorBody = await response.json();
-          const jsonErrorMessage = errorBody?.error?.message || errorBody?.message;
-          if (jsonErrorMessage) {
-            errorMessage = jsonErrorMessage;
+        if (rawBody) {
+          try {
+            const parsed = JSON.parse(rawBody);
+            const jsonErrorMessage = parsed?.error?.message || parsed?.message;
+            const payloadText = jsonErrorMessage || JSON.stringify(parsed);
+            if (payloadText) {
+              errorMessage = `${statusText} - ${payloadText}`;
+            }
+          } catch {
+            errorMessage = `${statusText} - ${rawBody}`;
           }
-        } catch {
-          // Swallow JSON parse errors – fall back to status text above
         }
 
         setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${errorMessage}` } }));
