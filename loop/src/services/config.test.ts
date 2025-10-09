@@ -19,7 +19,9 @@ describe('ApiConfigManager environment defaults', () => {
 
     const { apiConfig } = await import('./config');
 
-    expect(apiConfig.getConfigByName('gemini')?.apiKey).toBe('env-gemini-key');
+    expect(apiConfig.getConfigByName('gemini')?.apiKey).toBe(
+      import.meta.env.VITE_GEMINI_API_KEY,
+    );
   });
 
   it('fills missing Gemini API key for an existing config from the env var', async () => {
