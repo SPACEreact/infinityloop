@@ -74,26 +74,56 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
     setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: 'Testing...' } }));
 
     try {
-      const normalizedBase = (config.baseUrl?.trim() || '').replace(/\/+$/, '');
-      if (!normalizedBase) {
+      const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+      const GEMINI_TEST_MODEL = 'gemini-2.5-flash';
+
+      const normalizeBaseUrl = (raw: string, fallback = ''): string => {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+          return fallback;
+        }
+        return trimmed.replace(/\/+$/, '');
+      };
+
+      const providedBase = config.baseUrl ?? '';
+      const normalizedBase = normalizeBaseUrl(providedBase);
+
+      const isGeminiService =
+        config.name.toLowerCase() === 'gemini' || normalizedBase.includes('generativelanguage');
+
+      const effectiveBase = isGeminiService
+        ? normalizeBaseUrl(normalizedBase || DEFAULT_GEMINI_BASE_URL, DEFAULT_GEMINI_BASE_URL)
+        : normalizedBase;
+
+      if (!effectiveBase) {
         throw new Error('Base URL is required for testing');
       }
 
-      const defaultHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      const isGeminiService = config.name.toLowerCase() === 'gemini' || normalizedBase.includes('generativelanguage');
-
-      let requestUrl = `${normalizedBase}/`;
       const requestInit: RequestInit = {
         method: 'GET',
-        headers: { ...defaultHeaders },
+        headers: { 'Content-Type': 'application/json' },
       };
 
+      let requestUrl = `${effectiveBase}/`;
+
       if (isGeminiService) {
-        const keyParam = `?key=${encodeURIComponent(config.apiKey?.trim() ?? '')}`;
-        requestUrl = `${normalizedBase}/models${keyParam}`;
-        delete (requestInit.headers as Record<string, string>)['Content-Type'];
-      } else if (config.apiKey) {
-        (requestInit.headers as Record<string, string>)['Authorization'] = `Bearer ${config.apiKey}`;
+        const apiKey = config.apiKey?.trim();
+        if (!apiKey) {
+          throw new Error('An API key is required to test Gemini connectivity');
+        }
+
+        requestUrl = `${effectiveBase}/models/${GEMINI_TEST_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        requestInit.method = 'POST';
+        requestInit.body = JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: 'ping' }],
+            },
+          ],
+        });
+      } else if (!requestInit.headers) {
+        requestInit.headers = { 'Content-Type': 'application/json' };
       }
 
       const response = await fetch(requestUrl, requestInit);
@@ -101,17 +131,24 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
       if (response.ok) {
         setTestResults(prev => ({ ...prev, [config.name]: { success: true, message: 'Connection successful!' } }));
       } else {
-        const statusText = `${response.status} ${response.statusText}`.trim();
+        const statusText = `${response.status} ${response.statusText}`.trim() || `${response.status}`;
         const rawBody = await response.text();
         let errorMessage = statusText;
 
         if (rawBody) {
           try {
             const parsed = JSON.parse(rawBody);
-            const jsonErrorMessage = parsed?.error?.message || parsed?.message;
-            const payloadText = jsonErrorMessage || JSON.stringify(parsed);
-            if (payloadText) {
-              errorMessage = `${statusText} - ${payloadText}`;
+            const jsonMessage =
+              parsed?.error?.message ||
+              parsed?.error?.status ||
+              parsed?.message ||
+              parsed?.detail ||
+              parsed?.details?.[0]?.message;
+
+            if (jsonMessage && typeof jsonMessage === 'string') {
+              errorMessage = `${statusText} - ${jsonMessage}`;
+            } else {
+              errorMessage = `${statusText} - ${JSON.stringify(parsed)}`;
             }
           } catch {
             errorMessage = `${statusText} - ${rawBody}`;
