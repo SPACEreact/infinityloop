@@ -50,6 +50,7 @@ class ApiConfigManager {
       || import.meta.env.VITE_CHROMADB_API_KEY
       || '').trim();
     const envGeminiBaseUrl = (import.meta.env.VITE_GEMINI_API_BASE_URL || '').trim();
+    const envGeminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
 
     const envDefaults: ApiServiceConfig[] = [];
 
@@ -63,7 +64,7 @@ class ApiConfigManager {
       });
     }
 
-    if (envGeminiBaseUrl) {
+    if (envGeminiApiKey) {
       envDefaults.push({
         name: 'gemini',
         baseUrl: envGeminiBaseUrl,
@@ -236,6 +237,10 @@ class ApiConfigManager {
     if (name === 'chromadb') {
       const localBase = this.createLocalChromaConfig().baseUrl;
       return !!config.baseUrl && config.baseUrl !== localBase;
+    }
+
+    if (name === 'gemini') {
+      return !!config.apiKey;
     }
 
     return !!config.baseUrl || !!config.apiKey;
