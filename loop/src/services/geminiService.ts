@@ -593,14 +593,14 @@ const requestImageWithFallback = async (
   }
 };
 
-// Prompt optimization for quality without excessive length
-const MAX_EFFECTIVE_PROMPT_LENGTH = 90000; // Leave room for API headers/metadata
+// Smarter prompt optimization for reduced quota usage while maintaining quality
+const MAX_EFFECTIVE_PROMPT_LENGTH = 15000; // Significantly reduced to save tokens
+const MAX_CONVERSATION_CONTEXT = 3000; // Limit conversation history
+const MAX_KNOWLEDGE_CONTEXT = 8000; // Limit knowledge base context
 const CORE_KNOWLEDGE_PRIORITY = [
-  'Camera Movements and Techniques',
-  'Film Techniques', 
   'Story Structures',
-  'Scene Writing and Opening Hooks',
-  'Screenplay Conventions and Archetypes'
+  'Film Techniques', 
+  'Camera Movements and Techniques'
 ];
 
 const truncateConversationHistory = (historyText: string, maxLength: number): string => {
@@ -610,15 +610,17 @@ const truncateConversationHistory = (historyText: string, maxLength: number): st
   let truncated = '';
   let totalLength = 0;
   
-  // Keep the most recent messages that fit within the limit
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const messageLength = messages[i].length + 1; // +1 for newline
+  // Keep only the 2-3 most recent exchanges for context efficiency
+  const recentMessages = messages.slice(-6); // Last 6 lines = ~3 exchanges
+  
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const messageLength = recentMessages[i].length + 1;
     if (totalLength + messageLength > maxLength) break;
-    truncated = messages[i] + '\n' + truncated;
+    truncated = recentMessages[i] + '\n' + truncated;
     totalLength += messageLength;
   }
   
-  return truncated || messages[messages.length - 1] || ''; // At least keep the last message
+  return truncated || messages[messages.length - 1] || '';
 };
 
 const validateAndOptimizePrompt = (fullPrompt: string): string => {
@@ -626,65 +628,33 @@ const validateAndOptimizePrompt = (fullPrompt: string): string => {
     return fullPrompt;
   }
   
-  // If prompt is too long, progressively reduce context
-  const parts = fullPrompt.split('\n\n');
-  let optimized = '';
+  // Aggressively truncate to fit within quota limits
+  const truncated = fullPrompt.substring(0, MAX_EFFECTIVE_PROMPT_LENGTH - 100);
+  const lastCompleteSection = truncated.lastIndexOf('\n\n');
   
-  for (const part of parts) {
-    if ((optimized + part).length <= MAX_EFFECTIVE_PROMPT_LENGTH) {
-      optimized += (optimized ? '\n\n' : '') + part;
-    } else if (!optimized) {
-      // If even the first part is too long, truncate it
-      optimized = part.substring(0, MAX_EFFECTIVE_PROMPT_LENGTH - 100) + '...';
-      break;
-    } else {
-      break;
-    }
-  }
-  
-  return optimized;
+  return lastCompleteSection > MAX_EFFECTIVE_PROMPT_LENGTH * 0.7 
+    ? truncated.substring(0, lastCompleteSection) + '\n\n[Context truncated for quota efficiency]'
+    : truncated + '\n[Context truncated for quota efficiency]';
 };
 
 const getOptimizedKnowledgeContext = (outputType?: string, tagWeights?: Record<string, number>): string => {
-  const baseContext = `# Your Knowledge Base (Film Production & Storytelling)\n\n`;
+  // Use compact knowledge context for maximum quota efficiency  
+  const coreKnowledge = knowledgeBase.getCompactContext();
   
-  // For shorter contexts, use core knowledge only
-  const sections = knowledgeBase.fullContext.split('\n## ');
-  const prioritizedSections: string[] = [];
-  
-  // Add sections based on output type and tag priorities
-  if (outputType?.toLowerCase().includes('story') || outputType?.toLowerCase().includes('narrative')) {
-    prioritizedSections.push(
-      ...sections.filter(s => s.includes('Story Structures') || s.includes('Scene Writing') || s.includes('Subtext'))
-    );
+  // Add minimal context-specific guidance
+  let specificContext = '';
+  if (outputType?.toLowerCase().includes('story')) {
+    specificContext = '→ Focus: Character psychology, Want vs Need conflict\n';
+  } else if (outputType?.toLowerCase().includes('image') || outputType?.toLowerCase().includes('visual')) {
+    specificContext = '→ Focus: Visual composition, lighting mood, cinematic framing\n';
   }
   
-  if (outputType?.toLowerCase().includes('image') || outputType?.toLowerCase().includes('visual')) {
-    prioritizedSections.push(
-      ...sections.filter(s => s.includes('Camera Movements') || s.includes('Film Techniques'))
-    );
-  }
+  const fullContext = coreKnowledge + specificContext;
   
-  // Add core sections if not already included
-  CORE_KNOWLEDGE_PRIORITY.forEach(priority => {
-    if (!prioritizedSections.some(s => s.includes(priority))) {
-      const section = sections.find(s => s.includes(priority));
-      if (section) prioritizedSections.push(section);
-    }
-  });
-  
-  // Rebuild context with prioritized sections
-  let optimizedContext = baseContext;
-  prioritizedSections.forEach((section, index) => {
-    const sectionText = index === 0 ? section : `## ${section}`;
-    if ((optimizedContext + sectionText).length < MAX_EFFECTIVE_PROMPT_LENGTH * 0.4) {
-      optimizedContext += sectionText + '\n\n';
-    }
-  });
-  
-  optimizedContext += `Use this knowledge base to inform your responses, provide expert cinematography advice, suggest story structures, and help with all aspects of film production.\n`;
-  
-  return optimizedContext;
+  // Ensure we stay within strict limits for quota preservation
+  return fullContext.length > MAX_KNOWLEDGE_CONTEXT 
+    ? fullContext.substring(0, MAX_KNOWLEDGE_CONTEXT - 50) + '...\n'
+    : fullContext;
 };
 
 const KNOWLEDGE_CONTEXT = getOptimizedKnowledgeContext();
@@ -824,23 +794,21 @@ export const generateSandboxResponse = async (
     .join('\n');
 
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext('chat', tagWeights);
-  const systemPromptBase = `${MASTER_PROMPT}${optimizedKnowledgeContext}`;
-
-  let systemPrompt = `${systemPromptBase}\n\n`;
+  // Simplified system prompt for quota efficiency
+  let systemPrompt = `You are Loop, an expert filmmaker and storyteller. ${optimizedKnowledgeContext}`;
+  
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
-    .map(([tag, weight]) => `${tag} (importance: ${Math.round(weight * 100)}%)`)
+    .slice(0, 3) // Limit to top 3 tags only
+    .map(([tag]) => tag)
     .join(', ');
   if (weightedTags) {
-    systemPrompt += `Focus on these elements: ${weightedTags}. `;
+    systemPrompt += `\nKey focus: ${weightedTags}. `;
   }
-  systemPrompt += styleRigidity > 50
-    ? 'Be precise and adhere strictly to guidelines. Use knowledge base extensively. '
-    : 'Be creative and flexible in your responses. Draw inspiration from knowledge base. ';
+  systemPrompt += styleRigidity > 50 ? 'Be precise.' : 'Be creative.';
 
-  // Optimize conversation history to fit within limits
-  const maxHistoryLength = MAX_EFFECTIVE_PROMPT_LENGTH - systemPrompt.length - userMessage.length - 200;
-  const optimizedHistoryText = truncateConversationHistory(historyText, maxHistoryLength);
+  // Aggressively limit conversation history for quota efficiency
+  const optimizedHistoryText = truncateConversationHistory(historyText, MAX_CONVERSATION_CONTEXT);
 
   const fullPrompt = validateAndOptimizePrompt(
     `${systemPrompt}\n\nConversation History:\n${optimizedHistoryText}\n\nUser: ${userMessage}\nAssistant:`
@@ -868,25 +836,20 @@ export const generateFromWorkspace = async (
   outputType: string
 ): Promise<GeminiResult<string>> => {
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext(outputType, tagWeights);
-  let systemPrompt = `${MASTER_PROMPT}${optimizedKnowledgeContext}\n\nGenerate ${outputType} content based on the provided project workspace. `;
+  let systemPrompt = `Create ${outputType} with filmmaking expertise. ${optimizedKnowledgeContext}`;
+  
   if (outputType === 'Master Story') {
-    systemPrompt += `
-      The output should be a comprehensive story document that includes the following sections:
-      1.  **Logline:** A one-sentence summary of the story.
-      2.  **Synopsis:** A short paragraph (3-5 sentences) summarizing the plot.
-      3.  **Key Scene:** A short script or screenplay for a pivotal scene (1-2 pages).
-    `;
+    systemPrompt += `\nInclude: Logline, Synopsis (3-5 sentences), Key Scene script.`;
   }
+  
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
-    .map(([tag, weight]) => `${tag} (importance: ${Math.round(weight * 100)}%)`)
+    .slice(0, 2) // Limit to top 2 tags
+    .map(([tag]) => tag)
     .join(', ');
   if (weightedTags) {
-    systemPrompt += `Focus on these elements: ${weightedTags}. `;
+    systemPrompt += `\nFocus: ${weightedTags}.`;
   }
-  systemPrompt += styleRigidity > 50
-    ? 'Be precise and adhere strictly to guidelines. Use knowledge base extensively. '
-    : 'Be creative and flexible in your responses. Draw inspiration from knowledge base. ';
 
   const assetsText = project.assets
     .map(asset => `${asset.type}: ${asset.name} - ${asset.content} (tags: ${asset.tags.join(', ')})`)
@@ -922,17 +885,16 @@ export const runBuild = async (
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext(buildType, tagWeights);
-  let systemPrompt = `${MASTER_PROMPT}${optimizedKnowledgeContext}\n\nProcess the ${buildType} build with the provided answers. Use knowledge base to inform your output. `;
+  let systemPrompt = `Process ${buildType} build with film expertise. ${optimizedKnowledgeContext}`;
+  
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
-    .map(([tag, weight]) => `${tag} (importance: ${Math.round(weight * 100)}%)`)
+    .slice(0, 2) // Limit to top 2 tags
+    .map(([tag]) => tag)
     .join(', ');
   if (weightedTags) {
-    systemPrompt += `Focus on these elements: ${weightedTags}. `;
+    systemPrompt += `\nFocus: ${weightedTags}.`;
   }
-  systemPrompt += styleRigidity > 50
-    ? 'Be precise and adhere strictly to guidelines. '
-    : 'Be creative and flexible in your responses. ';
 
   const answersText = Object.entries(answers)
     .map(([key, value]) => `${key}: ${value}`)
