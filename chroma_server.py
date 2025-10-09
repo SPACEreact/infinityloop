@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Union
 import chromadb
-from chromadb.errors import InternalError
+from chromadb.errors import InternalError, NotFoundError
 import uvicorn
 
 app = FastAPI(title="ChromaDB MCP Server", description="REST API for ChromaDB operations")
