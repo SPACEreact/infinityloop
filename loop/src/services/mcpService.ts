@@ -1,4 +1,5 @@
 import { apiConfig } from './config';
+import { simpleVectorStore, syncProjectAssetsToVectorStore, queryProjectAssets, getVectorStoreStats } from './vectorStorage';
 
 function assertServiceAvailable(serviceName: string): void {
   if (!apiConfig.isConfigured(serviceName)) {
@@ -22,7 +23,30 @@ function getHeaders(serviceName: string = 'chromadb'): Record<string, string> {
   return headers;
 }
 
+// Check if we should use remote ChromaDB or local vector storage
+function shouldUseRemoteChromaDB(serviceName: string = 'chromadb'): boolean {
+  const config = apiConfig.getConfigByName(serviceName);
+  if (!config || !config.enabled) return false;
+  
+  // Check if it's pointing to a remote ChromaDB server (not localhost)
+  const baseUrl = config.baseUrl?.toLowerCase() || '';
+  return baseUrl.includes('http') && !baseUrl.includes('localhost') && !baseUrl.includes('127.0.0.1');
+}
+
 export async function createCollection(collectionName: string, serviceName: string = 'chromadb'): Promise<void> {
+  if (!apiConfig.isEnabled(serviceName)) {
+    // Use local vector storage
+    simpleVectorStore.createCollection(collectionName);
+    return;
+  }
+
+  if (!shouldUseRemoteChromaDB(serviceName)) {
+    // Use local vector storage
+    simpleVectorStore.createCollection(collectionName);
+    return;
+  }
+
+  // Use remote ChromaDB
   assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
@@ -47,6 +71,19 @@ export async function addDocuments(
   ids?: string[],
   serviceName: string = 'chromadb'
 ): Promise<void> {
+  if (!apiConfig.isEnabled(serviceName)) {
+    // Use local vector storage
+    simpleVectorStore.addDocuments(collectionName, documents, metadatas, ids);
+    return;
+  }
+
+  if (!shouldUseRemoteChromaDB(serviceName)) {
+    // Use local vector storage
+    simpleVectorStore.addDocuments(collectionName, documents, metadatas, ids);
+    return;
+  }
+
+  // Use remote ChromaDB
   assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
@@ -75,6 +112,29 @@ export async function queryDocuments(
   nResults: number = 10,
   serviceName: string = 'chromadb'
 ): Promise<any> {
+  if (!apiConfig.isEnabled(serviceName)) {
+    // Use local vector storage - return ChromaDB-compatible format
+    const results = simpleVectorStore.queryDocuments(collectionName, queryTexts, nResults);
+    return {
+      ids: results.map(queryResults => queryResults.map(r => r.document.id)),
+      distances: results.map(queryResults => queryResults.map(r => 1 - r.similarity)), // Convert similarity to distance
+      metadatas: results.map(queryResults => queryResults.map(r => r.document.metadata)),
+      documents: results.map(queryResults => queryResults.map(r => r.document.content))
+    };
+  }
+
+  if (!shouldUseRemoteChromaDB(serviceName)) {
+    // Use local vector storage - return ChromaDB-compatible format
+    const results = simpleVectorStore.queryDocuments(collectionName, queryTexts, nResults);
+    return {
+      ids: results.map(queryResults => queryResults.map(r => r.document.id)),
+      distances: results.map(queryResults => queryResults.map(r => 1 - r.similarity)), // Convert similarity to distance
+      metadatas: results.map(queryResults => queryResults.map(r => r.document.metadata)),
+      documents: results.map(queryResults => queryResults.map(r => r.document.content))
+    };
+  }
+
+  // Use remote ChromaDB
   assertServiceAvailable(serviceName);
   const config = apiConfig.getConfigByName(serviceName);
   if (!config) {
@@ -96,4 +156,30 @@ export async function queryDocuments(
   }
 
   return await response.json();
+}
+
+// Export the high-level functions for project asset management
+export { syncProjectAssetsToVectorStore, queryProjectAssets, getVectorStoreStats };
+
+// Add a function to sync assets to vector storage (for the toggle functionality)
+export async function syncAssetsToMcp(
+  project: { assets: Array<{ id: string; name: string; content: string; type: string; tags: string[] }> },
+  serviceName: string = 'chromadb'
+): Promise<void> {
+  await createCollection('project_assets', serviceName);
+  
+  const documents = project.assets.map(asset => 
+    `${asset.name}\n${asset.content}\nType: ${asset.type}\nTags: ${asset.tags.join(', ')}`
+  );
+  
+  const metadatas = project.assets.map(asset => ({
+    assetId: asset.id,
+    name: asset.name,
+    type: asset.type,
+    tags: asset.tags
+  }));
+
+  const ids = project.assets.map(asset => asset.id);
+
+  await addDocuments('project_assets', documents, metadatas, ids, serviceName);
 }

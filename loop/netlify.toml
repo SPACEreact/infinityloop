@@ -5,6 +5,9 @@
 [build.environment]
   NODE_VERSION = "20.19"
 
+[functions]
+  directory = "netlify/functions"
+
 [dev]
   command = "npm run dev"
   targetPort = 5173
