@@ -593,14 +593,101 @@ const requestImageWithFallback = async (
   }
 };
 
-const KNOWLEDGE_CONTEXT = `
+// Prompt optimization for quality without excessive length
+const MAX_EFFECTIVE_PROMPT_LENGTH = 90000; // Leave room for API headers/metadata
+const CORE_KNOWLEDGE_PRIORITY = [
+  'Camera Movements and Techniques',
+  'Film Techniques', 
+  'Story Structures',
+  'Scene Writing and Opening Hooks',
+  'Screenplay Conventions and Archetypes'
+];
 
-# Your Knowledge Base (Film Production & Storytelling)
+const truncateConversationHistory = (historyText: string, maxLength: number): string => {
+  if (historyText.length <= maxLength) return historyText;
+  
+  const messages = historyText.split('\n');
+  let truncated = '';
+  let totalLength = 0;
+  
+  // Keep the most recent messages that fit within the limit
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const messageLength = messages[i].length + 1; // +1 for newline
+    if (totalLength + messageLength > maxLength) break;
+    truncated = messages[i] + '\n' + truncated;
+    totalLength += messageLength;
+  }
+  
+  return truncated || messages[messages.length - 1] || ''; // At least keep the last message
+};
 
-${knowledgeBase.fullContext}
+const validateAndOptimizePrompt = (fullPrompt: string): string => {
+  if (fullPrompt.length <= MAX_EFFECTIVE_PROMPT_LENGTH) {
+    return fullPrompt;
+  }
+  
+  // If prompt is too long, progressively reduce context
+  const parts = fullPrompt.split('\n\n');
+  let optimized = '';
+  
+  for (const part of parts) {
+    if ((optimized + part).length <= MAX_EFFECTIVE_PROMPT_LENGTH) {
+      optimized += (optimized ? '\n\n' : '') + part;
+    } else if (!optimized) {
+      // If even the first part is too long, truncate it
+      optimized = part.substring(0, MAX_EFFECTIVE_PROMPT_LENGTH - 100) + '...';
+      break;
+    } else {
+      break;
+    }
+  }
+  
+  return optimized;
+};
 
-Use this knowledge base to inform your responses, provide expert cinematography advice, suggest story structures, and help with all aspects of film production.
-`;
+const getOptimizedKnowledgeContext = (outputType?: string, tagWeights?: Record<string, number>): string => {
+  const baseContext = `# Your Knowledge Base (Film Production & Storytelling)\n\n`;
+  
+  // For shorter contexts, use core knowledge only
+  const sections = knowledgeBase.fullContext.split('\n## ');
+  const prioritizedSections: string[] = [];
+  
+  // Add sections based on output type and tag priorities
+  if (outputType?.toLowerCase().includes('story') || outputType?.toLowerCase().includes('narrative')) {
+    prioritizedSections.push(
+      ...sections.filter(s => s.includes('Story Structures') || s.includes('Scene Writing') || s.includes('Subtext'))
+    );
+  }
+  
+  if (outputType?.toLowerCase().includes('image') || outputType?.toLowerCase().includes('visual')) {
+    prioritizedSections.push(
+      ...sections.filter(s => s.includes('Camera Movements') || s.includes('Film Techniques'))
+    );
+  }
+  
+  // Add core sections if not already included
+  CORE_KNOWLEDGE_PRIORITY.forEach(priority => {
+    if (!prioritizedSections.some(s => s.includes(priority))) {
+      const section = sections.find(s => s.includes(priority));
+      if (section) prioritizedSections.push(section);
+    }
+  });
+  
+  // Rebuild context with prioritized sections
+  let optimizedContext = baseContext;
+  prioritizedSections.forEach((section, index) => {
+    const sectionText = index === 0 ? section : `## ${section}`;
+    if ((optimizedContext + sectionText).length < MAX_EFFECTIVE_PROMPT_LENGTH * 0.4) {
+      optimizedContext += sectionText + '\n\n';
+    }
+  });
+  
+  optimizedContext += `Use this knowledge base to inform your responses, provide expert cinematography advice, suggest story structures, and help with all aspects of film production.\n`;
+  
+  return optimizedContext;
+};
+
+const KNOWLEDGE_CONTEXT = getOptimizedKnowledgeContext();
 
 const LOOP_SIGNATURE = 'Loop Studio Mock Feed';
 const MOCK_IMAGE_PLACEHOLDER = 'iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAHElEQVR42mNgGAWjYBSMglEwCkbBqNgUjIJRMAAAUwABnVh6hAAAAABJRU5ErkJggg==';
@@ -736,7 +823,8 @@ export const generateSandboxResponse = async (
     .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
     .join('\n');
 
-  const systemPromptBase = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}`;
+  const optimizedKnowledgeContext = getOptimizedKnowledgeContext('chat', tagWeights);
+  const systemPromptBase = `${MASTER_PROMPT}${optimizedKnowledgeContext}`;
 
   let systemPrompt = `${systemPromptBase}\n\n`;
   const weightedTags = Object.entries(tagWeights || {})
@@ -750,7 +838,13 @@ export const generateSandboxResponse = async (
     ? 'Be precise and adhere strictly to guidelines. Use knowledge base extensively. '
     : 'Be creative and flexible in your responses. Draw inspiration from knowledge base. ';
 
-  const fullPrompt = `${systemPrompt}\n\nConversation History:\n${historyText}\n\nUser: ${userMessage}\nAssistant:`;
+  // Optimize conversation history to fit within limits
+  const maxHistoryLength = MAX_EFFECTIVE_PROMPT_LENGTH - systemPrompt.length - userMessage.length - 200;
+  const optimizedHistoryText = truncateConversationHistory(historyText, maxHistoryLength);
+
+  const fullPrompt = validateAndOptimizePrompt(
+    `${systemPrompt}\n\nConversation History:\n${optimizedHistoryText}\n\nUser: ${userMessage}\nAssistant:`
+  );
 
   try {
     const { text } = await requestTextWithFallback(fullPrompt);
@@ -773,7 +867,8 @@ export const generateFromWorkspace = async (
   styleRigidity: number,
   outputType: string
 ): Promise<GeminiResult<string>> => {
-  let systemPrompt = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}\n\nGenerate ${outputType} content based on the provided project workspace. `;
+  const optimizedKnowledgeContext = getOptimizedKnowledgeContext(outputType, tagWeights);
+  let systemPrompt = `${MASTER_PROMPT}${optimizedKnowledgeContext}\n\nGenerate ${outputType} content based on the provided project workspace. `;
   if (outputType === 'Master Story') {
     systemPrompt += `
       The output should be a comprehensive story document that includes the following sections:
@@ -807,7 +902,8 @@ export const generateFromWorkspace = async (
         .join('; ')}`
     : 'Canvas connections: none recorded yet.';
 
-  const fullPrompt = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
+  const fullPromptContent = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
+  const fullPrompt = validateAndOptimizePrompt(fullPromptContent);
 
   try {
     const { text } = await requestTextWithFallback(fullPrompt);
@@ -825,7 +921,8 @@ export const runBuild = async (
   tagWeights: Record<string, number>,
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
-  let systemPrompt = `${MASTER_PROMPT}${KNOWLEDGE_CONTEXT}\n\nProcess the ${buildType} build with the provided answers. Use knowledge base to inform your output. `;
+  const optimizedKnowledgeContext = getOptimizedKnowledgeContext(buildType, tagWeights);
+  let systemPrompt = `${MASTER_PROMPT}${optimizedKnowledgeContext}\n\nProcess the ${buildType} build with the provided answers. Use knowledge base to inform your output. `;
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
     .map(([tag, weight]) => `${tag} (importance: ${Math.round(weight * 100)}%)`)
@@ -844,7 +941,8 @@ export const runBuild = async (
     .map(([key, value]) => `${key}: ${value}`)
     .join('\n');
 
-  const fullPrompt = `${systemPrompt}\n\nAnswers:\n${answersText}\n\nSandbox Context:\n${sandboxText}\n\nGenerate ${buildType} output:`;
+  const fullPromptContent = `${systemPrompt}\n\nAnswers:\n${answersText}\n\nSandbox Context:\n${sandboxText}\n\nGenerate ${buildType} output:`;
+  const fullPrompt = validateAndOptimizePrompt(fullPromptContent);
 
   try {
     const { text } = await requestTextWithFallback(fullPrompt);
