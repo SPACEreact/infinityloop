@@ -51,7 +51,8 @@ class ApiConfigManager {
     const envChromaApiKey = (import.meta.env.VITE_CHROMA_API_KEY
       || import.meta.env.VITE_CHROMADB_API_KEY
       || '').trim();
-    const envGeminiBaseUrl = (import.meta.env.VITE_GEMINI_API_BASE_URL || '').trim();
+    const envGeminiBaseUrl =
+      (import.meta.env.VITE_GEMINI_API_BASE_URL || '').trim() || DEFAULT_GEMINI_BASE_URL;
     const envGeminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
 
     const envDefaults: ApiServiceConfig[] = [];
