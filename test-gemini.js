@@ -42,7 +42,7 @@ async function testGeminiAPI() {
       body: JSON.stringify({
         action: 'generateContent',
         prompt: 'Hello, can you help me with a simple film idea?',
-        model: 'gemini-1.5-flash' // Try this first
+        model: 'gemini-1.5-pro-latest'
       })
     });
 

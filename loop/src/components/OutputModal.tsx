@@ -19,7 +19,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('imagen-4.5-ultra');
+  const [selectedModel, setSelectedModel] = useState<string>('imagen-3.0-generate-001');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   
@@ -35,30 +35,40 @@ export const OutputModal: React.FC<OutputModalProps> = ({
         const models = await listModels();
         if (models) {
           // Filter to only image generation models
-          const imageModels = models.models?.filter((model: any) => 
-            model.capabilities?.includes('image') || 
-            model.name.includes('imagen')
-          ) || [];
-          
-          // Add default high-quota models if not present
+          const imageModels = models.models?.filter((model: any) => {
+            const name: string = typeof model?.name === 'string' ? model.name : '';
+            const methods: string[] = Array.isArray(model?.supportedGenerationMethods)
+              ? model.supportedGenerationMethods
+              : [];
+            const capabilities: string[] = Array.isArray(model?.capabilities)
+              ? model.capabilities
+              : [];
+
+            const supportsImage =
+              methods.some((method: string) => typeof method === 'string' && method.toLowerCase().includes('image')) ||
+              capabilities.some((capability: string) => capability.toLowerCase() === 'image');
+
+            return supportsImage || name.includes('imagen');
+          }) || [];
+
           const defaultImageModels = [
             {
-              name: "models/imagen-4.5-ultra",
-              displayName: "Imagen 4.5 Ultra",
-              description: "Ultra-high quality image generation",
-              capabilities: ["image"]
+              name: 'models/imagen-3.0-generate-001',
+              displayName: 'Imagen 3.0',
+              description: 'High fidelity image generation tuned for cinematic concept frames.',
+              supportedGenerationMethods: ['generateImage']
             },
             {
-              name: "models/imagen-4.5-pro", 
-              displayName: "Imagen 4.5 Pro",
-              description: "Professional image generation with high quota",
-              capabilities: ["image"]
+              name: 'models/imagen-2.0-generate-001',
+              displayName: 'Imagen 2.0',
+              description: 'Fallback image generator with broad availability and lower quota requirements.',
+              supportedGenerationMethods: ['generateImage']
             },
             {
-              name: "models/imagen-4.5-flash",
-              displayName: "Imagen 4.5 Flash", 
-              description: "Fast image generation with good quota",
-              capabilities: ["image"]
+              name: 'models/imagegeneration',
+              displayName: 'Image Generation (Legacy)',
+              description: 'Legacy image generation entry point for older API keys.',
+              supportedGenerationMethods: ['generateImage']
             }
           ];
 
@@ -76,22 +86,22 @@ export const OutputModal: React.FC<OutputModalProps> = ({
         // Use default models if API call fails
         setAvailableModels([
           {
-            name: "models/imagen-4.5-ultra",
-            displayName: "Imagen 4.5 Ultra",
-            description: "Ultra-high quality image generation",
-            capabilities: ["image"]
+            name: 'models/imagen-3.0-generate-001',
+            displayName: 'Imagen 3.0',
+            description: 'High fidelity image generation tuned for cinematic concept frames.',
+            supportedGenerationMethods: ['generateImage']
           },
           {
-            name: "models/imagen-4.5-pro", 
-            displayName: "Imagen 4.5 Pro",
-            description: "Professional image generation with high quota",
-            capabilities: ["image"]
+            name: 'models/imagen-2.0-generate-001',
+            displayName: 'Imagen 2.0',
+            description: 'Fallback image generator with broad availability and lower quota requirements.',
+            supportedGenerationMethods: ['generateImage']
           },
           {
-            name: "models/imagen-4.5-flash",
-            displayName: "Imagen 4.5 Flash", 
-            description: "Fast image generation with good quota",
-            capabilities: ["image"]
+            name: 'models/imagegeneration',
+            displayName: 'Image Generation (Legacy)',
+            description: 'Legacy image generation entry point for older API keys.',
+            supportedGenerationMethods: ['generateImage']
           }
         ]);
       } finally {

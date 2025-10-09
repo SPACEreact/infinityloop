@@ -1,14 +1,15 @@
+// netlify/functions/gemini-api.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
-const GEMINI_KEY_ENV_CANDIDATES = [
+var GEMINI_KEY_ENV_CANDIDATES = [
   "GEMINI_API_KEY",
   "GOOGLE_API_KEY",
   "GOOGLE_AI_API_KEY",
   "GOOGLE_GENAI_API_KEY",
   "VITE_GEMINI_API_KEY"
 ];
-let cachedGeminiClient = null;
-let cachedGeminiApiKey = null;
-const resolveGeminiApiKey = () => {
+var cachedGeminiClient = null;
+var cachedGeminiApiKey = null;
+var resolveGeminiApiKey = () => {
   for (const envName of GEMINI_KEY_ENV_CANDIDATES) {
     const rawValue = process.env[envName];
     if (typeof rawValue === "string") {
@@ -23,7 +24,7 @@ const resolveGeminiApiKey = () => {
   }
   return null;
 };
-const getGeminiClient = () => {
+var getGeminiClient = () => {
   const apiKey = resolveGeminiApiKey();
   if (!apiKey) {
     return { apiKey: null, client: null };
@@ -34,16 +35,90 @@ const getGeminiClient = () => {
   }
   return { apiKey, client: cachedGeminiClient };
 };
-const DEFAULT_TEXT_MODEL = "gemini-2.5-flash";
-const FALLBACK_TEXT_MODEL = "gemini-1.5-flash-latest";
-const DEFAULT_IMAGE_MODEL = "imagen-4.5-ultra";
-const FALLBACK_IMAGE_MODEL = "imagen-3.0-latest";
-const rateLimitStore = /* @__PURE__ */ new Map();
-const RATE_LIMIT_WINDOW = 60 * 1e3;
-const RATE_LIMIT_MAX_REQUESTS = 10;
-const MAX_PROMPT_LENGTH = 1e4;
-const MAX_REQUEST_SIZE = 1024 * 1024;
-const SECURITY_HEADERS = {
+var MODEL_LIST_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+var MODEL_NAMESPACE_PREFIX = "models/";
+var normalizeModelName = (model) => model.startsWith(MODEL_NAMESPACE_PREFIX) ? model : `${MODEL_NAMESPACE_PREFIX}${model}`;
+var trimModelNamespace = (model) => model.startsWith(MODEL_NAMESPACE_PREFIX) ? model.slice(MODEL_NAMESPACE_PREFIX.length) : model;
+var cachedModelCatalog = null;
+var cachedModelCatalogTimestamp = 0;
+var MODEL_CACHE_TTL_MS = 5 * 60 * 1e3;
+var TEXT_MODEL_PRIORITY = [
+  "models/gemini-1.5-pro-latest",
+  "models/gemini-1.5-flash-latest",
+  "models/gemini-1.0-pro",
+  "models/gemini-1.0-pro-001"
+];
+var IMAGE_MODEL_PRIORITY = [
+  "models/imagen-3.0-generate-001",
+  "models/imagen-2.0-generate-001",
+  "models/imagegeneration"
+];
+var isCacheFresh = () => Date.now() - cachedModelCatalogTimestamp < MODEL_CACHE_TTL_MS;
+var fetchModelCatalog = async (apiKey) => {
+  if (cachedModelCatalog && isCacheFresh()) {
+    return cachedModelCatalog;
+  }
+  const response = await fetch(`${MODEL_LIST_ENDPOINT}?key=${apiKey}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" }
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`ListModels API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+  const data = await response.json();
+  cachedModelCatalog = Array.isArray(data.models) ? data.models : [];
+  cachedModelCatalogTimestamp = Date.now();
+  return cachedModelCatalog;
+};
+var supportsTextGeneration = (model) => {
+  const methods = (model.supportedGenerationMethods ?? []).map((method) => method.toLowerCase());
+  return methods.some((method) => method.includes("generatecontent") || method.includes("createcontent"));
+};
+var supportsImageGeneration = (model) => {
+  const normalizedName = model.name.toLowerCase();
+  if (normalizedName.includes("imagen")) {
+    return true;
+  }
+  const methods = (model.supportedGenerationMethods ?? []).map((method) => method.toLowerCase());
+  return methods.some((method) => method.includes("generateimage") || method.includes("createimage"));
+};
+var selectModel = (models, type, requested) => {
+  const predicate = type === "text" ? supportsTextGeneration : supportsImageGeneration;
+  const availableModels = models.filter((model) => predicate(model));
+  if (!availableModels.length) {
+    return { primary: null, fallback: null };
+  }
+  const requestedName = requested ? normalizeModelName(requested) : null;
+  const priorityList = type === "text" ? TEXT_MODEL_PRIORITY : IMAGE_MODEL_PRIORITY;
+  const orderedCandidates = [
+    ...requestedName ? [requestedName] : [],
+    ...priorityList,
+    ...availableModels.map((model) => model.name)
+  ];
+  const seen = /* @__PURE__ */ new Set();
+  const resolved = orderedCandidates.filter((name) => {
+    const normalized = normalizeModelName(name);
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return availableModels.some((model) => model.name === normalized);
+  });
+  const [primary = null, fallback = null] = resolved;
+  const trimmedPrimary = primary ? trimModelNamespace(primary) : null;
+  const trimmedFallback = fallback ? trimModelNamespace(fallback) : null;
+  return {
+    primary: trimmedPrimary,
+    fallback: trimmedFallback && trimmedFallback === trimmedPrimary ? null : trimmedFallback
+  };
+};
+var rateLimitStore = /* @__PURE__ */ new Map();
+var RATE_LIMIT_WINDOW = 60 * 1e3;
+var RATE_LIMIT_MAX_REQUESTS = 10;
+var MAX_PROMPT_LENGTH = 1e4;
+var MAX_REQUEST_SIZE = 1024 * 1024;
+var SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "X-XSS-Protection": "1; mode=block",
@@ -78,7 +153,7 @@ async function retryApiCall(fn, retries = 3, baseDelay = 1e3) {
   }
   throw lastError;
 }
-const extractErrorMessage = (error) => {
+var extractErrorMessage = (error) => {
   if (error instanceof Error) {
     return error.message;
   }
@@ -90,7 +165,7 @@ const extractErrorMessage = (error) => {
   }
   return "Unknown error occurred";
 };
-const shouldUseFallbackModel = (error) => {
+var shouldUseFallbackModel = (error) => {
   const message = extractErrorMessage(error).toLowerCase();
   if (message.includes("quota") && (message.includes("exceeded") || message.includes("exceed") || message.includes("exhausted"))) {
     return true;
@@ -116,7 +191,7 @@ const shouldUseFallbackModel = (error) => {
   }
   return false;
 };
-const buildMockFailureResponse = (headers, error, overrideMessage, extra) => {
+var buildMockFailureResponse = (headers, error, overrideMessage, extra) => {
   const detailMessage = extractErrorMessage(error);
   return {
     statusCode: 200,
@@ -130,7 +205,7 @@ const buildMockFailureResponse = (headers, error, overrideMessage, extra) => {
     })
   };
 };
-const handler = async (event, context) => {
+var handler = async (event, context) => {
   const { apiKey: resolvedApiKey, client } = getGeminiClient();
   if (!resolvedApiKey || !client) {
     console.error(
@@ -214,7 +289,7 @@ const handler = async (event, context) => {
     console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] ${event.httpMethod} ${event.path} - Action: ${action} - IP: ${clientIP}`);
     switch (action) {
       case "generateContent": {
-        const { prompt, model = DEFAULT_TEXT_MODEL } = requestData;
+        const { prompt, model } = requestData;
         if (!prompt || typeof prompt !== "string") {
           return {
             statusCode: 400,
@@ -229,8 +304,17 @@ const handler = async (event, context) => {
             body: JSON.stringify({ error: "Prompt exceeds maximum length." })
           };
         }
-        const primaryModel = typeof model === "string" ? model : DEFAULT_TEXT_MODEL;
-        let finalModel = primaryModel;
+        const catalog = await fetchModelCatalog(resolvedApiKey);
+        const { primary, fallback } = selectModel(catalog, "text", typeof model === "string" ? model : null);
+        if (!primary) {
+          return buildMockFailureResponse(
+            headers,
+            new Error("No text generation models available for this API key."),
+            void 0,
+            { usedFallback: false }
+          );
+        }
+        let finalModel = primary;
         let usedFallback = false;
         const invokeModel = async (modelName) => {
           const generativeModel = client.getGenerativeModel({ model: modelName });
@@ -239,7 +323,7 @@ const handler = async (event, context) => {
           return response.text().trim();
         };
         try {
-          const data = await retryApiCall(() => invokeModel(primaryModel));
+          const data = await retryApiCall(() => invokeModel(primary));
           return {
             statusCode: 200,
             headers,
@@ -252,17 +336,19 @@ const handler = async (event, context) => {
             })
           };
         } catch (error) {
-          if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_TEXT_MODEL) {
+          if (!shouldUseFallbackModel(error) || !fallback || fallback === primary) {
             return buildMockFailureResponse(headers, error, void 0, {
-              modelUsed: primaryModel,
+              modelUsed: primary,
               usedFallback: false
             });
           }
-          console.warn(`Quota exceeded for model "${primaryModel}". Falling back to free tier model "${FALLBACK_TEXT_MODEL}".`);
+          console.warn(
+            `Quota exceeded for model "${primary}". Falling back to available model "${fallback}".`
+          );
           usedFallback = true;
-          finalModel = FALLBACK_TEXT_MODEL;
+          finalModel = fallback;
           try {
-            const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
+            const data = await retryApiCall(() => invokeModel(fallback));
             return {
               statusCode: 200,
               headers,
@@ -284,7 +370,7 @@ const handler = async (event, context) => {
         }
       }
       case "generateImage": {
-        const { prompt, model = DEFAULT_IMAGE_MODEL } = requestData;
+        const { prompt, model } = requestData;
         if (!prompt || typeof prompt !== "string") {
           return {
             statusCode: 400,
@@ -299,8 +385,17 @@ const handler = async (event, context) => {
             body: JSON.stringify({ error: "Prompt exceeds maximum length." })
           };
         }
-        const primaryModel = typeof model === "string" ? model : DEFAULT_IMAGE_MODEL;
-        let finalModel = primaryModel;
+        const catalog = await fetchModelCatalog(resolvedApiKey);
+        const { primary, fallback } = selectModel(catalog, "image", typeof model === "string" ? model : null);
+        if (!primary) {
+          return buildMockFailureResponse(
+            headers,
+            new Error("No image generation models available for this API key."),
+            void 0,
+            { usedFallback: false }
+          );
+        }
+        let finalModel = primary;
         let usedFallback = false;
         const invokeModel = async (modelName) => {
           const imageModel = client.getGenerativeModel({ model: modelName });
@@ -319,7 +414,7 @@ const handler = async (event, context) => {
           throw new Error("No image data returned from model");
         };
         try {
-          const data = await retryApiCall(() => invokeModel(primaryModel));
+          const data = await retryApiCall(() => invokeModel(primary));
           return {
             statusCode: 200,
             headers,
@@ -332,18 +427,20 @@ const handler = async (event, context) => {
             })
           };
         } catch (error) {
-          if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
+          if (!shouldUseFallbackModel(error) || !fallback || fallback === primary) {
             console.error("Image generation error:", error);
             return buildMockFailureResponse(headers, error, void 0, {
-              modelUsed: primaryModel,
+              modelUsed: primary,
               usedFallback: false
             });
           }
-          console.warn(`Quota exceeded for image model "${primaryModel}". Falling back to free tier model "${FALLBACK_IMAGE_MODEL}".`);
+          console.warn(
+            `Quota exceeded for image model "${primary}". Falling back to available model "${fallback}".`
+          );
           usedFallback = true;
-          finalModel = FALLBACK_IMAGE_MODEL;
+          finalModel = fallback;
           try {
-            const data = await retryApiCall(() => invokeModel(FALLBACK_IMAGE_MODEL));
+            const data = await retryApiCall(() => invokeModel(fallback));
             return {
               statusCode: 200,
               headers,
@@ -365,98 +462,13 @@ const handler = async (event, context) => {
         }
       }
       case "listModels": {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${resolvedApiKey}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" }
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`ListModels API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-        }
-        const data = await response.json();
-        const enhancedModels = {
-          models: [
-            ...data.models || [],
-            {
-              name: "models/gemini-2.5-pro",
-              displayName: "Gemini 2.5 Pro",
-              description: "High-performance model with increased quota for text generation",
-              supportedGenerationMethods: ["generateContent"],
-              maxTokens: 2097152,
-              capabilities: ["text"]
-            },
-            {
-              name: "models/gemini-2.5-flash",
-              displayName: "Gemini 2.5 Flash",
-              description: "Fast model with high quota for quick responses",
-              supportedGenerationMethods: ["generateContent"],
-              maxTokens: 1048576,
-              capabilities: ["text"]
-            },
-            {
-              name: "models/imagen-4.5-ultra",
-              displayName: "Imagen 4.5 Ultra",
-              description: "Ultra-high quality image generation model",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            },
-            {
-              name: "models/imagen-4.5-pro",
-              displayName: "Imagen 4.5 Pro",
-              description: "Professional image generation with high quota",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            },
-            {
-              name: "models/imagen-4.5-flash",
-              displayName: "Imagen 4.5 Flash",
-              description: "Fast image generation with good quota",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            },
-            {
-              name: "models/gemini-1.5-flash-latest",
-              displayName: "Gemini 1.5 Flash (Free Tier - Latest)",
-              description: "Latest free tier text generation model for quota fallbacks",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["text"]
-            },
-            {
-              name: "models/claude-3.5-sonnet-free",
-              displayName: "Claude 3.5 Sonnet - Free Tier",
-              description: "Free tier for text generation with limited quota",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["text"]
-            },
-            {
-              name: "models/imagen-3.0-latest",
-              displayName: "Imagen 3.0 (Free Tier - Latest)",
-              description: "Latest free tier image generation model for quota fallbacks",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            },
-            {
-              name: "models/stable-diffusion-3-free",
-              displayName: "Stable Diffusion 3 - Free Tier",
-              description: "Free tier for image generation with limited quota",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            },
-            {
-              name: "models/dall-e-3-free",
-              displayName: "DALL-E 3 - Free Tier",
-              description: "Free tier for image generation with limited quota",
-              supportedGenerationMethods: ["generateContent"],
-              capabilities: ["image"]
-            }
-          ]
-        };
+        const models = await fetchModelCatalog(resolvedApiKey);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
             success: true,
-            data: enhancedModels
+            data: { models }
           })
         };
       }
