@@ -73,3 +73,18 @@ def test_collection_workflow_persists_data(api_client):
 
     stored_files = list(Path(db_path).iterdir())
     assert stored_files, "expected persisted database files to be created"
+
+
+def test_create_collection_duplicate_returns_conflict(api_client):
+    client, _ = api_client
+    collection_name = "dup-collection"
+
+    first_response = client.post(f"/collections/{collection_name}")
+    assert first_response.status_code == 200
+
+    duplicate_response = client.post(f"/collections/{collection_name}")
+
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json() == {
+        "detail": f"Collection [{collection_name}] already exists"
+    }
