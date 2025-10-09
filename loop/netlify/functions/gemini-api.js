@@ -1,5 +1,6 @@
 // netlify/functions/gemini-api.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Modality } from "@google/genai";
 var GEMINI_KEY_ENV_CANDIDATES = [
   "GEMINI_API_KEY",
   "GOOGLE_API_KEY",
@@ -8,6 +9,7 @@ var GEMINI_KEY_ENV_CANDIDATES = [
   "VITE_GEMINI_API_KEY"
 ];
 var cachedGeminiClient = null;
+var cachedGenAIClient = null;
 var cachedGeminiApiKey = null;
 var resolveGeminiApiKey = () => {
   for (const envName of GEMINI_KEY_ENV_CANDIDATES) {
@@ -27,13 +29,14 @@ var resolveGeminiApiKey = () => {
 var getGeminiClient = () => {
   const apiKey = resolveGeminiApiKey();
   if (!apiKey) {
-    return { apiKey: null, client: null };
+    return { apiKey: null, client: null, genAI: null };
   }
-  if (!cachedGeminiClient || cachedGeminiApiKey !== apiKey) {
+  if (!cachedGeminiClient || !cachedGenAIClient || cachedGeminiApiKey !== apiKey) {
     cachedGeminiClient = new GoogleGenerativeAI(apiKey);
+    cachedGenAIClient = new GoogleGenAI({ apiKey });
     cachedGeminiApiKey = apiKey;
   }
-  return { apiKey, client: cachedGeminiClient };
+  return { apiKey, client: cachedGeminiClient, genAI: cachedGenAIClient };
 };
 var MODEL_LIST_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 var MODEL_NAMESPACE_PREFIX = "models/";
@@ -49,9 +52,10 @@ var TEXT_MODEL_PRIORITY = [
   "models/gemini-1.0-pro-001"
 ];
 var IMAGE_MODEL_PRIORITY = [
-  "models/imagen-3.0-generate-001",
-  "models/imagen-2.0-generate-001",
-  "models/imagegeneration"
+  "models/gemini-2.5-flash-image",
+  "models/gemini-2.0-flash-exp-image-generation",
+  "models/gemini-2.0-flash-preview-image-generation",
+  "models/gemini-2.5-flash-image-preview"
 ];
 var isCacheFresh = () => Date.now() - cachedModelCatalogTimestamp < MODEL_CACHE_TTL_MS;
 var fetchModelCatalog = async (apiKey) => {
@@ -80,8 +84,16 @@ var supportsImageGeneration = (model) => {
   if (normalizedName.includes("imagen")) {
     return true;
   }
+  if (normalizedName.includes("image-generation") || normalizedName.includes("flash-image")) {
+    return true;
+  }
   const methods = (model.supportedGenerationMethods ?? []).map((method) => method.toLowerCase());
-  return methods.some((method) => method.includes("generateimage") || method.includes("createimage"));
+  return methods.some((method) => 
+    method.includes("generateimage") || 
+    method.includes("createimage") || 
+    method.includes("predict") ||
+    method.includes("generatecontent")
+  );
 };
 var selectModel = (models, type, requested) => {
   const predicate = type === "text" ? supportsTextGeneration : supportsImageGeneration;
@@ -206,8 +218,8 @@ var buildMockFailureResponse = (headers, error, overrideMessage, extra) => {
   };
 };
 var handler = async (event, context) => {
-  const { apiKey: resolvedApiKey, client } = getGeminiClient();
-  if (!resolvedApiKey || !client) {
+  const { apiKey: resolvedApiKey, client, genAI } = getGeminiClient();
+  if (!resolvedApiKey || !client || !genAI) {
     console.error(
       "Gemini API key environment variable is not set. Provide one of: " + GEMINI_KEY_ENV_CANDIDATES.join(", ")
     );
@@ -398,19 +410,30 @@ var handler = async (event, context) => {
         let finalModel = primary;
         let usedFallback = false;
         const invokeModel = async (modelName) => {
-          const imageModel = client.getGenerativeModel({ model: modelName });
-          const result = await imageModel.generateContent([prompt]);
-          const response = await result.response;
+          // Use the newer @google/genai SDK for image generation
+          const trimmedModelName = trimModelNamespace(modelName);
+          
+          const response = await genAI.models.generateContent({
+            model: trimmedModelName,
+            contents: prompt,
+            config: {
+              responseModalities: [Modality.TEXT, Modality.IMAGE]
+            }
+          });
+          
+          // Look for image data in the response
           const candidates = response.candidates;
           if (candidates && candidates.length > 0) {
             const candidate = candidates[0];
-            if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-              const part = candidate.content.parts[0];
-              if (part.inlineData && part.inlineData.data) {
-                return part.inlineData.data;
+            if (candidate.content && candidate.content.parts) {
+              for (const part of candidate.content.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                  return part.inlineData.data;
+                }
               }
             }
           }
+          
           throw new Error("No image data returned from model");
         };
         try {
