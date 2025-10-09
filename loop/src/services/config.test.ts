@@ -42,4 +42,16 @@ describe('ApiConfigManager environment defaults', () => {
     expect(geminiConfig?.apiKey).toBe('merged-gemini-key');
     expect(geminiConfig?.baseUrl).toBe('https://stored.example.com');
   });
+
+  it('uses the VITE_GEMINI_PROXY_URL when no Gemini key is provided', async () => {
+    vi.stubEnv('VITE_GEMINI_PROXY_URL', '/.netlify/functions/gemini-api');
+
+    const { apiConfig } = await import('./config');
+
+    const geminiConfig = apiConfig.getConfigByName('gemini');
+
+    expect(geminiConfig?.apiKey).toBeUndefined();
+    expect(geminiConfig?.baseUrl).toBe('/.netlify/functions/gemini-api');
+    expect(geminiConfig?.enabled).toBe(true);
+  });
 });

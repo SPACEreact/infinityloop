@@ -7,7 +7,72 @@ const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
 const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
 const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
 
-export const isMockMode = false; // Always use the Netlify function endpoint
+const NETLIFY_FUNCTION_PATH = '/.netlify/functions/gemini-api';
+
+type DirectGeminiEndpoint = {
+  type: 'direct';
+  baseUrl: string;
+  apiKey: string;
+};
+
+type ProxyGeminiEndpoint = {
+  type: 'proxy';
+  baseUrl: string;
+};
+
+type GeminiEndpoint = DirectGeminiEndpoint | ProxyGeminiEndpoint;
+
+const readEnvString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const resolveProxyBaseUrl = (configuredBaseUrl?: string): string | null => {
+  const envProxyRaw = (import.meta.env.VITE_GEMINI_PROXY_URL ?? '') as string | undefined;
+  const envProxy = readEnvString(envProxyRaw);
+
+  if (envProxy) {
+    return envProxy;
+  }
+
+  const normalizedConfigured = readEnvString(configuredBaseUrl);
+  if (normalizedConfigured && !normalizedConfigured.includes('generativelanguage.googleapis.com')) {
+    return normalizedConfigured;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location?.hostname ?? '';
+    if (hostname && (hostname.endsWith('.netlify.app') || hostname.endsWith('.netlify.dev'))) {
+      return NETLIFY_FUNCTION_PATH;
+    }
+  }
+
+  return null;
+};
+
+const getGeminiEndpoint = (): GeminiEndpoint | null => {
+  const config = apiConfig.getConfigByName('gemini');
+  const apiKey = readEnvString(config?.apiKey);
+  const configuredBase = readEnvString(config?.baseUrl);
+
+  if (apiKey) {
+    const normalizedBase = (configuredBase || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, '');
+    return {
+      type: 'direct',
+      baseUrl: normalizedBase || DEFAULT_GEMINI_BASE_URL,
+      apiKey,
+    };
+  }
+
+  const proxyBaseUrl = resolveProxyBaseUrl(configuredBase);
+  if (!proxyBaseUrl) {
+    return null;
+  }
+
+  return {
+    type: 'proxy',
+    baseUrl: proxyBaseUrl.replace(/\/$/, ''),
+  };
+};
+
+export const isMockMode = !getGeminiEndpoint();
 
 export interface GeminiResult<T> {
   data: T | null;
@@ -20,27 +85,6 @@ const createResult = <T>(data: T | null, error: string | null, isMock: boolean):
   error,
   isMock
 });
-
-type GeminiCredentials = {
-  baseUrl: string;
-  apiKey: string;
-};
-
-const getGeminiCredentials = (): GeminiCredentials | null => {
-  const config = apiConfig.getConfigByName('gemini');
-  const apiKey = config?.apiKey?.trim();
-
-  if (!apiKey) {
-    return null;
-  }
-
-  const baseUrl = (config?.baseUrl?.trim() || DEFAULT_GEMINI_BASE_URL).replace(/\/$/, '');
-
-  return {
-    baseUrl: baseUrl || DEFAULT_GEMINI_BASE_URL,
-    apiKey
-  };
-};
 
 const parseResponseJson = async (response: Response, requestDescription: string): Promise<any> => {
   const rawText = await response.text();
@@ -189,65 +233,122 @@ const extractImageDataFromResponse = (data: any): string => {
   throw new Error('No image data returned from model');
 };
 
-const requestGeminiContent = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+type GeminiProxyAction = 'generateContent' | 'generateImage' | 'listModels';
 
-  const response = await fetch(url, {
+const requestGeminiProxy = async (
+  endpoint: ProxyGeminiEndpoint,
+  action: GeminiProxyAction,
+  payload: Record<string, unknown>,
+  description: string
+): Promise<any> => {
+  const response = await fetch(endpoint.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'generateContent',
-      prompt: prompt,
-      model: model
-    })
+    body: JSON.stringify({ action, ...payload })
   });
 
-  const data = await parseResponseJson(response, 'Gemini text request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate content');
+  const data = await parseResponseJson(response, description);
+
+  if (data && typeof data === 'object' && 'success' in data && data.success === false) {
+    const errorMessage =
+      typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error?: string }).error
+        : `${description} failed.`;
+    throw new Error(errorMessage);
   }
+
+  return data;
 };
 
-const requestGeminiImage = async (credentials: GeminiCredentials, prompt: string, model: string): Promise<string> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+const requestGeminiContentDirect = async (
+  endpoint: DirectGeminiEndpoint,
+  prompt: string,
+  model: string
+): Promise<string> => {
+  const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateContent?key=${encodeURIComponent(endpoint.apiKey)}`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      action: 'generateImage',
-      prompt: prompt,
-      model: model
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ]
     })
   });
 
-  const data = await parseResponseJson(response, 'Gemini image request via Netlify function');
-  
-  if (data.success && data.data) {
-    return data.data;
-  } else {
-    throw new Error(data.error || 'Failed to generate image');
-  }
+  const data = await parseResponseJson(response, 'Gemini text request');
+  return extractTextFromResponse(data);
+};
+
+const requestGeminiImageDirect = async (
+  endpoint: DirectGeminiEndpoint,
+  prompt: string,
+  model: string
+): Promise<string> => {
+  const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
+  const normalizedModel = normalizeModelName(model);
+  const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(endpoint.apiKey)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: {
+        text: prompt
+      },
+      imageGenerationConfig: {
+        numberOfImages: 1
+      }
+    })
+  });
+
+  const data = await parseResponseJson(response, 'Gemini image request');
+  return extractImageDataFromResponse(data);
 };
 
 const requestTextWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_TEXT_MODEL
 ): Promise<{ text: string; modelUsed: string; usedFallback: boolean }> => {
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  if (endpoint.type === 'proxy') {
+    const proxyResponse = await requestGeminiProxy(
+      endpoint,
+      'generateContent',
+      { prompt, model: preferredModel },
+      'Gemini proxy text request'
+    );
+
+    const text = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    if (!text) {
+      throw new Error('Gemini proxy text request returned no data');
+    }
+
+    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : preferredModel;
+    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean' ? proxyResponse.usedFallback : false;
+
+    return { text, modelUsed, usedFallback };
+  }
+
   try {
-    const text = await requestGeminiContent({} as GeminiCredentials, prompt, preferredModel);
+    const text = await requestGeminiContentDirect(endpoint, prompt, preferredModel);
     return { text, modelUsed: preferredModel, usedFallback: false };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_TEXT_MODEL) {
       throw error;
     }
 
-    const fallbackText = await requestGeminiContent({} as GeminiCredentials, prompt, FALLBACK_TEXT_MODEL);
+    const fallbackText = await requestGeminiContentDirect(endpoint, prompt, FALLBACK_TEXT_MODEL);
     return { text: fallbackText, modelUsed: FALLBACK_TEXT_MODEL, usedFallback: true };
   }
 };
@@ -256,15 +357,39 @@ const requestImageWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_IMAGE_MODEL
 ): Promise<{ image: string; modelUsed: string; usedFallback: boolean }> => {
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    throw new Error('Gemini API key is not configured');
+  }
+
+  if (endpoint.type === 'proxy') {
+    const proxyResponse = await requestGeminiProxy(
+      endpoint,
+      'generateImage',
+      { prompt, model: preferredModel },
+      'Gemini proxy image request'
+    );
+
+    const image = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    if (!image) {
+      throw new Error('Gemini proxy image request returned no data');
+    }
+
+    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : preferredModel;
+    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean' ? proxyResponse.usedFallback : false;
+
+    return { image, modelUsed, usedFallback };
+  }
+
   try {
-    const image = await requestGeminiImage({} as GeminiCredentials, prompt, preferredModel);
+    const image = await requestGeminiImageDirect(endpoint, prompt, preferredModel);
     return { image, modelUsed: preferredModel, usedFallback: false };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || preferredModel === FALLBACK_IMAGE_MODEL) {
       throw error;
     }
 
-    const fallbackImage = await requestGeminiImage({} as GeminiCredentials, prompt, FALLBACK_IMAGE_MODEL);
+    const fallbackImage = await requestGeminiImageDirect(endpoint, prompt, FALLBACK_IMAGE_MODEL);
     return { image: fallbackImage, modelUsed: FALLBACK_IMAGE_MODEL, usedFallback: true };
   }
 };
@@ -343,6 +468,19 @@ const ADDITIONAL_MODELS = [
     capabilities: ['image']
   }
 ];
+
+const mergeModelsWithAdditions = (models: any[]): any[] => {
+  const normalizedModels = Array.isArray(models) ? models : [];
+  const existingNames = new Set(
+    normalizedModels
+      .map(model => (typeof model?.name === 'string' ? model.name : null))
+      .filter((name): name is string => !!name)
+  );
+
+  const extraModels = ADDITIONAL_MODELS.filter(model => !existingNames.has(model.name));
+
+  return [...normalizedModels, ...extraModels];
+};
 
 const KNOWLEDGE_CONTEXT = `
 
@@ -463,25 +601,44 @@ const createMockBuildResponse = (
 
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
-  // Use Netlify function instead of direct API call
-  const url = '/.netlify/functions/gemini-api';
+  const endpoint = getGeminiEndpoint();
+  if (!endpoint) {
+    throw new Error('Gemini API key is not configured');
+  }
 
   try {
+    if (endpoint.type === 'proxy') {
+      const proxyResponse = await requestGeminiProxy(
+        endpoint,
+        'listModels',
+        {},
+        'Gemini proxy models request'
+      );
+
+      const proxyModels = Array.isArray(proxyResponse?.data?.models)
+        ? proxyResponse.data.models
+        : Array.isArray(proxyResponse?.data)
+          ? proxyResponse.data
+          : [];
+
+      return {
+        models: mergeModelsWithAdditions(proxyModels)
+      };
+    }
+
+    const baseUrl = endpoint.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/models?key=${encodeURIComponent(endpoint.apiKey)}`;
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'listModels'
-      })
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    const data = await parseResponseJson(response, 'Gemini models request via Netlify function');
-    
-    if (data.success && data.data) {
-      return data.data;
-    } else {
-      throw new Error(data.error || 'Failed to list models');
-    }
+    const data = await parseResponseJson(response, 'Gemini models request');
+    const models = Array.isArray(data?.models) ? data.models : [];
+
+    return {
+      models: mergeModelsWithAdditions(models)
+    };
   } catch (error: unknown) {
     console.error('ListModels API Error:', error);
     if (error instanceof Error) {

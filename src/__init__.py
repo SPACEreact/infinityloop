@@ -1,5 +1,6 @@
-"""Application package for the Flask API service."""
+"""Expose the Flask application factory for external consumers."""
+from __future__ import annotations
 
-from .main import main_bp
+from .main import create_app
 
-__all__ = ["main_bp"]
+__all__ = ["create_app"]

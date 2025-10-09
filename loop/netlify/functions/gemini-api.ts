@@ -1,8 +1,47 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
+const GEMINI_KEY_ENV_CANDIDATES = [
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_AI_API_KEY',
+  'GOOGLE_GENAI_API_KEY',
+  'VITE_GEMINI_API_KEY'
+] as const;
+
+let cachedGeminiClient: GoogleGenerativeAI | null = null;
+let cachedGeminiApiKey: string | null = null;
+
+const resolveGeminiApiKey = (): string | null => {
+  for (const envName of GEMINI_KEY_ENV_CANDIDATES) {
+    const rawValue = process.env[envName];
+    if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      if (trimmed) {
+        if (envName !== 'GEMINI_API_KEY') {
+          console.info(`Resolved Gemini API key from ${envName} environment variable.`);
+        }
+        return trimmed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const getGeminiClient = (): { apiKey: string | null; client: GoogleGenerativeAI | null } => {
+  const apiKey = resolveGeminiApiKey();
+  if (!apiKey) {
+    return { apiKey: null, client: null };
+  }
+
+  if (!cachedGeminiClient || cachedGeminiApiKey !== apiKey) {
+    cachedGeminiClient = new GoogleGenerativeAI(apiKey);
+    cachedGeminiApiKey = apiKey;
+  }
+
+  return { apiKey, client: cachedGeminiClient };
+};
 
 const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
 const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
@@ -103,16 +142,24 @@ const shouldUseFallbackModel = (error: unknown): boolean => {
 };
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+  const { apiKey: resolvedApiKey, client } = getGeminiClient();
+
   // Validate API key on startup
-  if (!GEMINI_API_KEY) {
-    console.error('GEMINI_API_KEY environment variable is not set');
+  if (!resolvedApiKey || !client) {
+    console.error(
+      'Gemini API key environment variable is not set. Provide one of: ' +
+        GEMINI_KEY_ENV_CANDIDATES.join(', ')
+    );
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         ...SECURITY_HEADERS
       },
-      body: JSON.stringify({ error: 'Service configuration error' })
+      body: JSON.stringify({
+        error: 'Service configuration error',
+        detail: 'Gemini API key is not configured.'
+      })
     };
   }
 
@@ -219,7 +266,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         let usedFallback = false;
 
         const invokeModel = async (modelName: string) => {
-          const generativeModel = genAI.getGenerativeModel({ model: modelName });
+          const generativeModel = client.getGenerativeModel({ model: modelName });
           const result = await generativeModel.generateContent(prompt);
           const response = await result.response;
           return response.text().trim();
@@ -287,7 +334,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         let usedFallback = false;
 
         const invokeModel = async (modelName: string) => {
-          const imageModel = genAI.getGenerativeModel({ model: modelName });
+          const imageModel = client.getGenerativeModel({ model: modelName });
           const result = await imageModel.generateContent([prompt]);
           const response = await result.response;
 
@@ -367,7 +414,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
 
       case 'listModels': {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${resolvedApiKey}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
