@@ -1,5 +1,5 @@
 [build]
-  base = "loop"
+  base = "."
   command = "npm ci && npm run build"
   publish = "dist"
 
@@ -7,7 +7,15 @@
   NODE_VERSION = "20.19"
 
 [dev]
-targetPort = 5173
+  targetPort = 5173
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
 # Environment variables for API integrations
 # GEMINI_API_KEY: Your Google Gemini API key (set in Netlify dashboard)
