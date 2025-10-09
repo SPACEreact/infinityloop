@@ -9,6 +9,7 @@ interface ApiConfigProps {
 
 interface EditingConfig extends ApiServiceConfig {
   isNew?: boolean;
+  originalName?: string;
 }
 
 export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
@@ -47,8 +48,9 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
         return;
       }
     } else {
-      const existingName = editingConfig.name.trim();
-      apiConfig.updateConfigByName(existingName, {
+      const lookupName = editingConfig.originalName ?? editingConfig.name;
+      apiConfig.updateConfigByName(lookupName, {
+        name: normalizedName,
         baseUrl,
         apiKey,
         description,
@@ -158,7 +160,22 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                 <input
                   type="text"
                   value={editingConfig.name}
-                  onChange={(e) => setEditingConfig({ ...editingConfig, name: e.target.value })}
+                  onChange={(e) =>
+                    setEditingConfig({
+                      ...editingConfig,
+                      name: editingConfig.isNew ? e.target.value.toLowerCase() : e.target.value,
+                    })
+                  }
+                  onBlur={() =>
+                    setEditingConfig(current =>
+                      current && current.isNew
+                        ? {
+                            ...current,
+                            name: current.name.trim().toLowerCase(),
+                          }
+                        : current,
+                    )
+                  }
                   placeholder="e.g., chromadb, gemini, openai"
                   className="panel-input w-full px-3 py-2"
                   disabled={!editingConfig.isNew}
@@ -167,6 +184,12 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                   Use the canonical identifier for the service (for example, <code>gemini</code>, <code>chromadb</code>, or
                   <code>openai</code>). This name must match the integration ID used elsewhere in the app.
                 </p>
+                {!editingConfig.isNew && (
+                  <p className="mt-1 text-xs ink-subtle italic">
+                    Existing service identifiers are locked to keep stored configurations aligned with integrations such as
+                    <code>apiConfig.getConfigByName('gemini')</code>.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -293,7 +316,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
                               />
                             </label>
                             <button
-                              onClick={() => setEditingConfig({ ...config })}
+                              onClick={() => setEditingConfig({ ...config, originalName: config.name, isNew: false })}
                               className="text-blue-500 hover:text-blue-700"
                               title="Edit"
                             >
