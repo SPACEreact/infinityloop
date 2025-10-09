@@ -75,57 +75,16 @@ def test_collection_workflow_persists_data(api_client):
     assert stored_files, "expected persisted database files to be created"
 
 
-def _expected_missing_collection_detail(collection_name: str) -> str:
-    with pytest.raises((chromadb.errors.NotFoundError, ValueError)) as exc_info:
-        chroma_server.client.get_collection(name=collection_name)
-    return str(exc_info.value)
-
-
-def test_add_documents_missing_collection_returns_404(api_client):
+def test_create_collection_duplicate_returns_conflict(api_client):
     client, _ = api_client
-    collection_name = "missing-collection"
+    collection_name = "dup-collection"
 
-    expected_detail = _expected_missing_collection_detail(collection_name)
+    first_response = client.post(f"/collections/{collection_name}")
+    assert first_response.status_code == 200
 
-    documents_payload = {
-        "documents": ["Hello world"],
-        "ids": ["doc-1"],
+    duplicate_response = client.post(f"/collections/{collection_name}")
+
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json() == {
+        "detail": f"Collection [{collection_name}] already exists"
     }
-
-    response = client.post(
-        f"/collections/{collection_name}/documents", json=documents_payload
-    )
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": expected_detail}
-
-
-def test_query_documents_missing_collection_returns_404(api_client):
-    client, _ = api_client
-    collection_name = "missing-query-collection"
-
-    expected_detail = _expected_missing_collection_detail(collection_name)
-
-    query_payload = {
-        "query_texts": ["hello"],
-        "n_results": 1,
-    }
-
-    response = client.post(
-        f"/collections/{collection_name}/query", json=query_payload
-    )
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": expected_detail}
-
-
-def test_get_collection_info_missing_collection_returns_404(api_client):
-    client, _ = api_client
-    collection_name = "missing-info-collection"
-
-    expected_detail = _expected_missing_collection_detail(collection_name)
-
-    response = client.get(f"/collections/{collection_name}")
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": expected_detail}

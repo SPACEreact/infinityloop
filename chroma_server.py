@@ -1,14 +1,16 @@
 import logging
-from typing import Any, Dict, List, Optional
 
-import chromadb
-from chromadb.errors import NotFoundError
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Dict, Any, Optional, Union
+import chromadb
+from chromadb.errors import InternalError
 import uvicorn
 
 app = FastAPI(title="ChromaDB MCP Server", description="REST API for ChromaDB operations")
+
+logger = logging.getLogger(__name__)
 
 # Add CORS middleware to allow requests from the React app
 app.add_middleware(
@@ -49,8 +51,15 @@ async def create_collection(collection_name: str):
     try:
         collection = client.create_collection(name=collection_name)
         return {"message": f"Collection '{collection_name}' created successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InternalError as exc:
+        message = str(exc)
+        if "already exists" in message.lower():
+            raise HTTPException(status_code=409, detail=message)
+        logger.exception("Failed to create collection '%s'", collection_name)
+        raise
+    except Exception:
+        logger.exception("Unexpected error creating collection '%s'", collection_name)
+        raise
 
 def _get_collection_or_404(collection_name: str):
     try:
