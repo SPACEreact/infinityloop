@@ -545,11 +545,24 @@ const handler = async (event, context) => {
                     };
                 }
                 catch (error) {
+                    // Mark model as quota exceeded if it's a quota error
+                    if (isQuotaError(error)) {
+                        markModelAsQuotaExceeded(primary);
+                        
+                        // Extract retry delay if available
+                        const apiRetryDelay = extractRetryDelay(error);
+                        if (apiRetryDelay) {
+                            console.warn(`API suggests retry in ${apiRetryDelay}ms`);
+                        }
+                    }
+                    
                     if (!shouldUseFallbackModel(error) || !fallback || fallback === primary) {
                         console.error('Image generation error:', error);
                         return buildMockFailureResponse(headers, error, undefined, {
                             modelUsed: primary,
-                            usedFallback: false
+                            usedFallback: false,
+                            quotaExceeded: isQuotaError(error),
+                            apiRetryDelay: extractRetryDelay(error)
                         });
                     }
                     console.warn(`Quota exceeded for image model "${primary}". Falling back to available model "${fallback}".`);
@@ -570,10 +583,17 @@ const handler = async (event, context) => {
                         };
                     }
                     catch (fallbackError) {
+                        // Mark fallback model as quota exceeded if it's a quota error
+                        if (isQuotaError(fallbackError)) {
+                            markModelAsQuotaExceeded(fallback);
+                        }
+                        
                         console.error('Fallback image generation error:', fallbackError);
                         return buildMockFailureResponse(headers, fallbackError, 'Gemini image generation failed after fallback. Using mock response.', {
                             modelUsed: finalModel,
-                            usedFallback: true
+                            usedFallback: true,
+                            quotaExceeded: isQuotaError(fallbackError),
+                            apiRetryDelay: extractRetryDelay(fallbackError)
                         });
                     }
                 }
