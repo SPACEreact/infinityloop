@@ -23,7 +23,6 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@google/genai": "^1.21.0",
     "@google/generative-ai": "^0.24.1",
     "@tailwindcss/postcss": "^4.1.13",
     "autoprefixer": "^10.4.21",
