@@ -1,0 +1,21 @@
+{
+  "projects": [
+    {
+      "id": "demo-project",
+      "name": "Demo Loop Project",
+      "description": "Starter workspace demonstrating the REST API.",
+      "targetModel": "gemini-pro",
+      "assets": [],
+      "primaryTimeline": {
+        "folders": {
+          "story": [],
+          "image": [],
+          "text_to_video": []
+        },
+        "lastPrompt": ""
+      },
+      "createdAt": "2025-10-09T11:49:14.663910Z",
+      "updatedAt": "2025-10-09T11:49:14.663933Z"
+    }
+  ]
+}
