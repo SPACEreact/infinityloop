@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { listModels, generateSandboxResponse } from '../services/geminiService';
+import { TEXT_GENERATION_MODELS, IMAGE_GENERATION_MODELS } from '../models';
 
 const GeminiTest: React.FC = () => {
   const [models, setModels] = useState<any>(null);
+  const [textModels, setTextModels] = useState<any[]>([]);
+  const [imageModels, setImageModels] = useState<any[]>([]);
+  const [selectedTextModel, setSelectedTextModel] = useState<string>('');
+  const [selectedImageModel, setSelectedImageModel] = useState<string>('');
   const [response, setResponse] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    setTextModels(TEXT_GENERATION_MODELS);
+    setImageModels(IMAGE_GENERATION_MODELS);
+    setSelectedTextModel(TEXT_GENERATION_MODELS[0]?.id || '');
+    setSelectedImageModel(IMAGE_GENERATION_MODELS[0]?.id || '');
+  }, []);
 
   const handleListModels = async () => {
     setLoading(true);
@@ -49,6 +61,38 @@ const GeminiTest: React.FC = () => {
         <button onClick={handleGenerateContent} disabled={loading} style={{ marginLeft: '10px' }}>
           Generate Content
         </button>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label htmlFor="text-model-select">Text Generation Model:</label>
+        <select
+          id="text-model-select"
+          value={selectedTextModel}
+          onChange={(e) => setSelectedTextModel(e.target.value)}
+          style={{ marginLeft: '10px' }}
+        >
+          {textModels.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name} {model.quota ? `(${model.quota})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label htmlFor="image-model-select">Image Generation Model:</label>
+        <select
+          id="image-model-select"
+          value={selectedImageModel}
+          onChange={(e) => setSelectedImageModel(e.target.value)}
+          style={{ marginLeft: '10px' }}
+        >
+          {imageModels.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name} {model.quota ? `(${model.quota})` : ''}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading && <p>Loading...</p>}

@@ -257,6 +257,34 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               description: "Fast image generation with good quota",
               supportedGenerationMethods: ["generateContent"],
               capabilities: ["image"]
+            },
+            {
+              name: "models/gemini-1.5-flash-free",
+              displayName: "Gemini 1.5 Flash - Free Tier",
+              description: "Free tier for text generation with limited quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["text"]
+            },
+            {
+              name: "models/claude-3.5-sonnet-free",
+              displayName: "Claude 3.5 Sonnet - Free Tier",
+              description: "Free tier for text generation with limited quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["text"]
+            },
+            {
+              name: "models/stable-diffusion-3-free",
+              displayName: "Stable Diffusion 3 - Free Tier",
+              description: "Free tier for image generation with limited quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
+            },
+            {
+              name: "models/dall-e-3-free",
+              displayName: "DALL-E 3 - Free Tier",
+              description: "Free tier for image generation with limited quota",
+              supportedGenerationMethods: ["generateContent"],
+              capabilities: ["image"]
             }
           ]
         };
