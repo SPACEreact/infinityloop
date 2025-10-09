@@ -139,7 +139,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     switch (action) {
       case 'generateContent': {
-        const { prompt, model = 'gemini-2.5-pro' } = requestData;
+        const { prompt, model = 'gemini-2.5-flash' } = requestData;
 
         const data = await retryApiCall(async () => {
           const generativeModel = genAI.getGenerativeModel({ model: model });
