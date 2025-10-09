@@ -28,7 +28,16 @@ vi.mock('@google/generative-ai', () => {
 
 let handler: typeof import('../gemini-api').handler;
 
+const resetEnv = () => {
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_AI_API_KEY;
+  delete process.env.GOOGLE_GENAI_API_KEY;
+  delete process.env.VITE_GEMINI_API_KEY;
+};
+
 beforeAll(async () => {
+  resetEnv();
   process.env.GEMINI_API_KEY = 'test-key';
   ({ handler } = await import('../gemini-api'));
 });
@@ -66,6 +75,8 @@ describe('gemini-api quota fallback', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    resetEnv();
+    process.env.GEMINI_API_KEY = 'test-key';
     mockModelImplementations.clear();
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -76,6 +87,7 @@ describe('gemini-api quota fallback', () => {
     warnSpy.mockRestore();
     errorSpy.mockRestore();
     vi.restoreAllMocks();
+    resetEnv();
   });
 
   it('falls back to the free tier text model when quota is exceeded', async () => {
@@ -202,5 +214,48 @@ describe('gemini-api quota fallback', () => {
     expect(payload.data).toBe('image-data');
     expect(payload.modelUsed).toBe('imagen-3.0-latest');
     expect(payload.usedFallback).toBe(true);
+  });
+});
+
+describe('gemini-api configuration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetEnv();
+  });
+
+  it('allows using GOOGLE_API_KEY as a fallback secret name', async () => {
+    resetEnv();
+    process.env.GOOGLE_API_KEY = 'secondary-key';
+    mockModelImplementations.clear();
+    global.fetch = vi.fn();
+    mockModelImplementations.set('gemini-2.5-flash', async () => ({
+      response: Promise.resolve({
+        text: () => 'ok'
+      })
+    }));
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(true);
+  });
+
+  it('returns a configuration error when no compatible environment variable is present', async () => {
+    resetEnv();
+    mockModelImplementations.clear();
+    global.fetch = vi.fn();
+    const response = await handler(
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(500);
+    const payload = JSON.parse(response.body);
+    expect(payload.error).toBe('Service configuration error');
+    expect(payload.detail).toBe('Gemini API key is not configured.');
   });
 });
