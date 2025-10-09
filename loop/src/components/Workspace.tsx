@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ChatRole } from '../types';
 import type {
   Project,
@@ -21,6 +21,7 @@ import { ToastNotification, ToastState } from './ToastNotification';
 import { OutputModal } from './OutputModal';
 import WorkspaceHeader from './WorkspaceHeader';
 import FloatingOutputButton from './FloatingOutputButton';
+import { apiConfig } from '../services/config';
 // import { saveProject } from '../services/mcpService';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
@@ -103,6 +104,13 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChromaEnabled, setIsChromaEnabled] = useState(() => apiConfig.isEnabled('chromadb'));
+
+  useEffect(() => {
+    if (!isApiConfigOpen) {
+      setIsChromaEnabled(apiConfig.isEnabled('chromadb'));
+    }
+  }, [isApiConfigOpen]);
 
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
     if (!message.trim()) return null;
@@ -533,6 +541,28 @@ const Workspace: React.FC<WorkspaceProps> = ({
     setToastState(null);
   };
 
+  const handleToggleChromaService = (enabled: boolean) => {
+    try {
+      apiConfig.setEnabled('chromadb', enabled);
+      setIsChromaEnabled(apiConfig.isEnabled('chromadb'));
+      setToastState({
+        id: crypto.randomUUID(),
+        message: enabled
+          ? 'ChromaDB service enabled. Vector memory sync is active.'
+          : 'ChromaDB service disabled. Vector memory sync is paused.',
+        kind: enabled ? 'success' : 'warning',
+      });
+    } catch (error) {
+      console.error('Failed to toggle ChromaDB service:', error);
+      setToastState({
+        id: crypto.randomUUID(),
+        message: 'Unable to update ChromaDB service status.',
+        kind: 'warning',
+      });
+      setIsChromaEnabled(apiConfig.isEnabled('chromadb'));
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
       <WorkspaceHeader 
@@ -614,6 +644,8 @@ const Workspace: React.FC<WorkspaceProps> = ({
                 onOpenHelp={() => setIsUserGuideOpen(true)}
                 onOpenApi={() => setIsApiConfigOpen(true)}
                 onOpenOutput={() => setIsOutputModalOpen(true)}
+                isChromaEnabled={isChromaEnabled}
+                onToggleChroma={handleToggleChromaService}
               />
             )}
           </div>

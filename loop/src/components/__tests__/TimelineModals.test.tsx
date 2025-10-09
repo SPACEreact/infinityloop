@@ -6,6 +6,9 @@ vi.mock('../../services/config', () => ({
     addConfig: vi.fn(),
     updateConfigByName: vi.fn(),
     removeConfigByName: vi.fn(),
+    isEnabled: vi.fn(() => true),
+    setEnabled: vi.fn(),
+    isConfigured: vi.fn(() => true),
   },
 }));
 
