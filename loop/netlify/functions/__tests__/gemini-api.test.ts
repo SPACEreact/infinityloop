@@ -34,10 +34,12 @@ const resetEnv = () => {
   delete process.env.GOOGLE_AI_API_KEY;
   delete process.env.GOOGLE_GENAI_API_KEY;
   delete process.env.VITE_GEMINI_API_KEY;
+  delete process.env.GEMINI_PROXY_RETRY_BASE_DELAY;
 };
 
 beforeAll(async () => {
   resetEnv();
+  process.env.GEMINI_PROXY_RETRY_BASE_DELAY = '0';
   process.env.GEMINI_API_KEY = 'test-key';
   ({ handler } = await import('../gemini-api'));
 });
@@ -76,6 +78,7 @@ describe('gemini-api quota fallback', () => {
 
   beforeEach(() => {
     resetEnv();
+    process.env.GEMINI_PROXY_RETRY_BASE_DELAY = '0';
     process.env.GEMINI_API_KEY = 'test-key';
     mockModelImplementations.clear();
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -117,6 +120,30 @@ describe('gemini-api quota fallback', () => {
     );
   });
 
+  it('returns a mock response when the fallback text model also fails', async () => {
+    mockModelImplementations.set('gemini-2.5-flash', async () => {
+      throw createQuotaError();
+    });
+
+    mockModelImplementations.set('gemini-1.5-flash-latest', async () => {
+      throw createAccessDeniedError(404, 'Model not found');
+    });
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(false);
+    expect(payload.isMock).toBe(true);
+    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.usedFallback).toBe(true);
+    expect(payload.error).toBe('Gemini text generation failed after fallback. Using mock response.');
+    expect(payload.detail).toContain('Model not found');
+  });
+
   it('falls back to the free tier image model when quota is exceeded', async () => {
     mockModelImplementations.set('imagen-4.5-ultra', async () => {
       throw createQuotaError();
@@ -154,6 +181,30 @@ describe('gemini-api quota fallback', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Quota exceeded for image model "imagen-4.5-ultra". Falling back to free tier model "imagen-3.0-latest".'
     );
+  });
+
+  it('returns a mock response when the fallback image model also fails', async () => {
+    mockModelImplementations.set('imagen-4.5-ultra', async () => {
+      throw createQuotaError();
+    });
+
+    mockModelImplementations.set('imagen-3.0-latest', async () => {
+      throw createAccessDeniedError(403, 'Permission denied');
+    });
+
+    const response = await handler(
+      createHandlerEvent({ action: 'generateImage', prompt: 'Image prompt' }),
+      {} as HandlerContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(false);
+    expect(payload.isMock).toBe(true);
+    expect(payload.modelUsed).toBe('imagen-3.0-latest');
+    expect(payload.usedFallback).toBe(true);
+    expect(payload.error).toBe('Gemini image generation failed after fallback. Using mock response.');
+    expect(payload.detail).toContain('Permission denied');
   });
 
   it('falls back to the free tier text model when access is denied', async () => {
@@ -253,9 +304,11 @@ describe('gemini-api configuration', () => {
       {} as HandlerContext
     );
 
-    expect(response.statusCode).toBe(500);
+    expect(response.statusCode).toBe(200);
     const payload = JSON.parse(response.body);
+    expect(payload.success).toBe(false);
     expect(payload.error).toBe('Service configuration error');
     expect(payload.detail).toBe('Gemini API key is not configured.');
+    expect(payload.isMock).toBe(true);
   });
 });

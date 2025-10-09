@@ -70,6 +70,18 @@ const SECURITY_HEADERS = {
 
 // Retry utility function
 async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> {
+  let effectiveBaseDelay = baseDelay;
+  if (typeof process !== 'undefined' && process.env) {
+    const override = process.env.GEMINI_PROXY_RETRY_BASE_DELAY;
+    if (override) {
+      const parsed = Number.parseInt(override, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        effectiveBaseDelay = parsed;
+      }
+    } else if (process.env.VITEST) {
+      effectiveBaseDelay = Math.min(baseDelay, 10);
+    }
+  }
   let lastError: unknown;
   for (let i = 0; i < retries; i++) {
     try {
@@ -77,7 +89,7 @@ async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 10
     } catch (error: unknown) {
       lastError = error;
       if (i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
+        const delay = effectiveBaseDelay * Math.pow(2, i);
         console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -141,6 +153,26 @@ const shouldUseFallbackModel = (error: unknown): boolean => {
   return false;
 };
 
+const buildMockFailureResponse = (
+  headers: Record<string, string>,
+  error: unknown,
+  overrideMessage?: string,
+  extra?: Record<string, unknown>
+) => {
+  const detailMessage = extractErrorMessage(error);
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: false,
+      error: overrideMessage ?? 'Gemini request failed. Using mock response.',
+      detail: detailMessage,
+      isMock: true,
+      ...extra
+    })
+  };
+};
+
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const { apiKey: resolvedApiKey, client } = getGeminiClient();
 
@@ -151,14 +183,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         GEMINI_KEY_ENV_CANDIDATES.join(', ')
     );
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
         ...SECURITY_HEADERS
       },
       body: JSON.stringify({
+        success: false,
         error: 'Service configuration error',
-        detail: 'Gemini API key is not configured.'
+        detail: 'Gemini API key is not configured.',
+        isMock: true
       })
     };
   }
@@ -287,26 +321,37 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           };
         } catch (error: unknown) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_TEXT_MODEL) {
-            throw error;
+            return buildMockFailureResponse(headers, error, undefined, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
 
           console.warn(`Quota exceeded for model "${primaryModel}". Falling back to free tier model "${FALLBACK_TEXT_MODEL}".`);
           usedFallback = true;
           finalModel = FALLBACK_TEXT_MODEL;
 
-          const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
+          try {
+            const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
 
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              success: true,
-              data,
-              isMock: false,
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                success: true,
+                data,
+                isMock: false,
+                modelUsed: finalModel,
+                usedFallback
+              })
+            };
+          } catch (fallbackError: unknown) {
+            console.error('Fallback text generation error:', fallbackError);
+            return buildMockFailureResponse(headers, fallbackError, 'Gemini text generation failed after fallback. Using mock response.', {
               modelUsed: finalModel,
-              usedFallback
-            })
-          };
+              usedFallback: true
+            });
+          }
         }
       }
 
@@ -369,15 +414,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         } catch (error: unknown) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
             console.error('Image generation error:', error);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            return buildMockFailureResponse(headers, error, undefined, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
 
           console.warn(`Quota exceeded for image model "${primaryModel}". Falling back to free tier model "${FALLBACK_IMAGE_MODEL}".`);
@@ -400,15 +440,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             };
           } catch (fallbackError: unknown) {
             console.error('Fallback image generation error:', fallbackError);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: fallbackError instanceof Error ? fallbackError.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            return buildMockFailureResponse(headers, fallbackError, 'Gemini image generation failed after fallback. Using mock response.', {
+              modelUsed: finalModel,
+              usedFallback: true
+            });
           }
         }
       }
@@ -524,17 +559,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     }
   } catch (error: unknown) {
     console.error('Function error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error occurred';
-    
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        success: false,
-        error: message,
-        isMock: false 
-      })
-    };
+    return buildMockFailureResponse(headers, error);
   }
 };
 

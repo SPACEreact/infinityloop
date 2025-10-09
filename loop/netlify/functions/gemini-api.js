@@ -1,108 +1,20 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
 const GEMINI_KEY_ENV_CANDIDATES = [
-  'GEMINI_API_KEY',
-  'GOOGLE_API_KEY',
-  'GOOGLE_AI_API_KEY',
-  'GOOGLE_GENAI_API_KEY',
-  'VITE_GEMINI_API_KEY'
+  "GEMINI_API_KEY",
+  "GOOGLE_API_KEY",
+  "GOOGLE_AI_API_KEY",
+  "GOOGLE_GENAI_API_KEY",
+  "VITE_GEMINI_API_KEY"
 ];
-
 let cachedGeminiClient = null;
 let cachedGeminiApiKey = null;
-
-const DEFAULT_TEXT_MODEL = 'gemini-2.5-flash';
-const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
-const DEFAULT_IMAGE_MODEL = 'imagen-4.5-ultra';
-const FALLBACK_IMAGE_MODEL = 'imagen-3.0-latest';
-
-const rateLimitStore = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000;
-const RATE_LIMIT_MAX_REQUESTS = 10;
-
-const MAX_PROMPT_LENGTH = 10000;
-const MAX_REQUEST_SIZE = 1024 * 1024;
-
-export const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com;",
-};
-
-async function retryApiCall(fn, retries = 3, baseDelay = 1000) {
-  let lastError;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (i < retries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
-        console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  throw lastError;
-}
-
-const extractErrorMessage = error => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === 'string') {
-    return error;
-  }
-  if (typeof error === 'object' && error && 'message' in error) {
-    return String(error.message);
-  }
-  return 'Unknown error occurred';
-};
-
-const shouldUseFallbackModel = error => {
-  const message = extractErrorMessage(error).toLowerCase();
-  if (message.includes('quota') && (message.includes('exceeded') || message.includes('exceed') || message.includes('exhausted')))
-  {
-    return true;
-  }
-  if (message.includes('permission denied') || message.includes('not found')) {
-    return true;
-  }
-  const status = typeof error === 'object' && error ? error.status : undefined;
-  if (status === 429 || status === 403 || status === 404) {
-    return true;
-  }
-  const errorPayload = typeof error === 'object' && error ? error.error : undefined;
-  if (errorPayload) {
-    if (typeof errorPayload.status === 'string') {
-      const normalizedStatus = errorPayload.status.toLowerCase();
-      if (
-        normalizedStatus.includes('resource_exhausted') ||
-        normalizedStatus.includes('permission_denied') ||
-        normalizedStatus.includes('not_found')
-      ) {
-        return true;
-      }
-    }
-    if (
-      typeof errorPayload.code === 'number' &&
-      (errorPayload.code === 429 || errorPayload.code === 403 || errorPayload.code === 404)
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
-
 const resolveGeminiApiKey = () => {
   for (const envName of GEMINI_KEY_ENV_CANDIDATES) {
     const rawValue = process.env[envName];
-    if (typeof rawValue === 'string') {
+    if (typeof rawValue === "string") {
       const trimmed = rawValue.trim();
       if (trimmed) {
-        if (envName !== 'GEMINI_API_KEY') {
+        if (envName !== "GEMINI_API_KEY") {
           console.info(`Resolved Gemini API key from ${envName} environment variable.`);
         }
         return trimmed;
@@ -111,7 +23,6 @@ const resolveGeminiApiKey = () => {
   }
   return null;
 };
-
 const getGeminiClient = () => {
   const apiKey = resolveGeminiApiKey();
   if (!apiKey) {
@@ -123,42 +34,139 @@ const getGeminiClient = () => {
   }
   return { apiKey, client: cachedGeminiClient };
 };
-
-export const handler = async (event, _context) => {
+const DEFAULT_TEXT_MODEL = "gemini-2.5-flash";
+const FALLBACK_TEXT_MODEL = "gemini-1.5-flash-latest";
+const DEFAULT_IMAGE_MODEL = "imagen-4.5-ultra";
+const FALLBACK_IMAGE_MODEL = "imagen-3.0-latest";
+const rateLimitStore = /* @__PURE__ */ new Map();
+const RATE_LIMIT_WINDOW = 60 * 1e3;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+const MAX_PROMPT_LENGTH = 1e4;
+const MAX_REQUEST_SIZE = 1024 * 1024;
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://generativelanguage.googleapis.com;"
+};
+async function retryApiCall(fn, retries = 3, baseDelay = 1e3) {
+  let effectiveBaseDelay = baseDelay;
+  if (typeof process !== "undefined" && process.env) {
+    const override = process.env.GEMINI_PROXY_RETRY_BASE_DELAY;
+    if (override) {
+      const parsed = Number.parseInt(override, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        effectiveBaseDelay = parsed;
+      }
+    } else if (process.env.VITEST) {
+      effectiveBaseDelay = Math.min(baseDelay, 10);
+    }
+  }
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < retries - 1) {
+        const delay = effectiveBaseDelay * Math.pow(2, i);
+        console.warn(`API call failed, retrying in ${delay}ms... (${i + 1}/${retries})`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+const extractErrorMessage = (error) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (typeof error === "object" && error && "message" in error) {
+    return String(error.message);
+  }
+  return "Unknown error occurred";
+};
+const shouldUseFallbackModel = (error) => {
+  const message = extractErrorMessage(error).toLowerCase();
+  if (message.includes("quota") && (message.includes("exceeded") || message.includes("exceed") || message.includes("exhausted"))) {
+    return true;
+  }
+  if (message.includes("permission denied") || message.includes("not found")) {
+    return true;
+  }
+  const status = typeof error === "object" && error ? error.status : void 0;
+  if (status === 429 || status === 403 || status === 404) {
+    return true;
+  }
+  const errorPayload = typeof error === "object" && error ? error.error : void 0;
+  if (errorPayload) {
+    if (typeof errorPayload.status === "string") {
+      const normalizedStatus = errorPayload.status.toLowerCase();
+      if (normalizedStatus.includes("resource_exhausted") || normalizedStatus.includes("permission_denied") || normalizedStatus.includes("not_found")) {
+        return true;
+      }
+    }
+    if (typeof errorPayload.code === "number" && (errorPayload.code === 429 || errorPayload.code === 403 || errorPayload.code === 404)) {
+      return true;
+    }
+  }
+  return false;
+};
+const buildMockFailureResponse = (headers, error, overrideMessage, extra) => {
+  const detailMessage = extractErrorMessage(error);
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      success: false,
+      error: overrideMessage ?? "Gemini request failed. Using mock response.",
+      detail: detailMessage,
+      isMock: true,
+      ...extra
+    })
+  };
+};
+const handler = async (event, context) => {
   const { apiKey: resolvedApiKey, client } = getGeminiClient();
   if (!resolvedApiKey || !client) {
-    console.error('Gemini API key environment variable is not set. Provide one of: ' + GEMINI_KEY_ENV_CANDIDATES.join(', '));
+    console.error(
+      "Gemini API key environment variable is not set. Provide one of: " + GEMINI_KEY_ENV_CANDIDATES.join(", ")
+    );
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...SECURITY_HEADERS
       },
       body: JSON.stringify({
-        error: 'Service configuration error',
-        detail: 'Gemini API key is not configured.'
+        success: false,
+        error: "Service configuration error",
+        detail: "Gemini API key is not configured.",
+        isMock: true
       })
     };
   }
-
-  const clientIP = event.headers['x-forwarded-for'] || event.headers['x-real-ip'] || 'unknown';
+  const clientIP = event.headers["x-forwarded-for"] || event.headers["x-real-ip"] || "unknown";
   const now = Date.now();
   const rateLimitKey = clientIP;
   const currentLimit = rateLimitStore.get(rateLimitKey);
-
   if (currentLimit) {
     if (now > currentLimit.resetTime) {
       rateLimitStore.set(rateLimitKey, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     } else if (currentLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
-      const retryAfter = Math.ceil((currentLimit.resetTime - now) / 1000);
+      const retryAfter = Math.ceil((currentLimit.resetTime - now) / 1e3);
       return {
         statusCode: 429,
         headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': retryAfter.toString(),
+          "Content-Type": "application/json",
+          "Retry-After": retryAfter.toString(),
           ...SECURITY_HEADERS
         },
-        body: JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' })
+        body: JSON.stringify({ error: "Rate limit exceeded. Please try again later." })
       };
     } else {
       currentLimit.count++;
@@ -166,82 +174,70 @@ export const handler = async (event, _context) => {
   } else {
     rateLimitStore.set(rateLimitKey, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
   }
-
   const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json',
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json",
     ...SECURITY_HEADERS
   };
-
-  if (event.httpMethod === 'OPTIONS') {
+  if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
       headers,
-      body: ''
+      body: ""
     };
   }
-
-  if (event.httpMethod !== 'POST') {
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
       headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
+      body: JSON.stringify({ error: "Method not allowed" })
     };
   }
-
   try {
     if (!event.body) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Request body is required' })
+        body: JSON.stringify({ error: "Request body is required" })
       };
     }
-
     if (event.body.length > MAX_REQUEST_SIZE) {
       return {
         statusCode: 413,
         headers,
-        body: JSON.stringify({ error: 'Request too large' })
+        body: JSON.stringify({ error: "Request too large" })
       };
     }
-
     const { action, ...requestData } = JSON.parse(event.body);
-    console.log(`[${new Date().toISOString()}] ${event.httpMethod} ${event.path} - Action: ${action} - IP: ${clientIP}`);
-
+    console.log(`[${(/* @__PURE__ */ new Date()).toISOString()}] ${event.httpMethod} ${event.path} - Action: ${action} - IP: ${clientIP}`);
     switch (action) {
-      case 'generateContent': {
+      case "generateContent": {
         const { prompt, model = DEFAULT_TEXT_MODEL } = requestData;
-
-        if (!prompt || typeof prompt !== 'string') {
+        if (!prompt || typeof prompt !== "string") {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Prompt is required for text generation.' })
+            body: JSON.stringify({ error: "Prompt is required for text generation." })
           };
         }
-
         if (prompt.length > MAX_PROMPT_LENGTH) {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Prompt exceeds maximum length.' })
+            body: JSON.stringify({ error: "Prompt exceeds maximum length." })
           };
         }
-
-        const primaryModel = typeof model === 'string' ? model : DEFAULT_TEXT_MODEL;
+        const primaryModel = typeof model === "string" ? model : DEFAULT_TEXT_MODEL;
         let finalModel = primaryModel;
         let usedFallback = false;
-
-        const invokeModel = async modelName => {
+        const invokeModel = async (modelName) => {
           const generativeModel = client.getGenerativeModel({ model: modelName });
           const result = await generativeModel.generateContent(prompt);
           const response = await result.response;
           return response.text().trim();
         };
-
         try {
           const data = await retryApiCall(() => invokeModel(primaryModel));
           return {
@@ -257,57 +253,59 @@ export const handler = async (event, _context) => {
           };
         } catch (error) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_TEXT_MODEL) {
-            throw error;
+            return buildMockFailureResponse(headers, error, void 0, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
-
           console.warn(`Quota exceeded for model "${primaryModel}". Falling back to free tier model "${FALLBACK_TEXT_MODEL}".`);
           usedFallback = true;
           finalModel = FALLBACK_TEXT_MODEL;
-
-          const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
-
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-              success: true,
-              data,
-              isMock: false,
+          try {
+            const data = await retryApiCall(() => invokeModel(FALLBACK_TEXT_MODEL));
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                success: true,
+                data,
+                isMock: false,
+                modelUsed: finalModel,
+                usedFallback
+              })
+            };
+          } catch (fallbackError) {
+            console.error("Fallback text generation error:", fallbackError);
+            return buildMockFailureResponse(headers, fallbackError, "Gemini text generation failed after fallback. Using mock response.", {
               modelUsed: finalModel,
-              usedFallback
-            })
-          };
+              usedFallback: true
+            });
+          }
         }
       }
-
-      case 'generateImage': {
+      case "generateImage": {
         const { prompt, model = DEFAULT_IMAGE_MODEL } = requestData;
-
-        if (!prompt || typeof prompt !== 'string') {
+        if (!prompt || typeof prompt !== "string") {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Prompt is required for image generation.' })
+            body: JSON.stringify({ error: "Prompt is required for image generation." })
           };
         }
-
         if (prompt.length > MAX_PROMPT_LENGTH) {
           return {
             statusCode: 400,
             headers,
-            body: JSON.stringify({ error: 'Prompt exceeds maximum length.' })
+            body: JSON.stringify({ error: "Prompt exceeds maximum length." })
           };
         }
-
-        const primaryModel = typeof model === 'string' ? model : DEFAULT_IMAGE_MODEL;
+        const primaryModel = typeof model === "string" ? model : DEFAULT_IMAGE_MODEL;
         let finalModel = primaryModel;
         let usedFallback = false;
-
-        const invokeModel = async modelName => {
+        const invokeModel = async (modelName) => {
           const imageModel = client.getGenerativeModel({ model: modelName });
           const result = await imageModel.generateContent([prompt]);
           const response = await result.response;
-
           const candidates = response.candidates;
           if (candidates && candidates.length > 0) {
             const candidate = candidates[0];
@@ -318,13 +316,10 @@ export const handler = async (event, _context) => {
               }
             }
           }
-
-          throw new Error('No image data returned from model');
+          throw new Error("No image data returned from model");
         };
-
         try {
           const data = await retryApiCall(() => invokeModel(primaryModel));
-
           return {
             statusCode: 200,
             headers,
@@ -338,25 +333,17 @@ export const handler = async (event, _context) => {
           };
         } catch (error) {
           if (!shouldUseFallbackModel(error) || primaryModel === FALLBACK_IMAGE_MODEL) {
-            console.error('Image generation error:', error);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            console.error("Image generation error:", error);
+            return buildMockFailureResponse(headers, error, void 0, {
+              modelUsed: primaryModel,
+              usedFallback: false
+            });
           }
-
           console.warn(`Quota exceeded for image model "${primaryModel}". Falling back to free tier model "${FALLBACK_IMAGE_MODEL}".`);
           usedFallback = true;
           finalModel = FALLBACK_IMAGE_MODEL;
-
           try {
             const data = await retryApiCall(() => invokeModel(FALLBACK_IMAGE_MODEL));
-
             return {
               statusCode: 200,
               headers,
@@ -369,36 +356,27 @@ export const handler = async (event, _context) => {
               })
             };
           } catch (fallbackError) {
-            console.error('Fallback image generation error:', fallbackError);
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: fallbackError instanceof Error ? fallbackError.message : 'Image generation failed',
-                isMock: false
-              })
-            };
+            console.error("Fallback image generation error:", fallbackError);
+            return buildMockFailureResponse(headers, fallbackError, "Gemini image generation failed after fallback. Using mock response.", {
+              modelUsed: finalModel,
+              usedFallback: true
+            });
           }
         }
       }
-
-      case 'listModels': {
+      case "listModels": {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${resolvedApiKey}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
         });
-
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`ListModels API request failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
-
         const data = await response.json();
-
         const enhancedModels = {
           models: [
-            ...(data.models || []),
+            ...data.models || [],
             {
               name: "models/gemini-2.5-pro",
               displayName: "Gemini 2.5 Pro",
@@ -473,7 +451,6 @@ export const handler = async (event, _context) => {
             }
           ]
         };
-
         return {
           statusCode: 200,
           headers,
@@ -483,25 +460,18 @@ export const handler = async (event, _context) => {
           })
         };
       }
-
       default:
         return {
           statusCode: 400,
           headers,
-          body: JSON.stringify({ error: 'Invalid action' })
+          body: JSON.stringify({ error: "Invalid action" })
         };
     }
   } catch (error) {
-    console.error('Function error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error occurred';
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: message,
-        isMock: false
-      })
-    };
+    console.error("Function error:", error);
+    return buildMockFailureResponse(headers, error);
   }
+};
+export {
+  handler
 };
