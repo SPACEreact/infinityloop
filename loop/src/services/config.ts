@@ -71,7 +71,7 @@ class ApiConfigManager {
       envDefaults.push({
         name: 'gemini',
         baseUrl: envGeminiBaseUrl,
-        apiKey: undefined,
+        apiKey: envGeminiApiKey || undefined,
         description: 'Gemini proxy endpoint',
         enabled: true,
       });
