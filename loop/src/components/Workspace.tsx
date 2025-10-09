@@ -22,7 +22,7 @@ import { OutputModal } from './OutputModal';
 import WorkspaceHeader from './WorkspaceHeader';
 import FloatingOutputButton from './FloatingOutputButton';
 import { apiConfig } from '../services/config';
-// import { saveProject } from '../services/mcpService';
+import { syncAssetsToMcp } from '../services/mcpService';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
@@ -519,17 +519,17 @@ const Workspace: React.FC<WorkspaceProps> = ({
   const handleSyncAssetsToMcp = async () => {
     setIsMcpLoading(true);
     try {
-      // await saveProject(project.id, project);
+      await syncAssetsToMcp(project, 'chromadb');
       setToastState({
         id: crypto.randomUUID(),
-        message: 'Project saved successfully!',
+        message: 'Assets synchronized to vector storage successfully.',
         kind: 'success'
       });
     } catch (error) {
-      console.error('MCP save error:', error);
+      console.error('MCP sync error:', error);
       setToastState({
         id: crypto.randomUUID(),
-        message: 'Failed to save project.',
+        message: 'Failed to sync assets to vector storage.',
         kind: 'warning'
       });
     } finally {
