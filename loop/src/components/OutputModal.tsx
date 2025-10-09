@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Asset } from '../types';
-import { generateImageFromPrompt } from '../services/geminiService';
+import { generateImageFromPrompt, listModels } from '../services/geminiService';
 
 interface OutputModalProps {
   isOpen: boolean;
@@ -19,10 +19,90 @@ export const OutputModal: React.FC<OutputModalProps> = ({
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>('imagen-4.5-ultra');
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
   
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
+
+  // Load available models when component mounts
+  useEffect(() => {
+    const loadModels = async () => {
+      setIsLoadingModels(true);
+      try {
+        const models = await listModels();
+        if (models) {
+          // Filter to only image generation models
+          const imageModels = models.models?.filter((model: any) => 
+            model.capabilities?.includes('image') || 
+            model.name.includes('imagen')
+          ) || [];
+          
+          // Add default high-quota models if not present
+          const defaultImageModels = [
+            {
+              name: "models/imagen-4.5-ultra",
+              displayName: "Imagen 4.5 Ultra",
+              description: "Ultra-high quality image generation",
+              capabilities: ["image"]
+            },
+            {
+              name: "models/imagen-4.5-pro", 
+              displayName: "Imagen 4.5 Pro",
+              description: "Professional image generation with high quota",
+              capabilities: ["image"]
+            },
+            {
+              name: "models/imagen-4.5-flash",
+              displayName: "Imagen 4.5 Flash", 
+              description: "Fast image generation with good quota",
+              capabilities: ["image"]
+            }
+          ];
+
+          const mergedModels = [...imageModels];
+          defaultImageModels.forEach(defaultModel => {
+            if (!mergedModels.find(m => m.name === defaultModel.name)) {
+              mergedModels.push(defaultModel);
+            }
+          });
+
+          setAvailableModels(mergedModels);
+        }
+      } catch (error) {
+        console.warn('Failed to load models, using defaults:', error);
+        // Use default models if API call fails
+        setAvailableModels([
+          {
+            name: "models/imagen-4.5-ultra",
+            displayName: "Imagen 4.5 Ultra",
+            description: "Ultra-high quality image generation",
+            capabilities: ["image"]
+          },
+          {
+            name: "models/imagen-4.5-pro", 
+            displayName: "Imagen 4.5 Pro",
+            description: "Professional image generation with high quota",
+            capabilities: ["image"]
+          },
+          {
+            name: "models/imagen-4.5-flash",
+            displayName: "Imagen 4.5 Flash", 
+            description: "Fast image generation with good quota",
+            capabilities: ["image"]
+          }
+        ]);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    if (isOpen) {
+      loadModels();
+    }
+  }, [isOpen]);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -79,7 +159,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
     
     try {
       const prompt = `Create a cinematic visual representation of: ${selectedAsset.content || selectedAsset.name}. ${selectedAsset.summary || ''}. Professional cinematography style.`;
-      const result = await generateImageFromPrompt(prompt);
+      const result = await generateImageFromPrompt(prompt, selectedModel);
       
       if (result.data && !result.isMock) {
         setGeneratedImage(result.data);
@@ -408,12 +488,44 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                       )}
                     </button>
                   </div>
+
+                  {/* Model Selection */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium ink-strong">
+                      🤖 Select AI Model
+                    </label>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full p-2 border border-white/20 bg-black/50 rounded-lg text-white focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25 transition-all"
+                      disabled={isGeneratingImage || isLoadingModels}
+                    >
+                      {isLoadingModels ? (
+                        <option value="">Loading models...</option>
+                      ) : (
+                        availableModels.map(model => (
+                          <option key={model.name} value={model.name}>
+                            {model.displayName || model.name} 
+                            {model.description && ` - ${model.description}`}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {selectedModel && (
+                      <div className="text-xs ink-subtle p-2 bg-blue-50/10 rounded border border-blue-500/20">
+                        💡 <strong>Selected:</strong> {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}
+                        <br />
+                        {availableModels.find(m => m.name === selectedModel)?.description}
+                      </div>
+                    )}
+                  </div>
                   
                   <div className="border border-white/10 rounded-lg bg-white/5 min-h-64 flex items-center justify-center">
                     {isGeneratingImage ? (
                       <div className="text-center space-y-3 pulse-glow">
                         <div className="text-4xl loading-pulse">🎬</div>
                         <p className="text-sm ink-subtle">Creating cinematic visualization...</p>
+                        <p className="text-xs ink-subtle">Using {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}</p>
                         <div className="flex justify-center space-x-1">
                           <div className="w-2 h-2 bg-purple-500 rounded-full loading-pulse stagger-1"></div>
                           <div className="w-2 h-2 bg-pink-500 rounded-full loading-pulse stagger-2"></div>
@@ -429,6 +541,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                         />
                         <p className="text-xs ink-subtle mt-2 text-center">
                           Visual representation of: {selectedAsset?.name}
+                          <br />
+                          Generated with: {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}
                         </p>
                       </div>
                     ) : selectedAsset ? (
@@ -436,6 +550,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                         <div className="text-4xl">🖼️</div>
                         <p className="text-sm ink-subtle">Click "Generate Visual" to create an image</p>
                         <p className="text-xs ink-subtle">Asset: {selectedAsset.name}</p>
+                        <p className="text-xs ink-subtle">Model: {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}</p>
                       </div>
                     ) : (
                       <div className="text-center space-y-3">
@@ -449,7 +564,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                     <div className="p-3 bg-blue-50/10 rounded-lg border border-blue-500/20 fade-in-up">
                       <h4 className="font-medium ink-strong text-blue-400 mb-2">💡 About Visualization</h4>
                       <p className="text-xs ink-subtle">
-                        Generate cinematic visual representations of your assets using AI image generation. 
+                        Generate cinematic visual representations of your assets using AI image generation models. 
+                        Choose from high-quota models like Imagen 4.5 Ultra for the best quality. 
                         Perfect for mood boards, concept visualization, and creative inspiration.
                       </p>
                     </div>
