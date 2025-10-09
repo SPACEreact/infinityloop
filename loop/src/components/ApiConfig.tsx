@@ -66,20 +66,45 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
     setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: 'Testing...' } }));
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (config.apiKey) {
-        headers['Authorization'] = `Bearer ${config.apiKey}`;
+      const normalizedBase = config.baseUrl.trim().replace(/\/$/, '');
+      if (!normalizedBase) {
+        throw new Error('Base URL is required for testing');
       }
 
-      const response = await fetch(`${config.baseUrl}/`, {
+      const defaultHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      const isGeminiService = config.name.toLowerCase() === 'gemini' || normalizedBase.includes('generativelanguage');
+
+      let requestUrl = `${normalizedBase}/`;
+      const requestInit: RequestInit = {
         method: 'GET',
-        headers,
-      });
+        headers: { ...defaultHeaders },
+      };
+
+      if (isGeminiService) {
+        const keyParam = config.apiKey ? `?key=${encodeURIComponent(config.apiKey)}` : '';
+        requestUrl = `${normalizedBase}/models${keyParam}`;
+      } else if (config.apiKey) {
+        (requestInit.headers as Record<string, string>)['Authorization'] = `Bearer ${config.apiKey}`;
+      }
+
+      const response = await fetch(requestUrl, requestInit);
 
       if (response.ok) {
         setTestResults(prev => ({ ...prev, [config.name]: { success: true, message: 'Connection successful!' } }));
       } else {
-        setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${response.status} ${response.statusText}` } }));
+        let errorMessage = `${response.status} ${response.statusText}`;
+
+        try {
+          const errorBody = await response.json();
+          const jsonErrorMessage = errorBody?.error?.message || errorBody?.message;
+          if (jsonErrorMessage) {
+            errorMessage = jsonErrorMessage;
+          }
+        } catch {
+          // Swallow JSON parse errors – fall back to status text above
+        }
+
+        setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${errorMessage}` } }));
       }
     } catch (error) {
       setTestResults(prev => ({ ...prev, [config.name]: { success: false, message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` } }));
