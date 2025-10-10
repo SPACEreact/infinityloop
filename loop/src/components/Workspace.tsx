@@ -623,6 +623,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
                 onOpenOutput={() => setIsOutputModalOpen(true)}
                 isChromaEnabled={isChromaEnabled}
                 onToggleChroma={handleToggleChromaService}
+                targetModel={project.targetModel ?? null}
+                onTargetModelChange={handleSetTargetModel}
               />
             )}
           </div>

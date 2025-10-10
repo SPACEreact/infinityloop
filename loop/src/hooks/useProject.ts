@@ -314,6 +314,7 @@ export const useProject = (initialProject: Project) => {
     'primary' | 'secondary' | 'third' | 'fourth'
   >('primary');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDirectorAdviceLoading, setIsDirectorAdviceLoading] = useState(false);
 
   const handleAddAsset = useCallback(
     (templateType: string) => {
@@ -690,6 +691,7 @@ export const useProject = (initialProject: Project) => {
     const workspace = {
       assets: project.assets,
       canvas: { nodes: [], connections: [] },
+      targetModel: project.targetModel ?? null,
     };
 
     const runGeneration = async (target: 'story' | 'image') => {
@@ -795,6 +797,140 @@ export const useProject = (initialProject: Project) => {
   const handleGenerate = async () => {
     await handleGenerateOutput('all');
   };
+
+  const handleGenerateDirectorAdvice = useCallback(
+    async (options?: { tagWeights?: Record<string, number>; styleRigidity?: number }) => {
+      setIsDirectorAdviceLoading(true);
+      setToastState({
+        id: crypto.randomUUID(),
+        message: 'Analyzing project for director-level notes...',
+        kind: 'info',
+      });
+
+      try {
+        const result = await generateDirectorAdvice(project, {
+          tagWeights: options?.tagWeights,
+          styleRigidity: options?.styleRigidity,
+        });
+
+        if (result.data) {
+          const incomingSuggestions = result.data.map(suggestion => ({
+            ...suggestion,
+            accepted: suggestion.accepted ?? false,
+          }));
+
+          setProject(prev => {
+            const existingAccepted = prev.fourthTimeline?.acceptedSuggestions ?? [];
+            const acceptedMap = new Map(existingAccepted.map(item => [item.id, item] as const));
+            incomingSuggestions.filter(item => item.accepted).forEach(item => {
+              acceptedMap.set(item.id, item);
+            });
+
+            return {
+              ...prev,
+              fourthTimeline: {
+                suggestions: incomingSuggestions,
+                acceptedSuggestions: Array.from(acceptedMap.values()),
+              },
+              updatedAt: new Date(),
+            };
+          });
+
+          setToastState({
+            id: crypto.randomUUID(),
+            message: result.isMock
+              ? 'Director advice mocked — connect Gemini for live suggestions.'
+              : 'Director advice ready. Review the Director’s Advice timeline.',
+            kind: result.isMock ? 'info' : 'success',
+          });
+        } else if (result.error) {
+          setToastState({
+            id: crypto.randomUUID(),
+            message: `Director advice failed: ${result.error}`,
+            kind: 'error',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to generate director advice:', error);
+        setToastState({
+          id: crypto.randomUUID(),
+          message: 'Director advice request failed unexpectedly.',
+          kind: 'error',
+        });
+      } finally {
+        setIsDirectorAdviceLoading(false);
+      }
+    },
+    [project, setProject, setToastState]
+  );
+
+  const handleAcceptDirectorSuggestion = useCallback(
+    (suggestionId: string) => {
+      let suggestionAccepted = false;
+
+      setProject(prev => {
+        const timeline = prev.fourthTimeline;
+        if (!timeline) {
+          return prev;
+        }
+
+        const updatedSuggestions = timeline.suggestions.map(suggestion => {
+          if (suggestion.id === suggestionId && !suggestion.accepted) {
+            suggestionAccepted = true;
+            return { ...suggestion, accepted: true };
+          }
+          return suggestion;
+        });
+
+        if (!suggestionAccepted) {
+          return prev;
+        }
+
+        const acceptedMap = new Map(
+          (timeline.acceptedSuggestions ?? []).map(item => [item.id, item] as const)
+        );
+        updatedSuggestions
+          .filter(item => item.accepted)
+          .forEach(item => acceptedMap.set(item.id, item));
+
+        return {
+          ...prev,
+          fourthTimeline: {
+            suggestions: updatedSuggestions,
+            acceptedSuggestions: Array.from(acceptedMap.values()),
+          },
+          updatedAt: new Date(),
+        };
+      });
+
+      if (suggestionAccepted) {
+        setToastState({
+          id: crypto.randomUUID(),
+          message: 'Suggestion marked as accepted.',
+          kind: 'success',
+        });
+      }
+    },
+    [setProject, setToastState]
+  );
+
+  const handleSetTargetModel = useCallback(
+    (modelId: string | null) => {
+      setProject(prev => {
+        const normalized = modelId?.trim() ? modelId.trim() : undefined;
+        if (prev.targetModel === normalized) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          targetModel: normalized,
+          updatedAt: new Date(),
+        };
+      });
+    },
+    [setProject]
+  );
 
   return useMemo(
     () => ({

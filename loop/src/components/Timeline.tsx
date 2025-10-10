@@ -62,6 +62,7 @@ export const Timeline = ({
   onCancelBatchStyle: () => void;
   onGenerateDirectorAdvice?: () => void;
   onAcceptSuggestion?: (suggestionId: string) => void;
+  isDirectorAdviceLoading?: boolean;
 }) => {
 
   const sliderVariables = React.useMemo(() => {
@@ -675,8 +676,7 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
 
   const renderFourthTimeline = () => {
 
-    const generateDirectorAdvice = async () => {
-      // This would trigger the parent component to generate director advice
+    const triggerDirectorAdvice = () => {
       if (onGenerateDirectorAdvice) {
         onGenerateDirectorAdvice();
       }
@@ -695,8 +695,12 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
       <div className="flex justify-center mb-6">
         <div className="group inline-flex items-center gap-2">
           <button
-            onClick={() => generateDirectorAdvice()}
-            className="timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform hover:scale-105 transition-all duration-200"
+            onClick={triggerDirectorAdvice}
+            disabled={isDirectorAdviceLoading}
+            className={`timeline-action px-6 py-3 text-base font-semibold flex items-center gap-2 shadow-lg transform transition-all duration-200 ${
+              isDirectorAdviceLoading ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105'
+            }`}
+            aria-busy={isDirectorAdviceLoading}
             style={{
               background: 'linear-gradient(145deg, #FFDAB9, #FFCBA4)',
               boxShadow: '0 10px 20px rgba(255, 218, 185, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
@@ -706,7 +710,7 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
             }}
           >
             <SparklesIcon className="w-6 h-6" />
-            GENERATE DIRECTOR ADVICE
+            {isDirectorAdviceLoading ? 'GENERATING…' : 'GENERATE DIRECTOR ADVICE'}
           </button>
         </div>
       </div>
