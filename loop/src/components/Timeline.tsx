@@ -30,8 +30,7 @@ export const Timeline = ({
   onConfirmBatchStyle,
   onCancelBatchStyle,
   onGenerateDirectorAdvice,
-  onAcceptSuggestion,
-  isDirectorAdviceLoading
+  onAcceptSuggestion
 }: {
   project: Project;
   selectedAssetId: string | null;

@@ -59,9 +59,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     handleGenerate,
     handleGenerateOutput,
     handleGenerateDirectorAdvice,
-    handleAcceptDirectorSuggestion,
-    isDirectorAdviceLoading,
-    handleSetTargetModel
+    handleAcceptSuggestion
   } = useWorkspace();
 
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
@@ -580,9 +578,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
               onSelectMasterImage={handleSelectMasterImage}
               onConfirmBatchStyle={handleConfirmBatchStyle}
               onCancelBatchStyle={handleCancelBatchStyle}
-              onGenerateDirectorAdvice={() => handleGenerateDirectorAdvice({ tagWeights, styleRigidity })}
-              onAcceptSuggestion={handleAcceptDirectorSuggestion}
-              isDirectorAdviceLoading={isDirectorAdviceLoading}
+              onGenerateDirectorAdvice={handleGenerateDirectorAdvice}
+              onAcceptSuggestion={handleAcceptSuggestion}
             />
           </div>
         </main>

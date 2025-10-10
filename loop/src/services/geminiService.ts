@@ -2,7 +2,7 @@ import type { Asset, DirectorSuggestion, Project } from '../types';
 import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
-import { getPromptConversion } from './promptConversions';
+import type { DirectorSuggestion } from '../types';
 
 const MODEL_NAMESPACE_PREFIX = 'models/';
 
@@ -732,46 +732,140 @@ const prominentTags = (tagWeights: Record<string, number>) =>
     .map(([tag, weight]) => `${tag} (${Math.round(weight * 100)}%)`)
     .join(', ');
 
-const MAX_ASSET_PREVIEW_LENGTH = 320;
-const MAX_ASSETS_IN_CONTEXT = 12;
-const MAX_TAGS_PER_ASSET = 4;
+export interface DirectorAdviceTimelineEntry {
+  assetId: string;
+  name: string;
+  type?: string;
+  summary?: string;
+  contentPreview?: string;
+}
 
-const compactWhitespace = (value: string): string =>
-  value.replace(/\s+/g, ' ').trim();
+export interface DirectorAdviceContext {
+  projectName: string;
+  assets: Array<{
+    id: string;
+    type: string;
+    name: string;
+    summary?: string;
+    tags?: string[];
+    contentPreview?: string;
+  }>;
+  primaryTimeline: {
+    story: DirectorAdviceTimelineEntry[];
+    image: DirectorAdviceTimelineEntry[];
+    text_to_video: DirectorAdviceTimelineEntry[];
+  };
+  secondaryTimeline?: {
+    masterAssets?: Array<{ id: string; name: string; summary?: string }>;
+    shotLists?: Array<{
+      id: string;
+      masterAssetId: string;
+      shots: Array<{ id: string; name: string; description?: string }>;
+    }>;
+  };
+  thirdTimeline?: {
+    styledShots?: Array<{ id: string; name: string; description?: string }>;
+  };
+  existingSuggestions?: Array<{
+    id: string;
+    type: DirectorSuggestion['type'];
+    description: string;
+    accepted: boolean;
+  }>;
+}
 
-const formatAssetForPrompt = (asset: Asset): string => {
-  const baseSummary = asset.summary?.trim() ? asset.summary : asset.content;
-  const normalizedSummary = baseSummary ? compactWhitespace(baseSummary) : '';
-  const preview = normalizedSummary.slice(0, MAX_ASSET_PREVIEW_LENGTH);
-  const needsEllipsis = normalizedSummary.length > preview.length;
-  const previewText = preview ? `${preview}${needsEllipsis ? '…' : ''}` : 'No content provided';
-  const tags = (asset.tags || []).slice(0, MAX_TAGS_PER_ASSET);
+export interface DirectorAdviceSuggestionPayload {
+  id?: string;
+  type: DirectorSuggestion['type'];
+  description: string;
+  advice?: string;
+  targetAssetId?: string;
+}
 
-  const tagText = tags.length ? `tags: ${tags.join(', ')}` : 'tags: none';
-  const seedInfo = asset.seedId ? `seed: ${asset.seedId}` : null;
+const DIRECTOR_SUGGESTION_TYPES: DirectorSuggestion['type'][] = [
+  'addition',
+  'removal',
+  'edit',
+  'color_grading',
+  'transition',
+  'other'
+];
 
-  return [
-    `${asset.type.toUpperCase()}: ${asset.name}`,
-    tagText,
-    seedInfo,
-    `preview: ${previewText}`,
-  ]
-    .filter(Boolean)
-    .join(' | ');
-};
-
-const formatAssetsForPrompt = (assets: Asset[]): string => {
-  if (!assets?.length) {
-    return 'No assets pinned yet—provide guidance using fresh context.';
+const toTrimmedString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
   }
 
-  const clippedAssets = assets.slice(0, MAX_ASSETS_IN_CONTEXT);
-  const formatted = clippedAssets.map(formatAssetForPrompt).join('\n');
-  const remaining = assets.length - clippedAssets.length;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
 
-  return remaining > 0
-    ? `${formatted}\n…and ${remaining} more assets available in workspace.`
-    : formatted;
+const sanitizeSuggestionType = (value?: string): DirectorSuggestion['type'] => {
+  const normalized = value?.toLowerCase() ?? '';
+  return (DIRECTOR_SUGGESTION_TYPES.find(type => type === normalized) ?? 'other') as DirectorSuggestion['type'];
+};
+
+const extractJsonPayload = (raw: string): string => {
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch ? fencedMatch[1] : raw;
+  const objectStart = candidate.indexOf('{');
+  const arrayStart = candidate.indexOf('[');
+
+  if (objectStart === -1 && arrayStart === -1) {
+    throw new Error('Director advice response did not include a JSON payload.');
+  }
+
+  if (arrayStart !== -1 && (arrayStart < objectStart || objectStart === -1)) {
+    const arrayEnd = candidate.lastIndexOf(']');
+    if (arrayEnd === -1) {
+      throw new Error('Director advice array payload was malformed.');
+    }
+    return candidate.slice(arrayStart, arrayEnd + 1);
+  }
+
+  const objectEnd = candidate.lastIndexOf('}');
+  if (objectEnd === -1) {
+    throw new Error('Director advice object payload was malformed.');
+  }
+
+  return candidate.slice(objectStart, objectEnd + 1);
+};
+
+const parseDirectorAdviceResponse = (raw: string): DirectorAdviceSuggestionPayload[] => {
+  const payload = extractJsonPayload(raw);
+  const parsed = JSON.parse(payload) as unknown;
+
+  const suggestionsSource = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { suggestions?: unknown })?.suggestions)
+      ? ((parsed as { suggestions?: unknown }).suggestions as unknown[])
+      : [];
+
+  if (!Array.isArray(suggestionsSource)) {
+    throw new Error('Director advice suggestions payload was not an array.');
+  }
+
+  return suggestionsSource
+    .map((entry): DirectorAdviceSuggestionPayload | null => {
+      const description = toTrimmedString((entry as { description?: unknown })?.description);
+      if (!description) {
+        return null;
+      }
+
+      const type = sanitizeSuggestionType(toTrimmedString((entry as { type?: unknown })?.type));
+      const advice = toTrimmedString((entry as { advice?: unknown })?.advice);
+      const targetAssetId = toTrimmedString((entry as { targetAssetId?: unknown })?.targetAssetId);
+      const id = toTrimmedString((entry as { id?: unknown })?.id);
+
+      return {
+        id: id ?? undefined,
+        type,
+        description,
+        advice: advice ?? undefined,
+        targetAssetId: targetAssetId ?? undefined
+      };
+    })
+    .filter((entry): entry is DirectorAdviceSuggestionPayload => entry !== null);
 };
 
 const createMockChatResponse = (
@@ -869,121 +963,41 @@ const createMockBuildResponse = (
   ].join('\n');
 };
 
-const generateSuggestionId = () => `suggestion-${Math.random().toString(36).slice(2, 10)}`;
-
-const createMockDirectorAdvice = (project: Project): DirectorSuggestion[] => {
-  const referenceAsset = project.assets.find(asset => asset.type === 'master_story') ?? project.assets[0];
-  const referenceName = referenceAsset?.name ?? 'your opening sequence';
-  const secondaryReference = project.secondaryTimeline?.shotLists?.[0]?.shots?.[0]?.name;
+const createMockDirectorAdvice = (
+  context: DirectorAdviceContext
+): DirectorAdviceSuggestionPayload[] => {
+  const firstStoryBeat = context.primaryTimeline.story[0];
+  const firstImageBeat = context.primaryTimeline.image[0];
+  const firstMasterAsset = context.secondaryTimeline?.masterAssets?.[0];
+  const firstStyledShot = context.thirdTimeline?.styledShots?.[0];
+  const focalName = firstStoryBeat?.name ?? firstMasterAsset?.name ?? context.projectName;
 
   return [
     {
-      id: generateSuggestionId(),
       type: 'addition',
-      description: `Layer an establishing shot before ${referenceName} to ground the audience in geography.`,
-      advice: 'Use a slow push-in with ambient sound to set tone before dialogue.',
-      targetAssetId: referenceAsset?.id,
-      targetAssetName: referenceName,
-      accepted: false,
-      createdAt: new Date(),
+      description: `Add an establishing shot to reinforce the world of "${focalName}" before the conflict escalates.`,
+      advice: 'Open with a wide or overhead angle that telegraphs tone and geography, then cut into the inciting action.',
+      targetAssetId: firstStoryBeat?.assetId ?? firstMasterAsset?.id
     },
     {
-      id: generateSuggestionId(),
       type: 'edit',
-      description: secondaryReference
-        ? `Tighten pacing on shot "${secondaryReference}" with a motivated whip cut into the reaction.`
-        : 'Introduce a motivated whip cut to bridge into the protagonist reaction beat.',
-      advice: 'Trim the tail by 8–10 frames and land on the emotional beat to keep energy high.',
-      accepted: false,
-      createdAt: new Date(),
+      description: 'Tighten the midpoint exchange to keep momentum high.',
+      advice: 'Trim redundant dialogue and let a reaction shot breathe for two beats before the reversal lands.',
+      targetAssetId: firstStoryBeat?.assetId ?? firstImageBeat?.assetId
     },
     {
-      id: generateSuggestionId(),
       type: 'color_grading',
-      description: 'Warm the climax sequence by 300K and lift shadows 5% to reinforce catharsis.',
-      advice: 'Match grade across the final three shots so the emotional beat resolves in the same palette.',
-      accepted: false,
-      createdAt: new Date(),
+      description: 'Warm the climax beat to emphasize emotional release.',
+      advice: 'Introduce a golden-hour lift on the hero shot and balance it with a cooler rim-light on supporting characters.',
+      targetAssetId: firstStyledShot?.id ?? firstImageBeat?.assetId
     },
+    {
+      type: 'transition',
+      description: 'Bridge the final two scenes with a motivated match cut.',
+      advice: 'Match a gesture or prop between the closing shot of scene two and the opener of scene three to signal thematic continuity.',
+      targetAssetId: firstStyledShot?.id ?? firstStoryBeat?.assetId
+    }
   ];
-};
-
-type RawDirectorSuggestion = {
-  id?: unknown;
-  type?: unknown;
-  description?: unknown;
-  summary?: unknown;
-  advice?: unknown;
-  note?: unknown;
-  targetAssetId?: unknown;
-  target_asset_id?: unknown;
-  targetAssetName?: unknown;
-  target_asset_name?: unknown;
-};
-
-const DIRECTOR_SUGGESTION_TYPES: DirectorSuggestion['type'][] = [
-  'addition',
-  'removal',
-  'edit',
-  'color_grading',
-  'transition',
-  'other',
-];
-
-const normalizeSuggestionType = (value: unknown): DirectorSuggestion['type'] => {
-  if (typeof value !== 'string') {
-    return 'other';
-  }
-
-  const normalized = value.trim().toLowerCase().replace(/\s+/g, '_');
-  if (DIRECTOR_SUGGESTION_TYPES.includes(normalized as DirectorSuggestion['type'])) {
-    return normalized as DirectorSuggestion['type'];
-  }
-
-  if (normalized.includes('color')) {
-    return 'color_grading';
-  }
-  if (normalized.includes('transition')) {
-    return 'transition';
-  }
-  if (normalized.includes('add')) {
-    return 'addition';
-  }
-  if (normalized.includes('remove')) {
-    return 'removal';
-  }
-  if (normalized.includes('edit') || normalized.includes('trim')) {
-    return 'edit';
-  }
-
-  return 'other';
-};
-
-const extractJsonPayload = (text: string): string => {
-  const fencedMatch = text.match(/```json([\s\S]*?)```/i);
-  if (fencedMatch) {
-    return fencedMatch[1].trim();
-  }
-
-  return text.trim();
-};
-
-const parseDirectorAdviceResponse = (raw: string): RawDirectorSuggestion[] => {
-  const payload = extractJsonPayload(raw);
-
-  try {
-    const parsed = JSON.parse(payload);
-    if (Array.isArray(parsed?.suggestions)) {
-      return parsed.suggestions as RawDirectorSuggestion[];
-    }
-    if (Array.isArray(parsed)) {
-      return parsed as RawDirectorSuggestion[];
-    }
-  } catch (error) {
-    // Fall through to empty result
-  }
-
-  return [];
 };
 
 // Mock function for sandbox chat responses
@@ -1036,6 +1050,39 @@ export const generateSandboxResponse = async (
   } catch (error: unknown) {
     console.warn('Gemini chat generation failed, falling back to mock mode:', error);
     return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
+  }
+};
+
+export const generateDirectorAdvice = async (
+  context: DirectorAdviceContext
+): Promise<GeminiResult<DirectorAdviceSuggestionPayload[]>> => {
+  const { existingSuggestions = [], ...projectSnapshot } = context;
+
+  const promptSections = [
+    'You are Loop, an award-winning film director AI embedded inside a collaborative workspace.',
+    'Study the project context and return 3-5 actionable suggestions that a director or editor could apply right now.',
+    'Respond only with compact JSON matching this schema: { "suggestions": [ { "id": "optional", "type": "addition|removal|edit|color_grading|transition|other", "description": "string", "advice": "string (optional)", "targetAssetId": "string (optional)" } ] }.',
+    'Each suggestion should focus on cinematic craft (blocking, pacing, transitions, color, etc.) and avoid duplicating previously accepted notes.',
+    existingSuggestions.length
+      ? `Previously surfaced suggestions (accepted indicates if the user already locked them in):\n${JSON.stringify(existingSuggestions, null, 2)}`
+      : 'No earlier director suggestions have been accepted yet.',
+    `Project context:\n${JSON.stringify(projectSnapshot, null, 2)}`
+  ];
+
+  const fullPrompt = validateAndOptimizePrompt(promptSections.join('\n\n'));
+
+  try {
+    const { text } = await requestTextWithFallback(fullPrompt);
+    const suggestions = parseDirectorAdviceResponse(text);
+
+    if (!suggestions.length) {
+      return createResult(createMockDirectorAdvice(context), null, true);
+    }
+
+    return createResult(suggestions, null, false);
+  } catch (error) {
+    console.warn('Gemini director advice generation failed, falling back to mock mode:', error);
+    return createResult(createMockDirectorAdvice(context), null, true);
   }
 };
 
