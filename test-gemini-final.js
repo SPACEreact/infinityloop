@@ -1,18 +1,17 @@
 async function testGeminiAPI() {
   const baseUrl = 'http://localhost:8888'; // Netlify dev default port
 
-  console.log('Testing Gemini API with gemini-1.5-pro-latest...');
+  console.log('Testing Gemini API with gemini-pro...');
 
   try {
-    // Test generateContent with gemini-2.5-flash
-    console.log('\n--- Testing generateContent with gemini-1.5-pro-latest ---');
+    console.log('\n--- Testing generateContent with gemini-pro ---');
     const generateResponse = await fetch(`${baseUrl}/.netlify/functions/gemini-api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'generateContent',
         prompt: 'Hello, can you help me with a simple film idea?',
-        model: 'gemini-1.5-pro-latest'
+        model: 'gemini-pro'
       })
     });
 

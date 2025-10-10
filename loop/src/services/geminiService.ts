@@ -14,8 +14,8 @@ type ProjectAsset = {
 
 const MODEL_NAMESPACE_PREFIX = 'models/';
 
-const DEFAULT_TEXT_MODEL = 'gemini-1.5-pro-latest';
-const FALLBACK_TEXT_MODEL = 'gemini-1.5-flash-latest';
+const DEFAULT_TEXT_MODEL = 'gemini-pro';
+const FALLBACK_TEXT_MODEL = 'gemini-pro-vision';
 const DEFAULT_IMAGE_MODEL = 'imagen-3.0-generate-001';
 const FALLBACK_IMAGE_MODEL = 'imagen-2.0-generate-001';
 
@@ -49,6 +49,8 @@ type GeminiEndpoint = DirectGeminiEndpoint | ProxyGeminiEndpoint;
 const TEXT_MODEL_PRIORITY = [
   DEFAULT_TEXT_MODEL,
   FALLBACK_TEXT_MODEL,
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-latest',
   'gemini-1.0-pro',
   'gemini-1.0-pro-001'
 ];
@@ -62,14 +64,14 @@ const IMAGE_MODEL_PRIORITY = [
 const MOCK_MODEL_ENTRIES: GeminiModel[] = [
   {
     name: `${MODEL_NAMESPACE_PREFIX}${DEFAULT_TEXT_MODEL}`,
-    displayName: 'Gemini 1.5 Pro',
+    displayName: 'Gemini Pro',
     description: 'Primary text generation model optimized for high quality story outputs.',
     supportedGenerationMethods: ['generateContent']
   },
   {
     name: `${MODEL_NAMESPACE_PREFIX}${FALLBACK_TEXT_MODEL}`,
-    displayName: 'Gemini 1.5 Flash',
-    description: 'Fast text generation model suitable for quota-limited environments.',
+    displayName: 'Gemini Pro Vision',
+    description: 'Multimodal model suitable for quota-limited environments and vision prompts.',
     supportedGenerationMethods: ['generateContent']
   },
   {

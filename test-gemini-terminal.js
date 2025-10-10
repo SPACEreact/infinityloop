@@ -32,7 +32,7 @@ async function testGeminiAPI() {
       console.log('Error:', errorText);
     }
 
-    // Test generateContent with first available model that supports generateContent
+    // Test generateContent with Gemini Pro (free tier text model)
     console.log('\n--- Testing generateContent ---');
     const generateResponse = await fetch(`${baseUrl}/.netlify/functions/gemini-api`, {
       method: 'POST',
@@ -40,7 +40,7 @@ async function testGeminiAPI() {
       body: JSON.stringify({
         action: 'generateContent',
         prompt: 'Hello, can you help me with a simple film idea?',
-        model: 'gemini-1.5-pro-latest'
+        model: 'gemini-pro'
       })
     });
 

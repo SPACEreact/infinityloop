@@ -70,6 +70,8 @@ let cachedModelCatalogTimestamp = 0;
 const MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const TEXT_MODEL_PRIORITY = [
+  'models/gemini-pro',
+  'models/gemini-pro-vision',
   'models/gemini-1.5-pro-latest',
   'models/gemini-1.5-flash-latest',
   'models/gemini-1.0-pro',
@@ -163,7 +165,7 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
 
 // Input validation - Updated to support larger prompts for comprehensive filmmaking knowledge
-const MAX_PROMPT_LENGTH = 100000; // characters (~25,000 tokens, well under Gemini 1.5 Pro's limit)
+const MAX_PROMPT_LENGTH = 100000; // characters (~25,000 tokens, well under Gemini Pro's limit)
 const MAX_REQUEST_SIZE = 2 * 1024 * 1024; // 2MB
 
 // Security headers
