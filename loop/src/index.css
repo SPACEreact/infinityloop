@@ -10,57 +10,54 @@
   }
 
   :root {
-    /* Pastel color palette for Loop */
-    --background: 330 70% 94%;
-    --foreground: 330 25% 22%;
-    --card: 340 75% 92%;
-    --card-foreground: 330 24% 24%;
-    --popover: 335 68% 93%;
-    --popover-foreground: 330 25% 24%;
-    --primary: 338 82% 72%;
-    --primary-foreground: 338 55% 24%;
-    --secondary: 220 70% 78%;
-    --secondary-foreground: 220 42% 26%;
-    --muted: 328 38% 90%;
-    --muted-foreground: 330 18% 32%;
-    --accent: 20 85% 78%;
-    --accent-foreground: 20 54% 26%;
-    --destructive: 0 68% 76%;
-    --destructive-foreground: 2 55% 24%;
-    --border: 338 52% 84%;
-    --input: 338 50% 88%;
-    --ring: 338 78% 70%;
-    --ink: 330 32% 18%;
-    --timeline-scene: 0 75% 65%;
-    --timeline-scene-surface: 0 75% 92%;
-    --timeline-scene-highlight: 0 75% 96%;
-    --timeline-scene-edge: 0 75% 70%;
-    --timeline-visual: 220 75% 65%;
-    --timeline-visual-surface: 220 75% 92%;
-    --timeline-visual-highlight: 220 75% 96%;
-    --timeline-visual-edge: 220 75% 70%;
-    --timeline-multishot: 120 65% 60%;
-    --timeline-multishot-surface: 120 65% 88%;
-    --timeline-multishot-highlight: 120 65% 94%;
-    --timeline-multishot-edge: 120 65% 65%;
-    --timeline-masterasset: 268 62% 68%;
-    --timeline-masterasset-surface: 268 62% 92%;
-    --timeline-masterasset-highlight: 268 62% 97%;
-    --timeline-masterasset-edge: 268 62% 72%;
-    --timeline-director: 30 85% 65%;
-    --timeline-director-surface: 30 85% 92%;
-    --timeline-director-highlight: 30 85% 96%;
-    --timeline-director-edge: 30 85% 70%;
+    /* Midnight palette inspired by original hues */
+    --background: 330 45% 7%;
+    --foreground: 270 28% 90%;
+    --card: 268 40% 12%;
+    --card-foreground: 270 30% 92%;
+    --popover: 260 42% 14%;
+    --popover-foreground: 270 28% 88%;
+    --primary: 268 82% 62%;
+    --primary-foreground: 266 64% 92%;
+    --secondary: 220 72% 48%;
+    --secondary-foreground: 220 42% 90%;
+    --muted: 330 32% 18%;
+    --muted-foreground: 270 18% 72%;
+    --accent: 20 85% 46%;
+    --accent-foreground: 20 62% 92%;
+    --destructive: 358 70% 46%;
+    --destructive-foreground: 10 60% 94%;
+    --border: 268 46% 28%;
+    --input: 268 40% 24%;
+    --ring: 268 78% 58%;
+    --ink: 266 34% 92%;
+    --timeline-scene: 358 72% 48%;
+    --timeline-scene-surface: 358 56% 16%;
+    --timeline-scene-highlight: 358 54% 24%;
+    --timeline-scene-edge: 358 68% 38%;
+    --timeline-visual: 220 76% 46%;
+    --timeline-visual-surface: 220 58% 18%;
+    --timeline-visual-highlight: 220 52% 26%;
+    --timeline-visual-edge: 220 70% 38%;
+    --timeline-multishot: 150 64% 40%;
+    --timeline-multishot-surface: 150 48% 16%;
+    --timeline-multishot-highlight: 150 46% 22%;
+    --timeline-multishot-edge: 150 62% 34%;
+    --timeline-masterasset: 282 68% 52%;
+    --timeline-masterasset-surface: 282 54% 18%;
+    --timeline-masterasset-highlight: 282 52% 24%;
+    --timeline-masterasset-edge: 282 64% 40%;
+    --timeline-director: 32 78% 46%;
+    --timeline-director-surface: 32 58% 18%;
+    --timeline-director-highlight: 32 54% 24%;
+    --timeline-director-edge: 32 64% 38%;
     --radius: 1rem;
   }
 
   body {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--primary) / 0.35),
-      hsl(var(--secondary) / 0.35),
-      hsl(var(--accent) / 0.35)
-    );
+    background: radial-gradient(circle at top left, hsl(var(--primary) / 0.22), transparent 55%),
+                radial-gradient(circle at bottom right, hsl(var(--secondary) / 0.18), transparent 60%),
+                hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     margin: 0;
@@ -78,9 +75,9 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: radial-gradient(ellipse at top left, hsl(var(--primary) / 0.5), transparent 50%),
-                radial-gradient(ellipse at bottom right, hsl(var(--secondary) / 0.5), transparent 50%);
-    opacity: 0.5;
+    background: radial-gradient(ellipse at top left, hsl(var(--primary) / 0.3), transparent 55%),
+                radial-gradient(ellipse at bottom right, hsl(var(--secondary) / 0.28), transparent 55%);
+    opacity: 0.65;
     z-index: 0;
     pointer-events: none;
     animation: background-pan 30s ease-in-out infinite alternate;
@@ -103,7 +100,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.07'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 1;
   }
@@ -223,8 +220,8 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    background: hsl(var(--ink) / 0.38);
-    backdrop-filter: blur(18px);
+    background: radial-gradient(circle at center, hsl(var(--background) / 0.92), hsl(var(--background) / 0.88));
+    backdrop-filter: blur(22px);
     z-index: 1200;
     animation: fadeInBackdrop 0.4s cubic-bezier(0.23, 1, 0.32, 1);
   }
@@ -311,6 +308,47 @@
   .toast-dismiss:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px hsl(var(--primary) / 0.45);
+  }
+
+  /* Radial toggle used for Chroma service */
+  .chroma-toggle {
+    position: relative;
+    width: 3.1rem;
+    height: 1.65rem;
+    border-radius: 999px;
+    border: 1px solid rgba(166, 148, 255, 0.35);
+    background: radial-gradient(circle at 30% 30%, rgba(98, 78, 205, 0.9), rgba(26, 21, 46, 0.9));
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.45), 0 0 12px rgba(100, 88, 220, 0.25);
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.25rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .chroma-toggle.is-on {
+    border-color: rgba(126, 220, 167, 0.45);
+    background: radial-gradient(circle at 70% 70%, rgba(80, 197, 150, 0.95), rgba(20, 34, 28, 0.9));
+    box-shadow: inset 0 0 12px rgba(16, 54, 36, 0.55), 0 0 14px rgba(92, 201, 164, 0.35);
+  }
+
+  .chroma-toggle__thumb {
+    position: absolute;
+    top: 50%;
+    left: 0.35rem;
+    transform: translate(0, -50%);
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(162, 148, 255, 0.55));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition: all 0.3s ease;
+  }
+
+  .chroma-toggle.is-on .chroma-toggle__thumb {
+    left: 1.8rem;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(126, 220, 167, 0.65));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 0 10px rgba(92, 201, 164, 0.45);
   }
 
   /* Toast notifications */
