@@ -60,7 +60,9 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     handleGenerate,
     handleGenerateOutput,
     handleGenerateDirectorAdvice,
-    handleAcceptSuggestion
+    handleAcceptSuggestion,
+    handleSetTargetModel,
+    usageStats
   } = useWorkspace();
 
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
@@ -628,6 +630,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
                 onToggleChroma={handleToggleChromaService}
                 targetModel={project.targetModel ?? null}
                 onTargetModelChange={handleSetTargetModel}
+                usageStats={usageStats}
               />
             )}
           </div>

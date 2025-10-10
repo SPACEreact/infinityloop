@@ -1,9 +1,15 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { SetStateAction } from 'react';
-import type { Project, Asset, TimelineBlock, UsageTotals } from '../types';
+import type { Project, Asset, TimelineBlock, UsageTotals, UsageStats } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
-import { generateFromWorkspace, generateDirectorAdvice } from '../services/geminiService';
+import {
+  generateFromWorkspace,
+  generateDirectorAdvice,
+  type DirectorAdviceContext,
+  type DirectorAdviceSuggestionPayload,
+} from '../services/geminiService';
+import { TOKEN_DAILY_LIMIT } from '../services/config';
 
 type FolderKey = string;
 
@@ -96,33 +102,60 @@ const ensureAssetSeeds = <T extends Asset>(
   return updatedAssets ?? assets;
 };
 
-const DEFAULT_USAGE: UsageTotals = {
-  promptTokens: 0,
-  completionTokens: 0,
-};
-
-const normalizeUsageTotals = (usage?: UsageTotals | null): UsageTotals => {
-  const prompt = Math.max(
-    0,
-    Number.isFinite(usage?.promptTokens) ? Math.round(usage!.promptTokens) : 0,
-  );
-  const completion = Math.max(
-    0,
-    Number.isFinite(usage?.completionTokens) ? Math.round(usage!.completionTokens) : 0,
-  );
-
-  if (prompt === 0 && completion === 0) {
-    return DEFAULT_USAGE;
+const normalizeUsageTotals = (
+  usageTotals: Project['usageTotals'] | undefined,
+): UsageTotals | undefined => {
+  if (!usageTotals) {
+    return usageTotals ?? undefined;
   }
 
-  return { promptTokens: prompt, completionTokens: completion };
-};
+  const normalize = (value: unknown): number => {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value >= 0 ? value : 0;
+    }
 
-const usageTotalsEqual = (a?: UsageTotals, b?: UsageTotals): boolean =>
-  !!a &&
-  !!b &&
-  a.promptTokens === b.promptTokens &&
-  a.completionTokens === b.completionTokens;
+    if (typeof value === 'string') {
+      const parsed = Number(value.trim());
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    }
+
+    return 0;
+  };
+
+  const typedTotals = usageTotals as Partial<UsageTotals>;
+  const hasPrompt = typedTotals.promptTokens !== undefined && typedTotals.promptTokens !== null;
+  const hasCompletion =
+    typedTotals.completionTokens !== undefined && typedTotals.completionTokens !== null;
+  const hasTotal = typedTotals.totalTokens !== undefined && typedTotals.totalTokens !== null;
+
+  if (!hasPrompt && !hasCompletion && !hasTotal) {
+    return undefined;
+  }
+
+  const promptTokens = normalize(typedTotals.promptTokens);
+  const completionTokens = normalize(typedTotals.completionTokens);
+  const totalTokensRaw = normalize(typedTotals.totalTokens);
+
+  const totalTokens = totalTokensRaw || promptTokens + completionTokens;
+
+  const isAlreadyNormalized =
+    typeof typedTotals.promptTokens === 'number' &&
+    typedTotals.promptTokens === promptTokens &&
+    typeof typedTotals.completionTokens === 'number' &&
+    typedTotals.completionTokens === completionTokens &&
+    typeof typedTotals.totalTokens === 'number' &&
+    typedTotals.totalTokens === totalTokens;
+
+  if (isAlreadyNormalized) {
+    return typedTotals as UsageTotals;
+  }
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  };
+};
 
 const normalizeSeeds = (project: Project): Project => {
   let normalizedProject = project;
@@ -202,11 +235,51 @@ const normalizeSeeds = (project: Project): Project => {
     }
   }
 
-  const sanitizedUsage = normalizeUsageTotals(project.usage);
-  if (!usageTotalsEqual(project.usage, sanitizedUsage) || !project.usage) {
+  const normalizedUsageTotals = normalizeUsageTotals(project.usageTotals);
+
+  if (normalizedUsageTotals !== project.usageTotals) {
     normalizedProject = {
       ...normalizedProject,
-      usage: sanitizedUsage,
+      usageTotals: normalizedUsageTotals,
+    };
+  }
+
+  return normalizedProject;
+};
+
+const toContentPreview = (value?: string | null, limit: number = 600): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length <= limit) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, limit)}...`;
+};
+
+const mapTimelineBlocksToDirectorEntries = (
+  blocks: TimelineBlock[] | undefined,
+  assetsById: Map<string, Asset>,
+): DirectorAdviceContext['primaryTimeline']['story'] => {
+  if (!blocks?.length) {
+    return [];
+  }
+
+  return blocks.map((block) => {
+    const asset = assetsById.get(block.assetId);
+    return {
+      assetId: block.assetId,
+      name: asset?.name ?? 'Untitled asset',
+      type: asset?.type,
+      summary: asset?.summary,
+      contentPreview: toContentPreview(asset?.content, 360),
     };
   }
 
@@ -827,6 +900,36 @@ export const useProject = (initialProject: Project) => {
     [setProject]
   );
 
+  const usageStats = useMemo<UsageStats | null>(() => {
+    const totals = project.usageTotals;
+    if (!totals) {
+      return null;
+    }
+
+    const used = Math.max(0, totals.totalTokens);
+    const limit = Number.isFinite(TOKEN_DAILY_LIMIT) ? TOKEN_DAILY_LIMIT : 0;
+    const normalizedLimit = limit > 0 ? limit : 0;
+
+    if (!normalizedLimit) {
+      return {
+        used,
+        remaining: 0,
+        percent: 0,
+        limit: 0,
+      };
+    }
+
+    const remaining = normalizedLimit - used;
+    const percent = (used / normalizedLimit) * 100;
+
+    return {
+      used,
+      remaining,
+      percent,
+      limit: normalizedLimit,
+    };
+  }, [project.usageTotals]);
+
   return useMemo(
     () => ({
       project,
@@ -857,6 +960,8 @@ export const useProject = (initialProject: Project) => {
       handleGenerateOutput,
       handleGenerateDirectorAdvice,
       handleAcceptSuggestion,
+      handleSetTargetModel,
+      usageStats,
     }),
     [
       project,
@@ -887,6 +992,8 @@ export const useProject = (initialProject: Project) => {
       handleGenerateOutput,
       handleGenerateDirectorAdvice,
       handleAcceptSuggestion,
+      handleSetTargetModel,
+      usageStats,
     ],
   );
 };
