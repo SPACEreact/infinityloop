@@ -57,6 +57,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     activeTimeline,
     setActiveTimeline,
     isGenerating,
+    isDirectorAdviceLoading,
     handleGenerate,
     handleGenerateOutput,
     handleGenerateDirectorAdvice,
@@ -585,6 +586,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
               onCancelBatchStyle={handleCancelBatchStyle}
               onGenerateDirectorAdvice={handleGenerateDirectorAdvice}
               onAcceptSuggestion={handleAcceptSuggestion}
+              isDirectorAdviceLoading={isDirectorAdviceLoading}
             />
           </div>
         </main>
