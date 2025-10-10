@@ -258,15 +258,15 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
     }
   };
 
+  const openTopicModal = useCallback((topic: string, categoryId: string, content: string) => {
+    setSelectedTopic({ topic, category: categoryId, content });
+    setIsTopicModalOpen(true);
+  }, []);
+
   const handleTopicClick = (topic: string, categoryId: string) => {
     // Find detailed content about the topic from the knowledge base
     const detailedContent = findTopicDetails(topic, categoryId);
-    setSelectedTopic({
-      topic,
-      category: categoryId,
-      content: detailedContent
-    });
-    setIsTopicModalOpen(true);
+    openTopicModal(topic, categoryId, detailedContent);
   };
 
   const findTopicDetails = (topic: string, categoryId: string): string => {
@@ -429,9 +429,11 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
               </h3>
               <div className="mt-3 space-y-3">
                 {contextMatches.map((section) => (
-                  <div
+                  <button
                     key={section.title}
-                    className="rounded-xl border border-border bg-card/40 p-3 text-sm text-foreground"
+                    type="button"
+                    onClick={() => openTopicModal(section.title, 'context', section.content)}
+                    className="w-full text-left rounded-xl border border-border bg-card/40 p-3 text-sm text-foreground transition hover:border-primary/40 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary/60"
                   >
                     <div className="text-xs uppercase tracking-[0.3em] text-primary/80">
                       {section.title}
@@ -439,7 +441,7 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
                     <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
                       {renderContextSnippet(section.content)}
                     </p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -466,14 +468,16 @@ const ReferenceViewer: React.FC<ReferenceViewerProps> = ({ isOpen, onClose }) =>
                     </header>
                     <ul className="space-y-1.5 text-sm text-foreground">
                       {category.items.map((item) => (
-                        <li
-                          key={item}
-                          className="rounded-xl border border-border bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 px-3 py-2 cursor-pointer transition-all duration-200 transform hover:scale-105 hover:shadow-md"
-                          onClick={() => handleTopicClick(item, category.id)}
-                        >
-                          <div className="font-medium text-white">
-                            {highlightMatches(item)}
-                          </div>
+                        <li key={item}>
+                          <button
+                            type="button"
+                            onClick={() => handleTopicClick(item, category.id)}
+                            className="w-full text-left rounded-xl border border-border bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 px-3 py-2 transition-all duration-200 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/60"
+                          >
+                            <div className="font-medium text-white">
+                              {highlightMatches(item)}
+                            </div>
+                          </button>
                         </li>
                       ))}
                     </ul>

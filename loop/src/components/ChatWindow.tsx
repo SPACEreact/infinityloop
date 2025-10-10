@@ -5,20 +5,6 @@ import LoadingSpinner from './LoadingSpinner';
 import { SendIcon, SparklesIcon, UserIcon } from './IconComponents';
 import { dispatchOpenKnowledgeEvent } from '../services/uiEvents';
 
-const ImagePromptBlock = ({ prompt, imageData }: { prompt: string; imageData: string }) => {
-  return (
-    <div className="space-y-4">
-      <div className="bg-gray-900/50 p-4 rounded-lg">
-        <h4 className="text-indigo-300 font-semibold mb-2">Generated Image Prompt</h4>
-        <p className="text-gray-200 text-sm">{prompt}</p>
-      </div>
-      <div className="bg-gray-900/50 p-4 rounded-lg">
-        <img src={`data:image/png;base64,${imageData}`} alt="Generated image" className="max-w-full h-auto rounded-lg" />
-      </div>
-    </div>
-  );
-};
-
 interface ChatWindowProps {
   messages: Message[];
   isLoading: boolean;
@@ -44,32 +30,9 @@ const escapeHtml = (unsafe: string) =>
 const formatPlainText = (content: string) =>
   escapeHtml(content).replace(/\n/g, '<br />');
 
-const formatSingleImageOutput = (data: any, index: number, total: number) => {
-    if (data.prompt && data.explanation) {
-        return `
-            <div class="prose prose-invert max-w-none">
-                <h3 class="!mb-2">Image Prompt ${total > 1 ? `#${index + 1}` : ''}</h3>
-                <pre class="bg-gray-900/50 p-4 rounded-lg text-indigo-300 whitespace-pre-wrap break-words font-mono text-sm"><code>${escapeHtml(data.prompt)}</code></pre>
-                <h3 class="!mt-6 !mb-2">Director's Commentary</h3>
-                <p class="!mt-0">${escapeHtml(data.explanation)}</p>
-            </div>
-        `.trim();
-    }
-    return '';
-};
-
-
 // Helper to format the final build outputs for display
 const formatBuildOutput = (content: string, buildType: string): string => {
     try {
-        // Handle batch image output first
-        if (buildType === 'image' && content.trim().startsWith('[')) {
-            const batchData = JSON.parse(content);
-            if (Array.isArray(batchData)) {
-                return batchData.map((item, index) => formatSingleImageOutput(item, index, batchData.length)).join('<hr class="my-8 border-gray-700" />');
-            }
-        }
-
         const data = JSON.parse(content);
         if (buildType === 'story' && data.characterProfile && data.potentialArc) {
             return `
@@ -94,9 +57,6 @@ const formatBuildOutput = (content: string, buildType: string): string => {
                     </ul>
                 </div>
             `.trim();
-        }
-        if (buildType === 'image') {
-            return formatSingleImageOutput(data, 0, 1);
         }
         if (buildType === 'video' && data.videoSceneCard) {
             const { title, sequenceDescription, cinematography, audioVisualNotes } = data.videoSceneCard;

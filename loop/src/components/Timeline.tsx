@@ -67,13 +67,13 @@ export const Timeline = ({
 
   const sliderVariables = React.useMemo(() => {
     const center = 50;
-    const offset = Math.abs(styleRigidity - center);
-    const start = Math.max(0, center - offset);
-    const end = Math.min(100, center + offset);
+    const value = Math.max(0, Math.min(100, styleRigidity));
+    const highlightStart = value >= center ? center : value;
+    const highlightEnd = value >= center ? value : center;
 
     return {
-      '--slider-start': `${start}%`,
-      '--slider-end': `${end}%`
+      '--slider-highlight-start': `${highlightStart}%`,
+      '--slider-highlight-end': `${highlightEnd}%`,
     } as React.CSSProperties;
   }, [styleRigidity]);
 

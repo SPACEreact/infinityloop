@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Asset } from '../types';
-import { generateImageFromPrompt, listModels } from '../services/geminiService';
-import { useWorkspace } from '../state/WorkspaceContext';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Asset, StructuredInputData, ShotDetails, IndividualShot } from '../types';
 
 interface OutputModalProps {
   isOpen: boolean;
@@ -10,112 +8,326 @@ interface OutputModalProps {
   onExport?: (format: 'json' | 'txt' | 'csv') => void;
 }
 
+const humanizeLabel = (value: string): string =>
+  value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .replace(/^./, char => char.toUpperCase());
+
+const decodeEntities = (value: string): string =>
+  value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+
+const stripHtml = (value: string): string =>
+  decodeEntities(
+    value
+      .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+      .replace(/<\s*\/p\s*>/gi, '\n')
+      .replace(/<\s*li\s*>/gi, '- ')
+      .replace(/<[^>]*>/g, '')
+  )
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+/g, ' ')
+    .replace(/\n /g, '\n')
+    .trim();
+
+const formatStructuredData = (data?: StructuredInputData): string[] => {
+  if (!data) {
+    return [];
+  }
+
+  const entries: string[] = [];
+
+  const pushLine = (label: string, raw?: string | null) => {
+    if (!raw) return;
+    const text = stripHtml(raw);
+    if (text) {
+      entries.push(`${label}: ${text}`);
+    }
+  };
+
+  pushLine('Scene Description', data.sceneDescription);
+  pushLine('Character Focus', data.characterDetails);
+  pushLine('Location Details', data.locationDetails);
+  pushLine('Mood & Tone', data.moodAndTone);
+  pushLine('Visual Style', data.visualStyle);
+  pushLine('Narrative Purpose', data.narrativePurpose);
+  pushLine('Cinematic References', data.cinematicReferences);
+  pushLine('Specific Instructions', data.specificInstructions);
+
+  if (Array.isArray(data.keyMoments) && data.keyMoments.length) {
+    const sanitized = data.keyMoments
+      .map(moment => stripHtml(moment))
+      .filter(Boolean)
+      .map((moment, index) => `${index + 1}. ${moment}`);
+    if (sanitized.length) {
+      entries.push(`Key Moments:\n${sanitized.join('\n')}`);
+    }
+  }
+
+  return entries;
+};
+
+const formatShotDetails = (details?: ShotDetails): string[] => {
+  if (!details) {
+    return [];
+  }
+
+  return Object.entries(details)
+    .map(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      return `${humanizeLabel(key)}: ${stripHtml(String(value))}`;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+};
+
+const formatIndividualShots = (shots?: IndividualShot[]): string[] => {
+  if (!shots || !shots.length) {
+    return [];
+  }
+
+  return shots.map(shot => {
+    const lines: string[] = [];
+    lines.push(`Shot ${shot.shotNumber}${shot.shotType ? ` — ${humanizeLabel(shot.shotType)}` : ''}`);
+
+    const fieldEntries: Array<[keyof IndividualShot, string]> = [
+      ['description', 'Description'],
+      ['duration', 'Duration'],
+      ['cameraMovement', 'Camera Movement'],
+      ['cameraAngle', 'Camera Angle'],
+      ['lensType', 'Lens'],
+      ['lightingStyle', 'Lighting'],
+      ['framing', 'Framing'],
+      ['colorGrading', 'Color Grading'],
+      ['notes', 'Notes'],
+    ];
+
+    fieldEntries.forEach(([key, label]) => {
+      const value = shot[key];
+      if (value) {
+        lines.push(`  • ${label}: ${stripHtml(String(value))}`);
+      }
+    });
+
+    return lines.join('\n');
+  });
+};
+
+const formatMetadataEntries = (metadata?: Record<string, unknown>): string[] => {
+  if (!metadata) {
+    return [];
+  }
+
+  return Object.entries(metadata).reduce<string[]>((acc, [key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return acc;
+    }
+
+    const label = humanizeLabel(key);
+
+    if (typeof value === 'string') {
+      const sanitized = stripHtml(value);
+      if (sanitized) {
+        acc.push(`${label}: ${sanitized}`);
+      }
+      return acc;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      acc.push(`${label}: ${value}`);
+      return acc;
+    }
+
+    if (Array.isArray(value)) {
+      const items = value
+        .map(item => (typeof item === 'string' ? stripHtml(item) : String(item)))
+        .map(item => item.trim())
+        .filter(Boolean);
+      if (items.length) {
+        acc.push(`${label}: ${items.join(', ')}`);
+      }
+      return acc;
+    }
+
+    acc.push(`${label}: ${JSON.stringify(value, null, 2)}`);
+    return acc;
+  }, []);
+};
+
+const buildPromptForAsset = (asset: Asset): string => {
+  const sections: string[] = [];
+
+  const assetTypeName = humanizeLabel(asset.type);
+  sections.push(`TITLE: ${asset.name}`);
+  sections.push(`ASSET TYPE: ${assetTypeName}`);
+  sections.push(`SEED: ${asset.seedId}`);
+
+  if (asset.summary) {
+    const summary = stripHtml(asset.summary);
+    if (summary) {
+      sections.push(`SUMMARY:\n${summary}`);
+    }
+  }
+
+  if (asset.content) {
+    const content = stripHtml(asset.content);
+    if (content) {
+      sections.push(`CORE CONCEPT:\n${content}`);
+    }
+  }
+
+  if (asset.tags?.length) {
+    sections.push(`TAGS: ${asset.tags.join(', ')}`);
+  }
+
+  if (typeof asset.shotCount === 'number' && asset.shotCount > 0) {
+    const shotType = asset.shotType ? humanizeLabel(asset.shotType) : undefined;
+    sections.push(
+      `SHOT PLAN: ${asset.shotCount} shot${asset.shotCount === 1 ? '' : 's'}${shotType ? ` • Emphasis: ${shotType}` : ''}`
+    );
+  }
+
+  const shotDetailLines = formatShotDetails(asset.shotDetails);
+  if (shotDetailLines.length) {
+    sections.push(`SHOT DETAILS:\n${shotDetailLines.map(line => `- ${line}`).join('\n')}`);
+  }
+
+  const structuredLines = formatStructuredData(asset.inputData);
+  if (structuredLines.length) {
+    sections.push(`STRUCTURED CONTEXT:\n${structuredLines.map(line => `- ${line}`).join('\n')}`);
+  }
+
+  const individualShotLines = formatIndividualShots(asset.individualShots);
+  if (individualShotLines.length) {
+    sections.push(`INDIVIDUAL SHOTS:\n${individualShotLines.join('\n\n')}`);
+  }
+
+  const metadataLines = formatMetadataEntries(asset.metadata);
+  if (metadataLines.length) {
+    sections.push(`STYLE & TECHNICAL NOTES:\n${metadataLines.map(line => `- ${line}`).join('\n')}`);
+  }
+
+  if (asset.outputs?.length) {
+    const outputs = asset.outputs
+      .map(entry => stripHtml(entry))
+      .filter(Boolean);
+    if (outputs.length) {
+      sections.push(`REFERENCE PROMPTS:\n${outputs.map((entry, index) => `${index + 1}. ${entry}`).join('\n')}`);
+    }
+  }
+
+  if (asset.lineage?.length) {
+    sections.push(`SOURCE LINEAGE: ${asset.lineage.join(' → ')}`);
+  }
+
+  sections.push(
+    'DELIVERABLE: Craft a polished visual prompt ready for AI generation tools. Maintain cinematic clarity, reference the notes above, and keep the tone aligned with the project.'
+  );
+
+  return sections
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const assetTypeDisplayName = (type: Asset['type']): string => humanizeLabel(type);
+
 export const OutputModal: React.FC<OutputModalProps> = ({
   isOpen,
   finalAssets,
   onClose,
   onExport
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'export' | 'visualize'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'export' | 'prompts'>('overview');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('imagen-3.0-generate-001');
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+  const copyResetRef = React.useRef<number | null>(null);
 
-  const { updateUsage } = useWorkspace();
-  
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
 
-  // Load available models when component mounts
-  useEffect(() => {
-    const loadModels = async () => {
-      setIsLoadingModels(true);
-      try {
-        const models = await listModels();
-        if (models) {
-          // Filter to only image generation models
-          const imageModels = models.models?.filter((model: any) => {
-            const name: string = typeof model?.name === 'string' ? model.name : '';
-            const methods: string[] = Array.isArray(model?.supportedGenerationMethods)
-              ? model.supportedGenerationMethods
-              : [];
-            const capabilities: string[] = Array.isArray(model?.capabilities)
-              ? model.capabilities
-              : [];
+  const promptGroups = useMemo(() => {
+    const buildEntries = (assets: Asset[]) =>
+      assets
+        .map(asset => ({ asset, prompt: buildPromptForAsset(asset) }))
+        .filter(entry => Boolean(entry.prompt));
 
-            const supportsImage =
-              methods.some((method: string) => typeof method === 'string' && method.toLowerCase().includes('image')) ||
-              capabilities.some((capability: string) => capability.toLowerCase() === 'image');
+    const visualAssetTypes: Array<Asset['type']> = ['multi_shot', 'batch_style', 'master_image', 'master_video'];
+    const visualAssets = finalAssets.filter(asset => visualAssetTypes.includes(asset.type));
+    const shotAssets = finalAssets.filter(asset => asset.type === 'shot');
 
-            return supportsImage || name.includes('imagen');
-          }) || [];
+    return [
+      {
+        id: 'visuals' as const,
+        label: 'Visual Prompts',
+        description: 'Copy-ready structured prompts for cinematic image or video generators.',
+        entries: buildEntries(visualAssets),
+      },
+      {
+        id: 'shots' as const,
+        label: 'Shot Prompts',
+        description: 'Detailed shot breakdowns ready for storyboard or animation tools.',
+        entries: buildEntries(shotAssets),
+      },
+    ];
+  }, [finalAssets]);
 
-          const defaultImageModels = [
-            {
-              name: 'models/imagen-3.0-generate-001',
-              displayName: 'Imagen 3.0',
-              description: 'High fidelity image generation tuned for cinematic concept frames.',
-              supportedGenerationMethods: ['generateImage']
-            },
-            {
-              name: 'models/imagen-2.0-generate-001',
-              displayName: 'Imagen 2.0',
-              description: 'Fallback image generator with broad availability and lower quota requirements.',
-              supportedGenerationMethods: ['generateImage']
-            },
-            {
-              name: 'models/imagegeneration',
-              displayName: 'Image Generation (Legacy)',
-              description: 'Legacy image generation entry point for older API keys.',
-              supportedGenerationMethods: ['generateImage']
-            }
-          ];
-
-          const mergedModels = [...imageModels];
-          defaultImageModels.forEach(defaultModel => {
-            if (!mergedModels.find(m => m.name === defaultModel.name)) {
-              mergedModels.push(defaultModel);
-            }
-          });
-
-          setAvailableModels(mergedModels);
-        }
-      } catch (error) {
-        console.warn('Failed to load models, using defaults:', error);
-        // Use default models if API call fails
-        setAvailableModels([
-          {
-            name: 'models/imagen-3.0-generate-001',
-            displayName: 'Imagen 3.0',
-            description: 'High fidelity image generation tuned for cinematic concept frames.',
-            supportedGenerationMethods: ['generateImage']
-          },
-          {
-            name: 'models/imagen-2.0-generate-001',
-            displayName: 'Imagen 2.0',
-            description: 'Fallback image generator with broad availability and lower quota requirements.',
-            supportedGenerationMethods: ['generateImage']
-          },
-          {
-            name: 'models/imagegeneration',
-            displayName: 'Image Generation (Legacy)',
-            description: 'Legacy image generation entry point for older API keys.',
-            supportedGenerationMethods: ['generateImage']
-          }
-        ]);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    };
-
-    if (isOpen) {
-      loadModels();
+  const handleCopyPrompt = React.useCallback(async (assetId: string, prompt: string) => {
+    const text = prompt.trim();
+    if (!text) {
+      return;
     }
-  }, [isOpen]);
+
+    let copied = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (error) {
+        console.warn('Clipboard API copy failed, falling back to legacy method:', error);
+      }
+    }
+
+    if (!copied && typeof document !== 'undefined') {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+
+      try {
+        document.execCommand('copy');
+        copied = true;
+      } catch (error) {
+        console.warn('execCommand copy failed:', error);
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    }
+
+    if (copied) {
+      setCopiedPromptId(assetId);
+      if (typeof window !== 'undefined') {
+        if (copyResetRef.current) {
+          window.clearTimeout(copyResetRef.current);
+        }
+        copyResetRef.current = window.setTimeout(() => setCopiedPromptId(null), 2000);
+      }
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -164,30 +376,13 @@ export const OutputModal: React.FC<OutputModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  const generateImage = async () => {
-    if (!selectedAsset) return;
-    
-    setIsGeneratingImage(true);
-    setGeneratedImage(null);
-    
-    try {
-      const prompt = `Create a cinematic visual representation of: ${selectedAsset.content || selectedAsset.name}. ${selectedAsset.summary || ''}. Professional cinematography style.`;
-      const result = await generateImageFromPrompt(prompt, selectedModel);
-
-      updateUsage(result.usage);
-
-      if (result.data && !result.isMock) {
-        setGeneratedImage(result.data);
-      } else {
-        // Handle mock or error case
-        console.warn('Image generation failed or returned mock data');
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && copyResetRef.current) {
+        window.clearTimeout(copyResetRef.current);
       }
-    } catch (error) {
-      console.error('Image generation error:', error);
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -262,14 +457,14 @@ export const OutputModal: React.FC<OutputModalProps> = ({
             📋 Asset Details
           </button>
           <button
-            onClick={() => setActiveTab('visualize')}
+            onClick={() => setActiveTab('prompts')}
             className={`px-4 py-3 text-sm font-medium transition-all duration-300 hover-lift ${
-              activeTab === 'visualize' 
-                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)' 
+              activeTab === 'prompts'
+                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
           >
-            🎨 Visualize
+            🧾 Prompt Library
           </button>
           <button
             onClick={() => setActiveTab('export')}
@@ -450,146 +645,76 @@ export const OutputModal: React.FC<OutputModalProps> = ({
             </div>
           )}
 
-          {/* Visualize Tab */}
-          {activeTab === 'visualize' && (
-            <div className="space-y-4 fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Asset Selection for Visualization */}
-                <div className="space-y-3">
-                  <h3 className="font-medium ink-strong">Select Asset to Visualize</h3>
-                  <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg">
-                    {finalAssets.map(asset => (
-                      <button
-                        key={asset.id}
-                        onClick={() => {
-                          setSelectedAsset(asset);
-                          setGeneratedImage(null);
-                        }}
-                        className={`w-full text-left p-3 transition-all duration-200 hover-lift click-ripple ${
-                          selectedAsset?.id === asset.id 
-                            ? 'bg-green-500/20 border-l-4 border-green-500 transform translateX(2px)' 
-                            : 'hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="font-medium ink-strong text-sm">{asset.name}</div>
-                        <div className="text-xs ink-subtle">
-                          {asset.type} | {asset.seedId.slice(0, 12)}...
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Image Generation and Display */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium ink-strong">Visual Output</h3>
-                    <button
-                      onClick={generateImage}
-                      disabled={!selectedAsset || isGeneratingImage}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 click-ripple ${
-                        selectedAsset && !isGeneratingImage
-                          ? 'bg-gradient-to-r from-purple-500/80 to-pink-500/80 text-white hover:from-purple-600/90 hover:to-pink-600/90 hover-lift'
-                          : 'bg-gray-500/50 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {isGeneratingImage ? (
-                        <span className="flex items-center gap-2">
-                          <div className="loading-pulse">🎨</div>
-                          Generating...
-                        </span>
-                      ) : (
-                        '🎨 Generate Visual'
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Model Selection */}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium ink-strong">
-                      🤖 Select AI Model
-                    </label>
-                    <select
-                      value={selectedModel}
-                      onChange={(e) => setSelectedModel(e.target.value)}
-                      className="w-full p-2 border border-white/20 bg-black/50 rounded-lg text-white focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/25 transition-all"
-                      disabled={isGeneratingImage || isLoadingModels}
-                    >
-                      {isLoadingModels ? (
-                        <option value="">Loading models...</option>
-                      ) : (
-                        availableModels.map(model => (
-                          <option key={model.name} value={model.name}>
-                            {model.displayName || model.name} 
-                            {model.description && ` - ${model.description}`}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    {selectedModel && (
-                      <div className="text-xs ink-subtle p-2 bg-blue-50/10 rounded border border-blue-500/20">
-                        💡 <strong>Selected:</strong> {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}
-                        <br />
-                        {availableModels.find(m => m.name === selectedModel)?.description}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="border border-white/10 rounded-lg bg-white/5 min-h-64 flex items-center justify-center">
-                    {isGeneratingImage ? (
-                      <div className="text-center space-y-3 pulse-glow">
-                        <div className="text-4xl loading-pulse">🎬</div>
-                        <p className="text-sm ink-subtle">Creating cinematic visualization...</p>
-                        <p className="text-xs ink-subtle">Using {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}</p>
-                        <div className="flex justify-center space-x-1">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full loading-pulse stagger-1"></div>
-                          <div className="w-2 h-2 bg-pink-500 rounded-full loading-pulse stagger-2"></div>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full loading-pulse stagger-3"></div>
-                        </div>
-                      </div>
-                    ) : generatedImage ? (
-                      <div className="w-full bounce-in">
-                        <img 
-                          src={`data:image/png;base64,${generatedImage}`}
-                          alt={`Visual representation of ${selectedAsset?.name}`}
-                          className="w-full h-auto rounded-lg shadow-lg hover-lift"
-                        />
-                        <p className="text-xs ink-subtle mt-2 text-center">
-                          Visual representation of: {selectedAsset?.name}
-                          <br />
-                          Generated with: {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}
-                        </p>
-                      </div>
-                    ) : selectedAsset ? (
-                      <div className="text-center space-y-3">
-                        <div className="text-4xl">🖼️</div>
-                        <p className="text-sm ink-subtle">Click "Generate Visual" to create an image</p>
-                        <p className="text-xs ink-subtle">Asset: {selectedAsset.name}</p>
-                        <p className="text-xs ink-subtle">Model: {availableModels.find(m => m.name === selectedModel)?.displayName || selectedModel}</p>
-                      </div>
-                    ) : (
-                      <div className="text-center space-y-3">
-                        <div className="text-4xl">👈</div>
-                        <p className="text-sm ink-subtle">Select an asset to visualize</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedAsset && (
-                    <div className="p-3 bg-blue-50/10 rounded-lg border border-blue-500/20 fade-in-up">
-                      <h4 className="font-medium ink-strong text-blue-400 mb-2">💡 About Visualization</h4>
-                      <p className="text-xs ink-subtle">
-                        Generate cinematic visual representations of your assets using AI image generation models. 
-                        Choose from high-quota models like Imagen 4.5 Ultra for the best quality. 
-                        Perfect for mood boards, concept visualization, and creative inspiration.
-                      </p>
-                    </div>
-                  )}
-                </div>
+          {/* Prompt Library Tab */}
+          {activeTab === 'prompts' && (
+            <div className="space-y-6 fade-in">
+              <div className="p-4 border border-white/10 rounded-lg bg-white/5">
+                <h3 className="font-medium ink-strong mb-2">Copy prompts into your favourite AI tools</h3>
+                <p className="text-sm ink-subtle">
+                  Each prompt packages scene intent, shot design, and stylistic notes so you can paste directly into Midjourney, Runway, Sora, or any creative AI surface.
+                  Use the copy buttons to grab a structured prompt instantly.
+                </p>
               </div>
+
+              {promptGroups.map(group => (
+                <section key={group.id} className="space-y-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold ink-strong">{group.label}</h3>
+                      <p className="text-sm ink-subtle">{group.description}</p>
+                    </div>
+                    <span className="text-xs uppercase tracking-wide ink-subtle">{group.entries.length} prompt{group.entries.length === 1 ? '' : 's'}</span>
+                  </div>
+
+                  {group.entries.length ? (
+                    <div className="space-y-4">
+                      {group.entries.map(({ asset, prompt }) => {
+                        const truncatedSeed = asset.seedId.slice(0, 10);
+                        const isCopied = copiedPromptId === asset.id;
+
+                        return (
+                          <article
+                            key={asset.id}
+                            className="p-4 border border-white/10 rounded-xl bg-black/30 backdrop-blur-sm hover:border-white/20 transition-shadow shadow-sm"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="space-y-1">
+                                <h4 className="font-medium ink-strong text-base">{asset.name}</h4>
+                                <p className="text-xs uppercase tracking-[0.3em] text-green-300">
+                                  {assetTypeDisplayName(asset.type)} • Seed {truncatedSeed}...
+                                </p>
+                                {asset.summary && (
+                                  <p className="text-sm ink-subtle max-w-2xl">{stripHtml(asset.summary)}</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyPrompt(asset.id, prompt)}
+                                className={`self-start px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                                  isCopied
+                                    ? 'bg-green-500/80 text-black shadow-lg'
+                                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:shadow-md'
+                                }`}
+                                aria-live="polite"
+                              >
+                                {isCopied ? 'Copied!' : 'Copy prompt'}
+                              </button>
+                            </div>
+
+                            <pre className="mt-3 text-sm ink-subtle whitespace-pre-wrap bg-white/5 border border-white/10 rounded-lg p-4 max-h-72 overflow-y-auto custom-scrollbar">{prompt}</pre>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm ink-subtle border border-dashed border-white/20 rounded-lg p-4">
+                      No {group.label.toLowerCase()} yet. Generate assets to unlock ready-to-copy prompts.
+                    </p>
+                  )}
+                </section>
+              ))}
             </div>
           )}
-
           {/* Export Tab */}
           {activeTab === 'export' && (
             <div className="space-y-6">

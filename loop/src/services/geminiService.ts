@@ -16,8 +16,6 @@ const MODEL_NAMESPACE_PREFIX = 'models/';
 
 const DEFAULT_TEXT_MODEL = 'gemini-pro';
 const FALLBACK_TEXT_MODEL = 'gemini-pro-vision';
-const DEFAULT_IMAGE_MODEL = 'imagen-3.0-generate-001';
-const FALLBACK_IMAGE_MODEL = 'imagen-2.0-generate-001';
 
 type GeminiModel = {
   name: string;
@@ -55,12 +53,6 @@ const TEXT_MODEL_PRIORITY = [
   'gemini-1.0-pro-001'
 ];
 
-const IMAGE_MODEL_PRIORITY = [
-  DEFAULT_IMAGE_MODEL,
-  FALLBACK_IMAGE_MODEL,
-  'imagegeneration'
-];
-
 const MOCK_MODEL_ENTRIES: GeminiModel[] = [
   {
     name: `${MODEL_NAMESPACE_PREFIX}${DEFAULT_TEXT_MODEL}`,
@@ -73,18 +65,6 @@ const MOCK_MODEL_ENTRIES: GeminiModel[] = [
     displayName: 'Gemini Pro Vision',
     description: 'Multimodal model suitable for quota-limited environments and vision prompts.',
     supportedGenerationMethods: ['generateContent']
-  },
-  {
-    name: `${MODEL_NAMESPACE_PREFIX}${DEFAULT_IMAGE_MODEL}`,
-    displayName: 'Imagen 3.0',
-    description: 'High fidelity image generation tuned for cinematic concept frames.',
-    supportedGenerationMethods: ['generateImage']
-  },
-  {
-    name: `${MODEL_NAMESPACE_PREFIX}${FALLBACK_IMAGE_MODEL}`,
-    displayName: 'Imagen 2.0',
-    description: 'Fallback image generator with broad availability and lower quota requirements.',
-    supportedGenerationMethods: ['generateImage']
   }
 ];
 
@@ -108,30 +88,18 @@ const supportsTextGeneration = (model: GeminiModel): boolean => {
   return methods.some(method => method.includes('generatecontent') || method.includes('createcontent'));
 };
 
-const supportsImageGeneration = (model: GeminiModel): boolean => {
-  const normalizedName = model.name.toLowerCase();
-  if (normalizedName.includes('imagen')) {
-    return true;
-  }
-
-  const methods = (model.supportedGenerationMethods ?? []).map(method => method.toLowerCase());
-  return methods.some(method => method.includes('generateimage') || method.includes('createimage'));
-};
-
 const selectModel = (
   models: GeminiModel[],
-  type: 'text' | 'image',
   requested?: string | null
 ): ModelSelection => {
-  const predicate = type === 'text' ? supportsTextGeneration : supportsImageGeneration;
-  const availableModels = models.filter(model => predicate(model));
+  const availableModels = models.filter(model => supportsTextGeneration(model));
 
   if (!availableModels.length) {
     return { primary: null, fallback: null };
   }
 
   const requestedName = requested ? normalizeModelName(requested) : null;
-  const priorityList = type === 'text' ? TEXT_MODEL_PRIORITY : IMAGE_MODEL_PRIORITY;
+  const priorityList = TEXT_MODEL_PRIORITY;
 
   const orderedCandidates = [
     ...(requestedName ? [requestedName] : []),
@@ -214,11 +182,10 @@ const fetchModelCatalogForEndpoint = async (endpoint: GeminiEndpoint): Promise<G
 
 const resolveModelSelectionForEndpoint = async (
   endpoint: GeminiEndpoint,
-  type: 'text' | 'image',
   requested?: string | null
 ): Promise<ModelSelection> => {
   const catalog = await fetchModelCatalogForEndpoint(endpoint);
-  return selectModel(catalog, type, requested);
+  return selectModel(catalog, requested);
 };
 
 const readEnvString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
@@ -280,7 +247,7 @@ export interface GeminiResult<T> {
   usage?: UsageTotals;
 }
 
-const ZERO_USAGE: UsageTotals = { promptTokens: 0, completionTokens: 0 };
+const ZERO_USAGE: UsageTotals = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
 const sanitizeUsageTotals = (usage?: UsageTotals | null): UsageTotals | undefined => {
   if (!usage) {
@@ -294,11 +261,15 @@ const sanitizeUsageTotals = (usage?: UsageTotals | null): UsageTotals | undefine
     ? Math.max(0, Math.round(usage.completionTokens))
     : 0;
 
-  if (!prompt && !completion) {
+  const total = Number.isFinite(usage.totalTokens)
+    ? Math.max(0, Math.round(usage.totalTokens))
+    : prompt + completion;
+
+  if (!prompt && !completion && !total) {
     return ZERO_USAGE;
   }
 
-  return { promptTokens: prompt, completionTokens: completion };
+  return { promptTokens: prompt, completionTokens: completion, totalTokens: total };
 };
 
 const createResult = <T>(
@@ -683,55 +654,7 @@ const extractTextFromResponse = (data: any): string => {
   throw new Error('No text content returned from model');
 };
 
-const extractImageDataFromResponse = (data: any): string => {
-  const candidates = data?.candidates;
-  if (Array.isArray(candidates)) {
-    for (const candidate of candidates) {
-      const parts = candidate?.content?.parts;
-      if (Array.isArray(parts)) {
-        for (const part of parts) {
-          const inline = part?.inlineData || part?.inline_data;
-          const base64 = inline?.data || inline?.base64Data || inline?.imageBytes;
-          if (typeof base64 === 'string' && base64.trim()) {
-            return base64;
-          }
-        }
-      }
-    }
-  }
-
-  const images = data?.images;
-  if (Array.isArray(images)) {
-    for (const image of images) {
-      const base64 = image?.imageBytes || image?.imageData || image?.base64Data;
-      if (typeof base64 === 'string' && base64.trim()) {
-        return base64;
-      }
-    }
-  }
-
-  const image = data?.image;
-  if (image) {
-    const base64 = image?.imageBytes || image?.imageData || image?.base64Data;
-    if (typeof base64 === 'string' && base64.trim()) {
-      return base64;
-    }
-  }
-
-  const dataArray = data?.data;
-  if (Array.isArray(dataArray)) {
-    for (const item of dataArray) {
-      const base64 = item?.b64_json || item?.imageBytes || item?.base64Data;
-      if (typeof base64 === 'string' && base64.trim()) {
-        return base64;
-      }
-    }
-  }
-
-  throw new Error('No image data returned from model');
-};
-
-type GeminiProxyAction = 'generateContent' | 'generateImage' | 'listModels';
+type GeminiProxyAction = 'generateContent' | 'listModels';
 
 type GeminiProxyResult<T = any> = {
   payload: T;
@@ -799,37 +722,6 @@ const requestGeminiContentDirect = async (
   return { text: extractTextFromResponse(data), usage };
 };
 
-const requestGeminiImageDirect = async (
-  endpoint: DirectGeminiEndpoint,
-  prompt: string,
-  model: string
-): Promise<{ image: string; usage?: UsageTotals }> => {
-  const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
-  const normalizedModel = normalizeModelName(model);
-  const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(endpoint.apiKey)}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: {
-        text: prompt
-      },
-      imageGenerationConfig: {
-        numberOfImages: 1
-      }
-    })
-  });
-
-  const data = await parseResponseJson(response, 'Gemini image request');
-  const usage = resolveUsage(
-    extractUsageFromPayload(data),
-    extractUsageFromHeaders(response.headers)
-  );
-
-  return { image: extractImageDataFromResponse(data), usage };
-};
-
 const requestTextWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_TEXT_MODEL
@@ -839,7 +731,7 @@ const requestTextWithFallback = async (
     throw new Error('Gemini API key is not configured');
   }
 
-  const selection = await resolveModelSelectionForEndpoint(endpoint, 'text', preferredModel);
+  const selection = await resolveModelSelectionForEndpoint(endpoint, preferredModel);
   if (!selection.primary) {
     throw new Error('No text generation models available for this API key.');
   }
@@ -894,73 +786,6 @@ const requestTextWithFallback = async (
 
     const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
     return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
-  }
-};
-
-const requestImageWithFallback = async (
-  prompt: string,
-  preferredModel: string = DEFAULT_IMAGE_MODEL
-): Promise<{ image: string; modelUsed: string; usedFallback: boolean; usage?: UsageTotals }> => {
-  const endpoint = getGeminiEndpoint();
-  if (!endpoint) {
-    throw new Error('Gemini API key is not configured');
-  }
-
-  const selection = await resolveModelSelectionForEndpoint(endpoint, 'image', preferredModel);
-  if (!selection.primary) {
-    throw new Error('No image generation models available for this API key.');
-  }
-
-  if (endpoint.type === 'proxy') {
-    const proxyResponse = await requestGeminiProxy(
-      endpoint,
-      'generateImage',
-      { prompt, model: selection.primary },
-      'Gemini proxy image request'
-    );
-
-    const payload = proxyResponse.payload ?? {};
-    const payloadData = (payload as { data?: unknown }).data;
-    const imageSource =
-      typeof payloadData === 'string'
-        ? payloadData
-        : typeof payload === 'string'
-          ? (payload as string)
-          : typeof (payload as { image?: unknown }).image === 'string'
-            ? (payload as { image: string }).image
-            : '';
-
-    const image = typeof imageSource === 'string' ? imageSource.trim() : '';
-    if (!image) {
-      throw new Error('Gemini proxy image request returned no data');
-    }
-
-    const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
-      ? (payload as { modelUsed: string }).modelUsed
-      : selection.primary;
-    const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
-      ? (payload as { usedFallback: boolean }).usedFallback
-      : false;
-
-    const usage = resolveUsage(
-      proxyResponse.usage,
-      extractUsageFromPayload(payload),
-      extractUsageFromPayload(payloadData)
-    );
-
-    return { image, modelUsed, usedFallback, usage };
-  }
-
-  try {
-    const { image, usage } = await requestGeminiImageDirect(endpoint, prompt, selection.primary);
-    return { image, modelUsed: selection.primary, usedFallback: false, usage };
-  } catch (error) {
-    if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
-      throw error;
-    }
-
-    const { image: fallbackImage, usage } = await requestGeminiImageDirect(endpoint, prompt, selection.fallback);
-    return { image: fallbackImage, modelUsed: selection.fallback, usedFallback: true, usage };
   }
 };
 
@@ -1064,7 +889,6 @@ const getOptimizedKnowledgeContext = (outputType?: string, tagWeights?: Record<s
 const KNOWLEDGE_CONTEXT = getOptimizedKnowledgeContext();
 
 const LOOP_SIGNATURE = 'Loop Studio Mock Feed';
-const MOCK_IMAGE_PLACEHOLDER = 'iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAHElEQVR42mNgGAWjYBSMglEwCkbBqNgUjIJRMAAAUwABnVh6hAAAAABJRU5ErkJggg==';
 
 const TAG_WEIGHT_THRESHOLD = 0;
 
@@ -1076,8 +900,70 @@ const prominentTags = (tagWeights: Record<string, number>) =>
     .map(([tag, weight]) => `${tag} (${Math.round(weight * 100)}%)`)
     .join(', ');
 
-const ASSET_PROMPT_TAG_LIMIT = 3;
+const ASSET_PROMPT_TAG_LIMIT = 4;
 const ASSET_PROMPT_PREVIEW_LENGTH = 220;
+
+type PromptConversion = {
+  id: string;
+  aliases?: string[];
+  displayName: string;
+  promptFormat: string;
+  notes?: string;
+};
+
+const PROMPT_CONVERSION_TABLE: PromptConversion[] = [
+  {
+    id: 'midjourney',
+    aliases: ['midjourney-v6', 'mj', 'midjourney-v5'],
+    displayName: 'Midjourney',
+    promptFormat: 'subject, medium, lighting, mood, composition, stylers',
+    notes: 'Use :: to weight concepts and --ar for aspect ratio tweaks when relevant.'
+  },
+  {
+    id: 'sora',
+    aliases: ['openai-sora', 'sora-1'],
+    displayName: 'Sora',
+    promptFormat: 'subject • camera move • setting • lighting • mood • format',
+    notes: 'Keep prompts under 400 characters and emphasise temporal beats when describing motion.'
+  },
+  {
+    id: 'runway',
+    aliases: ['runway-gen2', 'runwayml'],
+    displayName: 'Runway Gen-2',
+    promptFormat: 'subject, action, environment, cinematic style, lighting, color grade',
+    notes: 'Short sentences separated by commas work best. Reference aspect ratio if critical.'
+  },
+  {
+    id: 'stable-diffusion',
+    aliases: ['sdxl', 'stability-ai', 'stable-diffusion-xl'],
+    displayName: 'Stable Diffusion XL',
+    promptFormat: 'subject, detailed descriptors, art style, lighting, color palette, lens info',
+    notes: 'Avoid negative phrases; use balanced commas and include desired guidance scale if needed.'
+  }
+];
+
+const getPromptConversion = (targetModel?: string | null): PromptConversion | null => {
+  if (!targetModel) {
+    return null;
+  }
+
+  const normalized = targetModel.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const match = PROMPT_CONVERSION_TABLE.find(entry => {
+    if (entry.id === normalized) {
+      return true;
+    }
+    if (!entry.aliases) {
+      return false;
+    }
+    return entry.aliases.some(alias => alias === normalized);
+  });
+
+  return match ?? null;
+};
 
 const cleanWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
@@ -1087,6 +973,31 @@ const truncateWithEllipsis = (text: string, maxLength: number): string => {
   }
 
   return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+};
+
+const formatAssetsForPrompt = (assets?: Asset[] | null): string => {
+  if (!assets || assets.length === 0) {
+    return 'No assets captured yet.';
+  }
+
+  return assets
+    .slice(0, 8)
+    .map(asset => {
+      const normalizedName = asset.name?.trim() || 'Untitled Asset';
+      const typeLabel = asset.type?.toUpperCase() || 'ASSET';
+      const tags = (asset.tags || []).filter(Boolean);
+      const tagPreview = tags.length ? tags.slice(0, ASSET_PROMPT_TAG_LIMIT).join(', ') : 'no tags';
+      const previewSource = cleanWhitespace(asset.summary || asset.content || '');
+      const preview = previewSource
+        ? truncateWithEllipsis(previewSource, ASSET_PROMPT_PREVIEW_LENGTH)
+        : 'No narrative captured yet.';
+      const lineage = Array.isArray(asset.lineage) && asset.lineage.length
+        ? ` | lineage: ${asset.lineage.join(' → ')}`
+        : '';
+
+      return `${typeLabel}: ${normalizedName} | seed: ${asset.seedId} | tags: ${tagPreview} | preview: ${preview}${lineage}`;
+    })
+    .join('\n');
 };
 
 const formatAssetPromptSummary = (asset: ProjectAsset): string => {
@@ -1320,10 +1231,65 @@ const extractJsonPayload = (text: string): string | null => {
   return trimmed;
 };
 
+function parseDirectorAdviceFallback(text: string): RawDirectorSuggestion[] {
+  if (!text) {
+    return [];
+  }
+
+  const sanitizedLines = text
+    .replace(/```[\s\S]*?```/g, '')
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const suggestions: RawDirectorSuggestion[] = [];
+  let current: RawDirectorSuggestion | null = null;
+
+  const commitCurrent = () => {
+    if (current && current.description) {
+      const committed: RawDirectorSuggestion = {
+        ...current,
+        advice: current.advice?.trim(),
+      };
+      suggestions.push(committed);
+    }
+    current = null;
+  };
+
+  sanitizedLines.forEach(line => {
+    const withoutBullet = line.replace(/^[-•*]+\s*/, '').replace(/^[0-9]+[.)]\s*/, '').trim();
+    if (!withoutBullet) {
+      return;
+    }
+
+    const typeMatch = withoutBullet.match(/^(addition|removal|edit|transition|color\s*grading|color\s*correction|note|tip)\s*[:\-]\s*(.+)$/i);
+    if (typeMatch) {
+      commitCurrent();
+      const [, rawType, rest] = typeMatch;
+      current = {
+        description: rest.trim(),
+        type: normalizeSuggestionType(rawType),
+      };
+      return;
+    }
+
+    if (!current) {
+      current = { description: withoutBullet };
+      return;
+    }
+
+    current.advice = current.advice ? `${current.advice} ${withoutBullet}` : withoutBullet;
+  });
+
+  commitCurrent();
+
+  return suggestions;
+}
+
 const parseDirectorAdviceResponse = (text: string): RawDirectorSuggestion[] => {
   const candidate = extractJsonPayload(text);
   if (!candidate) {
-    return [];
+    return parseDirectorAdviceFallback(text);
   }
 
   const tryParse = (value: string): unknown => {
@@ -1336,26 +1302,29 @@ const parseDirectorAdviceResponse = (text: string): RawDirectorSuggestion[] => {
 
   const parsed = tryParse(candidate) ?? tryParse(candidate.replace(/```/g, ''));
   if (!parsed) {
-    return [];
+    return parseDirectorAdviceFallback(candidate);
   }
 
   if (Array.isArray(parsed)) {
-    return parsed as RawDirectorSuggestion[];
+    const arrayResult = parsed as RawDirectorSuggestion[];
+    return arrayResult.length ? arrayResult : parseDirectorAdviceFallback(candidate);
   }
 
   if (typeof parsed === 'object' && parsed !== null) {
     const suggestions = (parsed as { suggestions?: unknown }).suggestions;
     if (Array.isArray(suggestions)) {
-      return suggestions as RawDirectorSuggestion[];
+      const suggestionArray = suggestions as RawDirectorSuggestion[];
+      return suggestionArray.length ? suggestionArray : parseDirectorAdviceFallback(candidate);
     }
 
     const dataArray = (parsed as { data?: unknown }).data;
     if (Array.isArray(dataArray)) {
-      return dataArray as RawDirectorSuggestion[];
+      const extracted = dataArray as RawDirectorSuggestion[];
+      return extracted.length ? extracted : parseDirectorAdviceFallback(candidate);
     }
   }
 
-  return [];
+  return parseDirectorAdviceFallback(candidate);
 };
 
 const normalizeSuggestionType = (value: unknown): DirectorSuggestion['type'] => {
@@ -1718,34 +1687,9 @@ export const generateDirectorAdvice = async (
   }
 };
 
-export const generateImageFromPrompt = async (
-  prompt: string,
-  model: string = DEFAULT_IMAGE_MODEL
-): Promise<GeminiResult<string>> => {
-  const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
-
-  try {
-    const { image, usage } = await requestImageWithFallback(enhancedPrompt, model);
-    return createResult(image, null, false, usage);
-  } catch (error: unknown) {
-    console.warn('Gemini image generation failed, falling back to mock mode:', error);
-    const mockCaption = [
-      `🖼️ **${LOOP_SIGNATURE} — Mock Image Placeholder**`,
-      'Gemini image generation is offline, so here is a placeholder tile for quick comps.',
-      `Prompt captured: ${prompt}`,
-      `Model: ${model}`,
-      '',
-      'Swap in a valid API key to stream real renders.'
-    ].join('\n');
-    return createResult(
-      JSON.stringify({ prompt, model, notes: mockCaption, placeholder: true, image: MOCK_IMAGE_PLACEHOLDER }),
-      null,
-      true
-    );
-  }
-};
 
 export const __testables = {
   truncateConversationHistory,
+  formatAssetsForPrompt,
   MAX_CONVERSATION_CONTEXT
 };

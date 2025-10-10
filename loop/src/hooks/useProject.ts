@@ -157,6 +157,25 @@ const normalizeUsageTotals = (
   };
 };
 
+const usageTotalsEqual = (
+  a?: UsageTotals | null,
+  b?: UsageTotals | null,
+): boolean => {
+  if (!a && !b) {
+    return true;
+  }
+
+  if (!a || !b) {
+    return false;
+  }
+
+  return (
+    a.promptTokens === b.promptTokens &&
+    a.completionTokens === b.completionTokens &&
+    a.totalTokens === b.totalTokens
+  );
+};
+
 const normalizeSeeds = (project: Project): Project => {
   let normalizedProject = project;
   const canonicalSeeds = new Map<string, string>();
@@ -323,25 +342,23 @@ export const useProject = (initialProject: Project) => {
     }
 
     const sanitized = normalizeUsageTotals(usage);
+    if (!sanitized) {
+      return;
+    }
 
-    setProjectState(prev => {
-      const current = prev.usage ?? DEFAULT_USAGE;
-      if (usageTotalsEqual(current, sanitized)) {
-        if (prev.usage) {
-          return prev;
-        }
-      }
-
-      if (prev.usage && usageTotalsEqual(prev.usage, sanitized)) {
+    setProject(prev => {
+      const currentTotals = prev.usageTotals;
+      if (usageTotalsEqual(currentTotals, sanitized)) {
         return prev;
       }
 
       return {
         ...prev,
-        usage: sanitized,
+        usageTotals: sanitized,
+        updatedAt: new Date(),
       };
     });
-  }, []);
+  }, [setProject]);
 
   const handleAddAsset = useCallback(
     (templateType: string) => {
