@@ -1,5 +1,6 @@
 import React from 'react';
 import { Cog6ToothIcon } from './IconComponents';
+import { PROMPT_CONVERSION_OPTIONS, getPromptConversion } from '../services/promptConversions';
 
 export const ControlPanel = ({
   tagWeights: _tagWeights,
@@ -13,7 +14,9 @@ export const ControlPanel = ({
   onOpenApi,
   onOpenOutput,
   isChromaEnabled,
-  onToggleChroma
+  onToggleChroma,
+  targetModel,
+  onTargetModelChange,
 }: {
   tagWeights: Record<string, number>;
   onTagWeightChange: (tagId: string, weight: number) => void;
@@ -27,7 +30,16 @@ export const ControlPanel = ({
   onOpenOutput: () => void;
   isChromaEnabled: boolean;
   onToggleChroma: (enabled: boolean) => void;
+  targetModel?: string | null;
+  onTargetModelChange: (modelId: string | null) => void;
 }) => {
+  const selectedConversion = getPromptConversion(targetModel ?? undefined);
+
+  const handleModelSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    onTargetModelChange(value ? value : null);
+  };
+
   return (
     <aside className="glass-card w-full p-4 flex flex-col overflow-y-auto custom-scrollbar max-h-full flex-shrink-0 transition-all duration-300">
       <div className="flex items-center gap-2 px-2 mb-4">
@@ -106,6 +118,28 @@ export const ControlPanel = ({
           >
             API Configuration
           </button>
+
+          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-white/10 bg-white/5">
+            <label htmlFor="prompt-model-select" className="font-medium ink-strong">
+              Prompt Output Model
+            </label>
+            <select
+              id="prompt-model-select"
+              value={targetModel ?? ''}
+              onChange={handleModelSelect}
+              className="w-full bg-white/90 text-gray-900 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            >
+              <option value="">Loop Standard (default)</option>
+              {PROMPT_CONVERSION_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs ink-subtle">
+              {selectedConversion ? selectedConversion.summary : 'Use Loop’s default prompt formatting for visual outputs.'}
+            </p>
+          </div>
         </div>
       </div>
     </aside>
