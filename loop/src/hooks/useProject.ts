@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { SetStateAction } from 'react';
-import type { Project, Asset, TimelineBlock } from '../types';
+import type { Project, Asset, TimelineBlock, UsageTotals } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
 import {
@@ -101,6 +101,34 @@ const ensureAssetSeeds = <T extends Asset>(
   return updatedAssets ?? assets;
 };
 
+const DEFAULT_USAGE: UsageTotals = {
+  promptTokens: 0,
+  completionTokens: 0,
+};
+
+const normalizeUsageTotals = (usage?: UsageTotals | null): UsageTotals => {
+  const prompt = Math.max(
+    0,
+    Number.isFinite(usage?.promptTokens) ? Math.round(usage!.promptTokens) : 0,
+  );
+  const completion = Math.max(
+    0,
+    Number.isFinite(usage?.completionTokens) ? Math.round(usage!.completionTokens) : 0,
+  );
+
+  if (prompt === 0 && completion === 0) {
+    return DEFAULT_USAGE;
+  }
+
+  return { promptTokens: prompt, completionTokens: completion };
+};
+
+const usageTotalsEqual = (a?: UsageTotals, b?: UsageTotals): boolean =>
+  !!a &&
+  !!b &&
+  a.promptTokens === b.promptTokens &&
+  a.completionTokens === b.completionTokens;
+
 const normalizeSeeds = (project: Project): Project => {
   let normalizedProject = project;
   const canonicalSeeds = new Map<string, string>();
@@ -177,6 +205,14 @@ const normalizeSeeds = (project: Project): Project => {
         thirdTimeline: normalizedThird,
       };
     }
+  }
+
+  const sanitizedUsage = normalizeUsageTotals(project.usage);
+  if (!usageTotalsEqual(project.usage, sanitizedUsage) || !project.usage) {
+    normalizedProject = {
+      ...normalizedProject,
+      usage: sanitizedUsage,
+    };
   }
 
   return normalizedProject;
@@ -315,6 +351,32 @@ export const useProject = (initialProject: Project) => {
   >('primary');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDirectorAdviceLoading, setIsDirectorAdviceLoading] = useState(false);
+
+  const updateUsage = useCallback((usage?: UsageTotals | null) => {
+    if (!usage) {
+      return;
+    }
+
+    const sanitized = normalizeUsageTotals(usage);
+
+    setProjectState(prev => {
+      const current = prev.usage ?? DEFAULT_USAGE;
+      if (usageTotalsEqual(current, sanitized)) {
+        if (prev.usage) {
+          return prev;
+        }
+      }
+
+      if (prev.usage && usageTotalsEqual(prev.usage, sanitized)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        usage: sanitized,
+      };
+    });
+  }, []);
 
   const handleAddAsset = useCallback(
     (templateType: string) => {
@@ -699,6 +761,8 @@ export const useProject = (initialProject: Project) => {
         target === 'story' ? 'Master Story' : 'Master Visual Style';
       const result = await generateFromWorkspace(workspace, {}, 50, outputType);
 
+      updateUsage(result.usage);
+
       if (result.data && !result.error) {
         const now = new Date();
         const sourceFolder = target === 'story' ? 'story' : 'image';
@@ -812,6 +876,8 @@ export const useProject = (initialProject: Project) => {
           tagWeights: options?.tagWeights,
           styleRigidity: options?.styleRigidity,
         });
+
+        updateUsage(result.usage);
 
         if (result.data) {
           const incomingSuggestions = result.data.map(suggestion => ({
@@ -946,6 +1012,7 @@ export const useProject = (initialProject: Project) => {
     () => ({
       project,
       setProject,
+      updateUsage,
       selectedAssetId,
       setSelectedAssetId,
       pendingDeleteAsset,
@@ -975,6 +1042,7 @@ export const useProject = (initialProject: Project) => {
     [
       project,
       setProject,
+      updateUsage,
       selectedAssetId,
       setSelectedAssetId,
       pendingDeleteAsset,

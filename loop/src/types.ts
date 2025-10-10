@@ -121,6 +121,11 @@ export interface DirectorSuggestion {
   createdAt: Date;
 }
 
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -132,6 +137,7 @@ export interface Project {
   createdAt: Date;
   updatedAt: Date;
   targetModel?: string; // Target AI model for generation (MidJourney, Sora, etc.)
+  usage?: UsageTotals;
   // Legacy timeline properties for backward compatibility
   tracks?: Track[];
   timelineItems?: TimelineItem[];
