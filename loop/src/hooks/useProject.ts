@@ -10,6 +10,7 @@ import {
   type DirectorAdviceSuggestionPayload,
 } from '../services/geminiService';
 import { TOKEN_DAILY_LIMIT } from '../services/config';
+import { parseScriptScenes } from '../utils/scriptParser';
 
 type FolderKey = string;
 
@@ -413,6 +414,76 @@ export const useProject = (initialProject: Project) => {
       handleAddAsset(templateType);
     },
     [handleAddAsset],
+  );
+
+  const handleImportScript = useCallback(
+    (script: string): { importedScenes: number; sceneTitles: string[] } | null => {
+      const scenes = parseScriptScenes(script);
+      if (!scenes.length) {
+        return null;
+      }
+
+      const now = new Date();
+      const newAssets: Asset[] = scenes.map(scene => ({
+        id: crypto.randomUUID(),
+        seedId: crypto.randomUUID(),
+        type: 'scene',
+        name: scene.slugline,
+        content: scene.content,
+        tags: ['scene', 'script-import'],
+        createdAt: now,
+        summary: scene.summary,
+        metadata: {
+          importSource: 'chat-script',
+          slugline: scene.slugline,
+          characters: scene.characters,
+          originalOrder: scene.order,
+        },
+        lineage: [],
+      }));
+
+      const newBlocks: TimelineBlock[] = newAssets.map(asset => ({
+        id: crypto.randomUUID(),
+        assetId: asset.id,
+        position: 0,
+        isExpanded: false,
+        createdAt: now,
+      }));
+
+      setProject(prev => {
+        const storyBlocks = prev.primaryTimeline.folders.story ?? [];
+        const updatedStory = reindexBlocks([
+          ...storyBlocks.map(block => ({ ...block })),
+          ...newBlocks,
+        ]);
+
+        return {
+          ...prev,
+          assets: [...prev.assets, ...newAssets],
+          primaryTimeline: {
+            ...prev.primaryTimeline,
+            folders: {
+              ...prev.primaryTimeline.folders,
+              story: updatedStory,
+            },
+          },
+          updatedAt: now,
+        };
+      });
+
+      setSelectedAssetId(newAssets[0]?.id ?? null);
+      setToastState({
+        id: crypto.randomUUID(),
+        message: `Imported ${newAssets.length} scene${newAssets.length === 1 ? '' : 's'} from script.`,
+        kind: 'success',
+      });
+
+      return {
+        importedScenes: newAssets.length,
+        sceneTitles: newAssets.map(asset => asset.name),
+      };
+    },
+    [setProject, setSelectedAssetId, setToastState],
   );
 
   const performAssetRemoval = useCallback(
@@ -962,6 +1033,7 @@ export const useProject = (initialProject: Project) => {
       handleCancelDelete,
       handleUndoDelete,
       handleUpdateAsset,
+      handleImportScript,
       selectedStoryAssets,
       setSelectedStoryAssets,
       selectedMultiShots,
@@ -995,6 +1067,7 @@ export const useProject = (initialProject: Project) => {
       handleCancelDelete,
       handleUndoDelete,
       handleUpdateAsset,
+      handleImportScript,
       selectedStoryAssets,
       setSelectedStoryAssets,
       selectedMultiShots,
