@@ -28,7 +28,9 @@ export const Timeline = ({
   onToggleMultiShot,
   onSelectMasterImage,
   onConfirmBatchStyle,
-  onCancelBatchStyle
+  onCancelBatchStyle,
+  onGenerateDirectorAdvice,
+  onAcceptSuggestion
 }: {
   project: Project;
   selectedAssetId: string | null;

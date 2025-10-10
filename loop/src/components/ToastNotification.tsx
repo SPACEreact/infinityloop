@@ -1,6 +1,6 @@
 import React from 'react';
 
-type ToastKind = 'info' | 'success' | 'warning';
+type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
 export interface ToastState {
   id: string;
