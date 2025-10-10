@@ -4,6 +4,15 @@ import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
 import type { DirectorSuggestion } from '../types';
 
+type ProjectAsset = {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  summary?: string;
+  tags: string[];
+};
+
 const MODEL_NAMESPACE_PREFIX = 'models/';
 
 const DEFAULT_TEXT_MODEL = 'gemini-1.5-pro-latest';
@@ -707,140 +716,41 @@ const prominentTags = (tagWeights: Record<string, number>) =>
     .map(([tag, weight]) => `${tag} (${Math.round(weight * 100)}%)`)
     .join(', ');
 
-export interface DirectorAdviceTimelineEntry {
-  assetId: string;
-  name: string;
-  type?: string;
-  summary?: string;
-  contentPreview?: string;
-}
+const ASSET_PROMPT_TAG_LIMIT = 3;
+const ASSET_PROMPT_PREVIEW_LENGTH = 220;
 
-export interface DirectorAdviceContext {
-  projectName: string;
-  assets: Array<{
-    id: string;
-    type: string;
-    name: string;
-    summary?: string;
-    tags?: string[];
-    contentPreview?: string;
-  }>;
-  primaryTimeline: {
-    story: DirectorAdviceTimelineEntry[];
-    image: DirectorAdviceTimelineEntry[];
-    text_to_video: DirectorAdviceTimelineEntry[];
-  };
-  secondaryTimeline?: {
-    masterAssets?: Array<{ id: string; name: string; summary?: string }>;
-    shotLists?: Array<{
-      id: string;
-      masterAssetId: string;
-      shots: Array<{ id: string; name: string; description?: string }>;
-    }>;
-  };
-  thirdTimeline?: {
-    styledShots?: Array<{ id: string; name: string; description?: string }>;
-  };
-  existingSuggestions?: Array<{
-    id: string;
-    type: DirectorSuggestion['type'];
-    description: string;
-    accepted: boolean;
-  }>;
-}
+const cleanWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-export interface DirectorAdviceSuggestionPayload {
-  id?: string;
-  type: DirectorSuggestion['type'];
-  description: string;
-  advice?: string;
-  targetAssetId?: string;
-}
-
-const DIRECTOR_SUGGESTION_TYPES: DirectorSuggestion['type'][] = [
-  'addition',
-  'removal',
-  'edit',
-  'color_grading',
-  'transition',
-  'other'
-];
-
-const toTrimmedString = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') {
-    return undefined;
+const truncateWithEllipsis = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) {
+    return text;
   }
 
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
-const sanitizeSuggestionType = (value?: string): DirectorSuggestion['type'] => {
-  const normalized = value?.toLowerCase() ?? '';
-  return (DIRECTOR_SUGGESTION_TYPES.find(type => type === normalized) ?? 'other') as DirectorSuggestion['type'];
+const formatAssetPromptSummary = (asset: ProjectAsset): string => {
+  const normalizedTags = (asset.tags || []).filter(Boolean);
+  const tagPreview = normalizedTags.length
+    ? normalizedTags.slice(0, ASSET_PROMPT_TAG_LIMIT).join(', ')
+    : 'no tags';
+
+  const contentSource = asset.summary?.trim() ? 'Summary' : 'Content';
+  const baseText = cleanWhitespace(asset.summary || asset.content || '');
+  const previewText = baseText
+    ? truncateWithEllipsis(baseText, ASSET_PROMPT_PREVIEW_LENGTH)
+    : 'No narrative captured yet.';
+
+  return `• ${asset.name} [${asset.type}] — tags: ${tagPreview} — ${contentSource}: ${previewText}`;
 };
 
-const extractJsonPayload = (raw: string): string => {
-  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fencedMatch ? fencedMatch[1] : raw;
-  const objectStart = candidate.indexOf('{');
-  const arrayStart = candidate.indexOf('[');
-
-  if (objectStart === -1 && arrayStart === -1) {
-    throw new Error('Director advice response did not include a JSON payload.');
+const isDevelopmentEnv = (): boolean => {
+  if (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') {
+    return true;
   }
 
-  if (arrayStart !== -1 && (arrayStart < objectStart || objectStart === -1)) {
-    const arrayEnd = candidate.lastIndexOf(']');
-    if (arrayEnd === -1) {
-      throw new Error('Director advice array payload was malformed.');
-    }
-    return candidate.slice(arrayStart, arrayEnd + 1);
-  }
-
-  const objectEnd = candidate.lastIndexOf('}');
-  if (objectEnd === -1) {
-    throw new Error('Director advice object payload was malformed.');
-  }
-
-  return candidate.slice(objectStart, objectEnd + 1);
-};
-
-const parseDirectorAdviceResponse = (raw: string): DirectorAdviceSuggestionPayload[] => {
-  const payload = extractJsonPayload(raw);
-  const parsed = JSON.parse(payload) as unknown;
-
-  const suggestionsSource = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { suggestions?: unknown })?.suggestions)
-      ? ((parsed as { suggestions?: unknown }).suggestions as unknown[])
-      : [];
-
-  if (!Array.isArray(suggestionsSource)) {
-    throw new Error('Director advice suggestions payload was not an array.');
-  }
-
-  return suggestionsSource
-    .map((entry): DirectorAdviceSuggestionPayload | null => {
-      const description = toTrimmedString((entry as { description?: unknown })?.description);
-      if (!description) {
-        return null;
-      }
-
-      const type = sanitizeSuggestionType(toTrimmedString((entry as { type?: unknown })?.type));
-      const advice = toTrimmedString((entry as { advice?: unknown })?.advice);
-      const targetAssetId = toTrimmedString((entry as { targetAssetId?: unknown })?.targetAssetId);
-      const id = toTrimmedString((entry as { id?: unknown })?.id);
-
-      return {
-        id: id ?? undefined,
-        type,
-        description,
-        advice: advice ?? undefined,
-        targetAssetId: targetAssetId ?? undefined
-      };
-    })
-    .filter((entry): entry is DirectorAdviceSuggestionPayload => entry !== null);
+  const meta = import.meta as ImportMeta & { env?: { DEV?: boolean } };
+  return Boolean(meta?.env?.DEV);
 };
 
 const createMockChatResponse = (
@@ -873,7 +783,7 @@ const createMockChatResponse = (
 };
 
 const summarizeAssets = (project: {
-  assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+  assets: ProjectAsset[];
 }) => {
   if (!project.assets?.length) return 'No assets pinned yet—this build starts from a clean slate.';
   return project.assets
@@ -884,7 +794,7 @@ const summarizeAssets = (project: {
 
 const createMockWorkspaceResponse = (
   project: {
-    assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+    assets: ProjectAsset[];
   },
   outputType: string,
   tagWeights: Record<string, number>,
@@ -1063,7 +973,7 @@ export const generateDirectorAdvice = async (
 
 export const generateFromWorkspace = async (
   project: {
-    assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+    assets: ProjectAsset[];
     canvas: {
       nodes: Array<{ id: string; assetId: string; position: { x: number; y: number }; size: number }>;
       connections: Array<{ from: string; to: string; type: 'harmony' | 'tension'; harmonyLevel: number }>;
@@ -1090,32 +1000,9 @@ export const generateFromWorkspace = async (
     systemPrompt += `\nFocus: ${weightedTags}.`;
   }
 
-  const conversion = getPromptConversion(project.targetModel);
-
-  const responseSections = [
-    'Story Blueprint — provide logline, synopsis, and thematic throughline.',
-    'Screenplay Beat — deliver a short screenplay-formatted excerpt (INT./EXT., action lines, dialogue).',
-    'Visual Prompt Pack — list copy/paste prompts for imagery keyed to the story beats.',
-  ];
-
-  systemPrompt += `\nRespond in Markdown with clear section headings:`;
-  responseSections.forEach(section => {
-    systemPrompt += `\n- ${section}`;
-  });
-
-  systemPrompt += '\nKeep screenplay formatting tight (no more than 12 lines).';
-
-  if (conversion) {
-    systemPrompt += `\nFor the Visual Prompt Pack, format each prompt as: ${conversion.promptFormat}.`;
-    if (conversion.notes) {
-      systemPrompt += ` ${conversion.notes}`;
-    }
-    systemPrompt += ' Output each prompt on a single line prefixed with a dash for easy copy/paste and reference seed continuity when available.';
-  } else {
-    systemPrompt += '\nEach visual prompt should be a single-line bullet that includes subject, setting, mood, camera, lighting, color, and seed continuity.';
-  }
-
-  const assetsText = formatAssetsForPrompt(project.assets as Asset[]);
+  const assetsText = project.assets.length
+    ? project.assets.map(formatAssetPromptSummary).join('\n')
+    : 'No project assets captured yet.';
 
   const canvasText = project.canvas.connections.length
     ? `Canvas connections: ${project.canvas.connections
@@ -1129,6 +1016,10 @@ export const generateFromWorkspace = async (
 
   const fullPromptContent = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
   const fullPrompt = validateAndOptimizePrompt(fullPromptContent);
+
+  if (isDevelopmentEnv()) {
+    console.debug('[Gemini] Workspace prompt length:', fullPromptContent.length);
+  }
 
   try {
     const { text } = await requestTextWithFallback(fullPrompt);
