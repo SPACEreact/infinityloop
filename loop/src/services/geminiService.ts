@@ -2,7 +2,6 @@ import type { Asset, DirectorSuggestion, Project } from '../types';
 import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
-import type { DirectorSuggestion } from '../types';
 
 type ProjectAsset = {
   id: string;
@@ -848,42 +847,196 @@ const createMockBuildResponse = (
   ].join('\n');
 };
 
-const createMockDirectorAdvice = (
-  context: DirectorAdviceContext
-): DirectorAdviceSuggestionPayload[] => {
-  const firstStoryBeat = context.primaryTimeline.story[0];
-  const firstImageBeat = context.primaryTimeline.image[0];
-  const firstMasterAsset = context.secondaryTimeline?.masterAssets?.[0];
-  const firstStyledShot = context.thirdTimeline?.styledShots?.[0];
-  const focalName = firstStoryBeat?.name ?? firstMasterAsset?.name ?? context.projectName;
+const generateSuggestionId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
 
-  return [
+  return `suggestion-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const createMockDirectorAdvice = (project: Project): DirectorSuggestion[] => {
+  const assetsById = new Map(project.assets.map(asset => [asset.id, asset] as const));
+  const storyBlocks = project.primaryTimeline.folders?.story ?? [];
+  const imageBlocks = project.primaryTimeline.folders?.image ?? [];
+
+  const storyAsset = storyBlocks.length
+    ? assetsById.get(storyBlocks[0].assetId)
+    : undefined;
+  const imageAsset = imageBlocks.length
+    ? assetsById.get(imageBlocks[0].assetId)
+    : undefined;
+  const masterAsset = project.secondaryTimeline?.masterAssets?.[0];
+  const styledShot = project.thirdTimeline?.styledShots?.[0];
+
+  const focalAsset = storyAsset ?? masterAsset ?? imageAsset ?? styledShot;
+  const focalName = focalAsset?.name ?? project.name ?? 'your project';
+  const timestamp = new Date();
+
+  const suggestions: DirectorSuggestion[] = [
     {
+      id: generateSuggestionId(),
       type: 'addition',
-      description: `Add an establishing shot to reinforce the world of "${focalName}" before the conflict escalates.`,
-      advice: 'Open with a wide or overhead angle that telegraphs tone and geography, then cut into the inciting action.',
-      targetAssetId: firstStoryBeat?.assetId ?? firstMasterAsset?.id
+      description: `Add an establishing beat to ground "${focalName}" before the conflict escalates.`,
+      advice:
+        'Open with a wide or overhead angle that telegraphs tone and geography, then cut into the inciting action.',
+      targetAssetId: storyAsset?.id ?? masterAsset?.id ?? styledShot?.id,
+      targetAssetName: storyAsset?.name ?? masterAsset?.name ?? styledShot?.name,
+      accepted: false,
+      createdAt: timestamp
     },
     {
+      id: generateSuggestionId(),
       type: 'edit',
       description: 'Tighten the midpoint exchange to keep momentum high.',
       advice: 'Trim redundant dialogue and let a reaction shot breathe for two beats before the reversal lands.',
-      targetAssetId: firstStoryBeat?.assetId ?? firstImageBeat?.assetId
+      targetAssetId: storyAsset?.id ?? imageAsset?.id,
+      targetAssetName: storyAsset?.name ?? imageAsset?.name,
+      accepted: false,
+      createdAt: timestamp
     },
     {
+      id: generateSuggestionId(),
       type: 'color_grading',
       description: 'Warm the climax beat to emphasize emotional release.',
       advice: 'Introduce a golden-hour lift on the hero shot and balance it with a cooler rim-light on supporting characters.',
-      targetAssetId: firstStyledShot?.id ?? firstImageBeat?.assetId
+      targetAssetId: styledShot?.id ?? imageAsset?.id,
+      targetAssetName: styledShot?.name ?? imageAsset?.name,
+      accepted: false,
+      createdAt: timestamp
     },
     {
+      id: generateSuggestionId(),
       type: 'transition',
       description: 'Bridge the final two scenes with a motivated match cut.',
-      advice: 'Match a gesture or prop between the closing shot of scene two and the opener of scene three to signal thematic continuity.',
-      targetAssetId: firstStyledShot?.id ?? firstStoryBeat?.assetId
+      advice:
+        'Match a gesture or prop between the closing shot of scene two and the opener of scene three to signal thematic continuity.',
+      targetAssetId: styledShot?.id ?? storyAsset?.id,
+      targetAssetName: styledShot?.name ?? storyAsset?.name,
+      accepted: false,
+      createdAt: timestamp
     }
   ];
+
+  return suggestions;
 };
+
+type RawDirectorSuggestion = {
+  id?: string;
+  type?: string;
+  summary?: string;
+  description?: string;
+  advice?: string;
+  note?: string;
+  targetAssetId?: string;
+  target_asset_id?: string;
+  targetAssetName?: string;
+  target_asset_name?: string;
+  accepted?: boolean;
+};
+
+const extractJsonPayload = (text: string): string | null => {
+  if (!text) {
+    return null;
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch && fencedMatch[1]?.trim()) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  return trimmed;
+};
+
+const parseDirectorAdviceResponse = (text: string): RawDirectorSuggestion[] => {
+  const candidate = extractJsonPayload(text);
+  if (!candidate) {
+    return [];
+  }
+
+  const tryParse = (value: string): unknown => {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const parsed = tryParse(candidate) ?? tryParse(candidate.replace(/```/g, ''));
+  if (!parsed) {
+    return [];
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed as RawDirectorSuggestion[];
+  }
+
+  if (typeof parsed === 'object' && parsed !== null) {
+    const suggestions = (parsed as { suggestions?: unknown }).suggestions;
+    if (Array.isArray(suggestions)) {
+      return suggestions as RawDirectorSuggestion[];
+    }
+
+    const dataArray = (parsed as { data?: unknown }).data;
+    if (Array.isArray(dataArray)) {
+      return dataArray as RawDirectorSuggestion[];
+    }
+  }
+
+  return [];
+};
+
+const normalizeSuggestionType = (value: unknown): DirectorSuggestion['type'] => {
+  if (typeof value !== 'string') {
+    return 'other';
+  }
+
+  const normalized = value.toLowerCase().replace(/[^a-z_]+/g, ' ').trim();
+  const directMatch = normalized.replace(/\s+/g, '_');
+
+  const allowed: DirectorSuggestion['type'][] = [
+    'addition',
+    'removal',
+    'edit',
+    'color_grading',
+    'transition',
+    'other'
+  ];
+
+  if (allowed.includes(directMatch as DirectorSuggestion['type'])) {
+    return directMatch as DirectorSuggestion['type'];
+  }
+
+  if (normalized.includes('add')) {
+    return 'addition';
+  }
+  if (normalized.includes('remov') || normalized.includes('delete')) {
+    return 'removal';
+  }
+  if (normalized.includes('color')) {
+    return 'color_grading';
+  }
+  if (normalized.includes('transition')) {
+    return 'transition';
+  }
+  if (normalized.includes('edit') || normalized.includes('revision') || normalized.includes('revise')) {
+    return 'edit';
+  }
+
+  return 'other';
+};
+
 
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
@@ -935,39 +1088,6 @@ export const generateSandboxResponse = async (
   } catch (error: unknown) {
     console.warn('Gemini chat generation failed, falling back to mock mode:', error);
     return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
-  }
-};
-
-export const generateDirectorAdvice = async (
-  context: DirectorAdviceContext
-): Promise<GeminiResult<DirectorAdviceSuggestionPayload[]>> => {
-  const { existingSuggestions = [], ...projectSnapshot } = context;
-
-  const promptSections = [
-    'You are Loop, an award-winning film director AI embedded inside a collaborative workspace.',
-    'Study the project context and return 3-5 actionable suggestions that a director or editor could apply right now.',
-    'Respond only with compact JSON matching this schema: { "suggestions": [ { "id": "optional", "type": "addition|removal|edit|color_grading|transition|other", "description": "string", "advice": "string (optional)", "targetAssetId": "string (optional)" } ] }.',
-    'Each suggestion should focus on cinematic craft (blocking, pacing, transitions, color, etc.) and avoid duplicating previously accepted notes.',
-    existingSuggestions.length
-      ? `Previously surfaced suggestions (accepted indicates if the user already locked them in):\n${JSON.stringify(existingSuggestions, null, 2)}`
-      : 'No earlier director suggestions have been accepted yet.',
-    `Project context:\n${JSON.stringify(projectSnapshot, null, 2)}`
-  ];
-
-  const fullPrompt = validateAndOptimizePrompt(promptSections.join('\n\n'));
-
-  try {
-    const { text } = await requestTextWithFallback(fullPrompt);
-    const suggestions = parseDirectorAdviceResponse(text);
-
-    if (!suggestions.length) {
-      return createResult(createMockDirectorAdvice(context), null, true);
-    }
-
-    return createResult(suggestions, null, false);
-  } catch (error) {
-    console.warn('Gemini director advice generation failed, falling back to mock mode:', error);
-    return createResult(createMockDirectorAdvice(context), null, true);
   }
 };
 
