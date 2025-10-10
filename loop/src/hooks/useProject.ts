@@ -281,9 +281,7 @@ const mapTimelineBlocksToDirectorEntries = (
       summary: asset?.summary,
       contentPreview: toContentPreview(asset?.content, 360),
     };
-  }
-
-  return normalizedProject;
+  });
 };
 
 export const useProject = (initialProject: Project) => {

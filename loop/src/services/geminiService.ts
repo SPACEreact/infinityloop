@@ -1450,39 +1450,6 @@ export const generateSandboxResponse = async (
   }
 };
 
-export const generateDirectorAdvice = async (
-  context: DirectorAdviceContext
-): Promise<GeminiResult<DirectorAdviceSuggestionPayload[]>> => {
-  const { existingSuggestions = [], ...projectSnapshot } = context;
-
-  const promptSections = [
-    'You are Loop, an award-winning film director AI embedded inside a collaborative workspace.',
-    'Study the project context and return 3-5 actionable suggestions that a director or editor could apply right now.',
-    'Respond only with compact JSON matching this schema: { "suggestions": [ { "id": "optional", "type": "addition|removal|edit|color_grading|transition|other", "description": "string", "advice": "string (optional)", "targetAssetId": "string (optional)" } ] }.',
-    'Each suggestion should focus on cinematic craft (blocking, pacing, transitions, color, etc.) and avoid duplicating previously accepted notes.',
-    existingSuggestions.length
-      ? `Previously surfaced suggestions (accepted indicates if the user already locked them in):\n${JSON.stringify(existingSuggestions, null, 2)}`
-      : 'No earlier director suggestions have been accepted yet.',
-    `Project context:\n${JSON.stringify(projectSnapshot, null, 2)}`
-  ];
-
-  const fullPrompt = validateAndOptimizePrompt(promptSections.join('\n\n'));
-
-  try {
-    const { text, usage } = await requestTextWithFallback(fullPrompt);
-    const suggestions = parseDirectorAdviceResponse(text);
-
-    if (!suggestions.length) {
-      return createResult(createMockDirectorAdvice(context), null, true);
-    }
-
-    return createResult(suggestions, null, false, usage);
-  } catch (error) {
-    console.warn('Gemini director advice generation failed, falling back to mock mode:', error);
-    return createResult(createMockDirectorAdvice(context), null, true);
-  }
-};
-
 export const generateFromWorkspace = async (
   project: {
     assets: ProjectAsset[];
