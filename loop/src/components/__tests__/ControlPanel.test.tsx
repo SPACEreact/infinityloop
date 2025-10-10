@@ -12,6 +12,7 @@ const baseProps = {
   onOpenReference: () => {},
   onOpenHelp: () => {},
   onOpenApi: () => {},
+  onOpenScriptImport: () => {},
   onOpenOutput: () => {},
   isChromaEnabled: false,
   onToggleChroma: () => {},

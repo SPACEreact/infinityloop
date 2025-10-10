@@ -24,6 +24,7 @@ import FloatingOutputButton from './FloatingOutputButton';
 import { apiConfig } from '../services/config';
 import { syncAssetsToMcp } from '../services/mcpService';
 import { useWorkspace } from '../state/WorkspaceContext';
+import { ScriptImportModal } from './ScriptImportModal';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
@@ -85,6 +86,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isChromaEnabled, setIsChromaEnabled] = useState(() => apiConfig.isEnabled('chromadb'));
+  const [isScriptImportOpen, setIsScriptImportOpen] = useState(false);
 
   useEffect(() => {
     if (!isApiConfigOpen) {
@@ -162,6 +164,29 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
       setIsChatLoading(false);
     }
   }, [chatMessages, tagWeights, styleRigidity, handleImportScript]);
+
+  const handleScriptImportFromModal = useCallback((script: string) => {
+    const result = handleImportScript(script);
+    if (result) {
+      const sceneList = result.sceneTitles
+        .map(title => `• ${title}`)
+        .join('\n');
+
+      const confirmation = [
+        `Imported ${result.importedScenes} scene${result.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
+        sceneList ? '\n' + sceneList : ''
+      ].join('').trim();
+
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: ChatRole.MODEL,
+          content: confirmation || 'Script imported into the timeline.'
+        }
+      ]);
+    }
+    return result;
+  }, [handleImportScript, setChatMessages]);
 
   const handleRequestFieldSuggestion = useCallback(async ({ assetId, fieldKey, fieldLabel, currentValue }: any) => {
     const asset = project.assets.find(a => a.id === assetId);
@@ -650,6 +675,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
                 onOpenReference={() => setIsReferenceViewerOpen(true)}
                 onOpenHelp={() => setIsUserGuideOpen(true)}
                 onOpenApi={() => setIsApiConfigOpen(true)}
+                onOpenScriptImport={() => setIsScriptImportOpen(true)}
                 onOpenOutput={() => setIsOutputModalOpen(true)}
                 isChromaEnabled={isChromaEnabled}
                 onToggleChroma={handleToggleChromaService}
@@ -687,9 +713,15 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
         onClose={() => setIsUserGuideOpen(false)}
       />
 
-      <ApiConfig 
+      <ApiConfig
         isOpen={isApiConfigOpen}
         onClose={() => setIsApiConfigOpen(false)}
+      />
+
+      <ScriptImportModal
+        isOpen={isScriptImportOpen}
+        onClose={() => setIsScriptImportOpen(false)}
+        onImport={handleScriptImportFromModal}
       />
 
       <React.Suspense fallback={<div>Loading...</div>}>
