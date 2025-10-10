@@ -132,9 +132,23 @@ export interface Project {
   createdAt: Date;
   updatedAt: Date;
   targetModel?: string; // Target AI model for generation (MidJourney, Sora, etc.)
+  usageTotals?: UsageTotals;
   // Legacy timeline properties for backward compatibility
   tracks?: Track[];
   timelineItems?: TimelineItem[];
+}
+
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface UsageStats {
+  used: number;
+  remaining: number;
+  percent: number;
+  limit: number;
 }
 
 // Enhanced Guided Build Types

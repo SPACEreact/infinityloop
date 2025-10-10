@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Cog6ToothIcon } from './IconComponents';
 import { PROMPT_CONVERSION_OPTIONS, getPromptConversion } from '../services/promptConversions';
 
@@ -17,6 +17,7 @@ export const ControlPanel = ({
   onToggleChroma,
   targetModel,
   onTargetModelChange,
+  usageStats,
 }: {
   tagWeights: Record<string, number>;
   onTagWeightChange: (tagId: string, weight: number) => void;
@@ -32,13 +33,36 @@ export const ControlPanel = ({
   onToggleChroma: (enabled: boolean) => void;
   targetModel?: string | null;
   onTargetModelChange: (modelId: string | null) => void;
+  usageStats?: {
+    used: number;
+    remaining: number;
+    percent: number;
+    limit: number;
+  } | null;
 }) => {
   const selectedConversion = getPromptConversion(targetModel ?? undefined);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('en-US'), []);
 
   const handleModelSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
     onTargetModelChange(value ? value : null);
   };
+
+  const usagePercentDisplay = usageStats ? Math.round(usageStats.percent) : null;
+  const clampedPercent = usageStats
+    ? Math.max(0, Math.min(100, usageStats.percent))
+    : 0;
+  const formattedUsed = usageStats
+    ? numberFormatter.format(Math.round(Math.max(0, usageStats.used)))
+    : '0';
+  const formattedLimit = usageStats
+    ? numberFormatter.format(Math.round(Math.max(0, usageStats.limit)))
+    : '0';
+  const remainingTokens = usageStats ? Math.round(Math.max(0, usageStats.remaining)) : null;
+  const formattedRemaining =
+    remainingTokens !== null ? numberFormatter.format(remainingTokens) : null;
+  const overageTokens = usageStats ? Math.round(Math.max(0, usageStats.used - usageStats.limit)) : 0;
+  const formattedOverage = overageTokens ? numberFormatter.format(overageTokens) : null;
 
   return (
     <aside className="glass-card w-full p-4 flex flex-col overflow-y-auto custom-scrollbar max-h-full flex-shrink-0 transition-all duration-300">
@@ -139,6 +163,39 @@ export const ControlPanel = ({
             <p className="text-xs ink-subtle">
               {selectedConversion ? selectedConversion.summary : 'Use Loop’s default prompt formatting for visual outputs.'}
             </p>
+          </div>
+
+          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-white/10 bg-white/5" aria-live="polite">
+            <div className="flex items-center justify-between">
+              <span className="font-medium ink-strong">Daily Token Usage</span>
+              {usageStats ? (
+                <span className="text-xs ink-subtle">{usagePercentDisplay}%</span>
+              ) : null}
+            </div>
+            {usageStats ? (
+              <>
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className={`h-full ${usageStats.percent >= 100 ? 'bg-red-500' : 'bg-blue-500'}`}
+                    style={{ width: `${clampedPercent}%` }}
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={usageStats.limit}
+                    aria-valuenow={Math.min(usageStats.limit, Math.max(0, usageStats.used))}
+                    aria-label="Daily token consumption"
+                  />
+                </div>
+                <p className="text-xs ink-subtle">
+                  Used {formattedUsed} of {formattedLimit} tokens
+                  {formattedRemaining !== null && usageStats.remaining >= 0
+                    ? ` (${formattedRemaining} remaining)`
+                    : ''}
+                  {formattedOverage ? ` (Over by ${formattedOverage})` : ''}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs ink-subtle">Usage data is not available for this project yet.</p>
+            )}
           </div>
         </div>
       </div>

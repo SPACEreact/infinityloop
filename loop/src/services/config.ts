@@ -3,6 +3,32 @@ const NETLIFY_FUNCTION_PATH = '/.netlify/functions/gemini-api';
 
 const normalizeString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
+const parsePositiveNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  return null;
+};
+
+const resolveEnvValue = (key: string): string => {
+  const fromImportMeta = (import.meta as ImportMeta | undefined)?.env?.[key];
+  if (typeof fromImportMeta === 'string') {
+    return fromImportMeta;
+  }
+
+  if (typeof process !== 'undefined' && typeof process.env?.[key] === 'string') {
+    return process.env[key] as string;
+  }
+
+  return '';
+};
+
 const isLikelyGeminiProxyUrl = (url: string | undefined): boolean => {
   if (!url) return false;
 
@@ -351,3 +377,12 @@ class ApiConfigManager {
 export const apiConfig = ApiConfigManager.getInstance();
 
 export { DEFAULT_GEMINI_BASE_URL };
+
+const DEFAULT_TOKEN_DAILY_LIMIT = 200_000;
+
+const resolvedTokenDailyLimit =
+  parsePositiveNumber(resolveEnvValue('VITE_TOKEN_DAILY_LIMIT')) ?? DEFAULT_TOKEN_DAILY_LIMIT;
+
+export const TOKEN_DAILY_LIMIT = resolvedTokenDailyLimit;
+
+export const getTokenDailyLimit = (): number => TOKEN_DAILY_LIMIT;
