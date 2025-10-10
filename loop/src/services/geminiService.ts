@@ -2,6 +2,15 @@ import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
 
+type ProjectAsset = {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  summary?: string;
+  tags: string[];
+};
+
 const MODEL_NAMESPACE_PREFIX = 'models/';
 
 const DEFAULT_TEXT_MODEL = 'gemini-1.5-pro-latest';
@@ -672,6 +681,43 @@ const prominentTags = (tagWeights: Record<string, number>) =>
     .map(([tag, weight]) => `${tag} (${Math.round(weight * 100)}%)`)
     .join(', ');
 
+const ASSET_PROMPT_TAG_LIMIT = 3;
+const ASSET_PROMPT_PREVIEW_LENGTH = 220;
+
+const cleanWhitespace = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+const truncateWithEllipsis = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+};
+
+const formatAssetPromptSummary = (asset: ProjectAsset): string => {
+  const normalizedTags = (asset.tags || []).filter(Boolean);
+  const tagPreview = normalizedTags.length
+    ? normalizedTags.slice(0, ASSET_PROMPT_TAG_LIMIT).join(', ')
+    : 'no tags';
+
+  const contentSource = asset.summary?.trim() ? 'Summary' : 'Content';
+  const baseText = cleanWhitespace(asset.summary || asset.content || '');
+  const previewText = baseText
+    ? truncateWithEllipsis(baseText, ASSET_PROMPT_PREVIEW_LENGTH)
+    : 'No narrative captured yet.';
+
+  return `• ${asset.name} [${asset.type}] — tags: ${tagPreview} — ${contentSource}: ${previewText}`;
+};
+
+const isDevelopmentEnv = (): boolean => {
+  if (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') {
+    return true;
+  }
+
+  const meta = import.meta as ImportMeta & { env?: { DEV?: boolean } };
+  return Boolean(meta?.env?.DEV);
+};
+
 const createMockChatResponse = (
   userMessage: string,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
@@ -702,7 +748,7 @@ const createMockChatResponse = (
 };
 
 const summarizeAssets = (project: {
-  assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+  assets: ProjectAsset[];
 }) => {
   if (!project.assets?.length) return 'No assets pinned yet—this build starts from a clean slate.';
   return project.assets
@@ -713,7 +759,7 @@ const summarizeAssets = (project: {
 
 const createMockWorkspaceResponse = (
   project: {
-    assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+    assets: ProjectAsset[];
   },
   outputType: string,
   tagWeights: Record<string, number>,
@@ -825,7 +871,7 @@ export const generateSandboxResponse = async (
 
 export const generateFromWorkspace = async (
   project: {
-    assets: Array<{ id: string; type: string; name: string; content: string; tags: string[] }>;
+    assets: ProjectAsset[];
     canvas: {
       nodes: Array<{ id: string; assetId: string; position: { x: number; y: number }; size: number }>;
       connections: Array<{ from: string; to: string; type: 'harmony' | 'tension'; harmonyLevel: number }>;
@@ -851,9 +897,9 @@ export const generateFromWorkspace = async (
     systemPrompt += `\nFocus: ${weightedTags}.`;
   }
 
-  const assetsText = project.assets
-    .map(asset => `${asset.type}: ${asset.name} - ${asset.content} (tags: ${asset.tags.join(', ')})`)
-    .join('\n');
+  const assetsText = project.assets.length
+    ? project.assets.map(formatAssetPromptSummary).join('\n')
+    : 'No project assets captured yet.';
 
   const canvasText = project.canvas.connections.length
     ? `Canvas connections: ${project.canvas.connections
@@ -867,6 +913,10 @@ export const generateFromWorkspace = async (
 
   const fullPromptContent = `${systemPrompt}\n\nProject Assets:\n${assetsText}\n\nCanvas Structure:\n${canvasText}\n\nGenerate ${outputType} output:`;
   const fullPrompt = validateAndOptimizePrompt(fullPromptContent);
+
+  if (isDevelopmentEnv()) {
+    console.debug('[Gemini] Workspace prompt length:', fullPromptContent.length);
+  }
 
   try {
     const { text } = await requestTextWithFallback(fullPrompt);
