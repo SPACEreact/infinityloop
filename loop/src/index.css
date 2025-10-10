@@ -70,56 +70,61 @@
   }
 
   :root[data-theme='light'] {
-    --background: 270 35% 98%;
-    --foreground: 268 40% 18%;
-    --card: 270 34% 99%;
-    --card-foreground: 268 42% 22%;
-    --popover: 270 30% 100%;
-    --popover-foreground: 268 45% 22%;
-    --primary: 268 84% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 70% 56%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 270 24% 92%;
-    --muted-foreground: 268 42% 34%;
-    --accent: 20 82% 58%;
-    --accent-foreground: 18 86% 18%;
-    --destructive: 358 74% 52%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 270 24% 84%;
-    --input: 270 22% 90%;
-    --ring: 268 78% 58%;
-    --ink: 268 44% 18%;
-    --timeline-scene-surface: 358 52% 88%;
-    --timeline-scene-highlight: 358 68% 72%;
-    --timeline-scene-edge: 358 68% 64%;
-    --timeline-visual-surface: 220 48% 86%;
-    --timeline-visual-highlight: 220 64% 72%;
-    --timeline-visual-edge: 220 66% 62%;
-    --timeline-multishot-surface: 150 44% 82%;
-    --timeline-multishot-highlight: 150 56% 66%;
-    --timeline-multishot-edge: 150 58% 58%;
-    --timeline-masterasset-surface: 282 54% 86%;
-    --timeline-masterasset-highlight: 282 64% 72%;
-    --timeline-masterasset-edge: 282 66% 60%;
-    --timeline-director-surface: 32 58% 88%;
-    --timeline-director-highlight: 32 70% 72%;
-    --timeline-director-edge: 32 72% 60%;
-    --workspace-header-surface: 270 34% 96%;
-    --workspace-header-border: 270 24% 84%;
-    --theme-toggle-surface: 270 30% 96%;
-    --theme-toggle-highlight: 270 26% 90%;
-    --theme-toggle-text: 268 42% 22%;
-    --theme-toggle-glow: 268 78% 58%;
-    --chat-button-surface: 327 86% 62%;
-    --chat-button-highlight: 266 82% 62%;
-    --chat-button-muted-surface: 325 94% 94%;
-    --chat-button-muted-highlight: 260 80% 92%;
-    --chat-button-muted-text: 268 40% 24%;
-    --story-card-bg: 45 88% 94%;
-    --story-card-border: 45 72% 74%;
-    --visual-card-bg: 200 88% 94%;
-    --visual-card-border: 200 72% 74%;
+    --background: 330 70% 94%;
+    --foreground: 330 25% 22%;
+    --card: 340 75% 92%;
+    --card-foreground: 330 24% 24%;
+    --popover: 335 68% 93%;
+    --popover-foreground: 330 25% 24%;
+    --primary: 338 82% 72%;
+    --primary-foreground: 338 55% 24%;
+    --secondary: 220 70% 78%;
+    --secondary-foreground: 220 42% 26%;
+    --muted: 328 38% 90%;
+    --muted-foreground: 330 18% 32%;
+    --accent: 20 85% 78%;
+    --accent-foreground: 20 54% 26%;
+    --destructive: 0 68% 76%;
+    --destructive-foreground: 2 55% 24%;
+    --border: 338 52% 84%;
+    --input: 338 50% 88%;
+    --ring: 338 78% 70%;
+    --ink: 330 32% 18%;
+    --timeline-scene: 0 75% 65%;
+    --timeline-scene-surface: 0 75% 92%;
+    --timeline-scene-highlight: 0 75% 96%;
+    --timeline-scene-edge: 0 75% 70%;
+    --timeline-visual: 220 75% 65%;
+    --timeline-visual-surface: 220 75% 92%;
+    --timeline-visual-highlight: 220 75% 96%;
+    --timeline-visual-edge: 220 75% 70%;
+    --timeline-multishot: 120 65% 60%;
+    --timeline-multishot-surface: 120 65% 88%;
+    --timeline-multishot-highlight: 120 65% 94%;
+    --timeline-multishot-edge: 120 65% 65%;
+    --timeline-masterasset: 268 62% 68%;
+    --timeline-masterasset-surface: 268 62% 92%;
+    --timeline-masterasset-highlight: 268 62% 97%;
+    --timeline-masterasset-edge: 268 62% 72%;
+    --timeline-director: 30 85% 65%;
+    --timeline-director-surface: 30 85% 92%;
+    --timeline-director-highlight: 30 85% 96%;
+    --timeline-director-edge: 30 85% 70%;
+    --workspace-header-surface: 0 0% 100%;
+    --workspace-header-border: 330 52% 84%;
+    --theme-toggle-surface: 270 60% 96%;
+    --theme-toggle-highlight: 226 100% 94%;
+    --theme-toggle-text: 330 24% 28%;
+    --theme-toggle-glow: 338 78% 70%;
+    --chat-button-surface: 330 87% 70%;
+    --chat-button-highlight: 266 92% 65%;
+    --chat-button-muted-surface: 326 77% 94%;
+    --chat-button-muted-highlight: 226 100% 94%;
+    --chat-button-muted-text: 220 24% 32%;
+    --story-card-bg: 54 100% 90%;
+    --story-card-border: 45 84% 70%;
+    --visual-card-bg: 198 100% 93%;
+    --visual-card-border: 200 70% 70%;
   }
 
   body {
@@ -171,6 +176,25 @@
     background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23noise)' opacity='0.06'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 1;
+  }
+
+  body.theme-light {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.35),
+      hsl(var(--secondary) / 0.35),
+      hsl(var(--accent) / 0.35)
+    );
+  }
+
+  body.theme-light::before {
+    background: radial-gradient(ellipse at top left, hsl(var(--primary) / 0.5), transparent 50%),
+                radial-gradient(ellipse at bottom right, hsl(var(--secondary) / 0.5), transparent 50%);
+    opacity: 0.5;
+  }
+
+  body.theme-light::after {
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.07'/%3E%3C/svg%3E");
   }
 
   #root {
@@ -891,6 +915,13 @@
   color: hsl(var(--ink));
 }
 
+body.theme-light .workspace-header.workspace-header--classic {
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 25px rgba(244, 114, 182, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .workspace-header__chat-button {
   align-items: center;
   background: linear-gradient(
@@ -932,6 +963,33 @@
     inset 0 1px 0 hsl(var(--card));
 }
 
+body.theme-light .workspace-header__chat-button--classic {
+  background: linear-gradient(145deg, #fce7f3, #e0e7ff);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 6px 20px rgba(244, 114, 182, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: #374151;
+  transform: none;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.theme-light .workspace-header__chat-button--classic:hover {
+  box-shadow:
+    0 12px 28px rgba(244, 114, 182, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transform: scale(1.05);
+}
+
+body.theme-light .workspace-header__chat-button--classic.is-open {
+  background: linear-gradient(145deg, #f472b6, #a855f7);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 18px 40px rgba(244, 114, 182, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
 .theme-toggle {
   align-items: center;
   background: linear-gradient(
@@ -955,20 +1013,23 @@
   box-shadow: 0 16px 36px hsl(var(--theme-toggle-glow) / 0.3);
 }
 
-.theme-toggle--light {
-  background: linear-gradient(
-    135deg,
-    hsl(var(--theme-toggle-surface) / 0.95),
-    hsl(var(--theme-toggle-highlight) / 0.9)
-  );
-}
-
 .theme-toggle--dark {
   background: linear-gradient(
     135deg,
     hsl(var(--theme-toggle-surface) / 0.85),
     hsl(var(--theme-toggle-highlight) / 0.8)
   );
+}
+
+body.theme-light .theme-toggle--classic {
+  background: linear-gradient(145deg, #fce7f3, #e0e7ff);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 6px 20px rgba(244, 114, 182, 0.18);
+  color: #433144;
+}
+
+body.theme-light .theme-toggle--classic:hover {
+  box-shadow: 0 10px 26px rgba(244, 114, 182, 0.26);
 }
 
 .theme-toggle__icon {

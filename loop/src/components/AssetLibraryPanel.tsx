@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { ASSET_TEMPLATES } from '../constants';
+import { useTheme } from '../state/ThemeContext';
 
-export function AssetLibraryPanel({ 
+export function AssetLibraryPanel({
   onAddAsset
-}: { 
+}: {
   onAddAsset: (templateType: string, folder?: string) => void;
 }) {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
     story: true,
     visual: true
@@ -30,6 +33,8 @@ export function AssetLibraryPanel({
   };
 
   const getAssetCardVariant = (templateType: string) => {
+    if (isLight) return '';
+
     const template = ASSET_TEMPLATES[templateType];
     if (template?.category === 'story') {
       return 'asset-card--story';
@@ -40,6 +45,19 @@ export function AssetLibraryPanel({
     }
 
     return '';
+  };
+
+  const getClassicAssetColor = (templateType: string) => {
+    const template = ASSET_TEMPLATES[templateType];
+    if (template?.category === 'story') {
+      return '#FFFACD';
+    }
+
+    if (template?.category === 'visual') {
+      return '#E0F6FF';
+    }
+
+    return undefined;
   };
 
   return (
@@ -74,6 +92,7 @@ export function AssetLibraryPanel({
                     draggable
                     onDragStart={(e) => handleDragStart(e, template.type)}
                     className={`p-2 asset-card cursor-move group ${getAssetCardVariant(template.type)}`}
+                    style={isLight ? { backgroundColor: getClassicAssetColor(template.type) } : undefined}
                   >
                     <div className="font-medium ink-strong">{template.name}</div>
                     <div className="overflow-hidden max-h-0 group-hover:max-h-96 opacity-0 group-hover:opacity-100 transition-all duration-200 text-xs">
