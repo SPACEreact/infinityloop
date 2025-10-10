@@ -3,12 +3,7 @@ import type { SetStateAction } from 'react';
 import type { Project, Asset, TimelineBlock, UsageTotals } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
-import {
-  generateFromWorkspace,
-  generateDirectorAdvice,
-  type DirectorAdviceContext,
-  type DirectorAdviceSuggestionPayload,
-} from '../services/geminiService';
+import { generateFromWorkspace, generateDirectorAdvice } from '../services/geminiService';
 
 type FolderKey = string;
 
@@ -216,107 +211,6 @@ const normalizeSeeds = (project: Project): Project => {
   }
 
   return normalizedProject;
-};
-
-const toContentPreview = (value?: string | null, limit: number = 600): string | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  if (trimmed.length <= limit) {
-    return trimmed;
-  }
-
-  return `${trimmed.slice(0, limit)}...`;
-};
-
-const mapTimelineBlocksToDirectorEntries = (
-  blocks: TimelineBlock[] | undefined,
-  assetsById: Map<string, Asset>,
-): DirectorAdviceContext['primaryTimeline']['story'] => {
-  if (!blocks?.length) {
-    return [];
-  }
-
-  return blocks.map((block) => {
-    const asset = assetsById.get(block.assetId);
-    return {
-      assetId: block.assetId,
-      name: asset?.name ?? 'Untitled asset',
-      type: asset?.type,
-      summary: asset?.summary,
-      contentPreview: toContentPreview(asset?.content, 360),
-    };
-  });
-};
-
-const buildDirectorAdviceContext = (project: Project): DirectorAdviceContext => {
-  const assetsById = new Map(project.assets.map((asset) => [asset.id, asset]));
-
-  return {
-    projectName: project.name,
-    assets: project.assets.map((asset) => ({
-      id: asset.id,
-      type: asset.type,
-      name: asset.name,
-      summary: asset.summary,
-      tags: asset.tags,
-      contentPreview: toContentPreview(asset.content, 800),
-    })),
-    primaryTimeline: {
-      story: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.story,
-        assetsById,
-      ),
-      image: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.image,
-        assetsById,
-      ),
-      text_to_video: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.text_to_video,
-        assetsById,
-      ),
-    },
-    secondaryTimeline: project.secondaryTimeline
-      ? {
-          masterAssets: project.secondaryTimeline.masterAssets.map((asset) => ({
-            id: asset.id,
-            name: asset.name,
-            summary: asset.summary,
-          })),
-          shotLists: project.secondaryTimeline.shotLists.map((shotList) => ({
-            id: shotList.id,
-            masterAssetId: shotList.masterAssetId,
-            shots: shotList.shots.map((shot) => ({
-              id: shot.id,
-              name: shot.name,
-              description: toContentPreview(shot.content, 400),
-            })),
-          })),
-        }
-      : undefined,
-    thirdTimeline: project.thirdTimeline
-      ? {
-          styledShots: project.thirdTimeline.styledShots.map((shot) => ({
-            id: shot.id,
-            name: shot.name,
-            description: toContentPreview(shot.content, 400),
-          })),
-        }
-      : undefined,
-    existingSuggestions:
-      project.fourthTimeline?.suggestions?.map((suggestion) => ({
-        id: suggestion.id,
-        type: suggestion.type,
-        description: suggestion.description,
-        accepted: suggestion.accepted,
-      })) ?? [],
-  };
 };
 
 export const useProject = (initialProject: Project) => {
@@ -618,81 +512,6 @@ export const useProject = (initialProject: Project) => {
       ),
     }));
   };
-
-  const handleGenerateDirectorAdviceLegacy = useCallback(async () => {
-    setIsGenerating(true);
-    setToastState({
-      id: crypto.randomUUID(),
-      message: 'Generating director advice...',
-      kind: 'info',
-    });
-
-    try {
-      const context = buildDirectorAdviceContext(project);
-      const result = await generateDirectorAdvice(context);
-      const suggestions: DirectorAdviceSuggestionPayload[] = result.data ?? [];
-
-      if (suggestions.length) {
-        const now = new Date();
-        setProject((prev) => {
-          const existingTimeline =
-            prev.fourthTimeline ?? {
-              suggestions: [],
-              acceptedSuggestions: [],
-            };
-
-          const normalizedSuggestions = suggestions.map((suggestion) => {
-            const providedId = suggestion.id?.trim();
-            return {
-              id: providedId && providedId.length > 0 ? providedId : crypto.randomUUID(),
-              type: suggestion.type,
-              description: suggestion.description,
-              targetAssetId: suggestion.targetAssetId,
-              advice: suggestion.advice,
-              accepted: false,
-              createdAt: now,
-            };
-          });
-
-          return {
-            ...prev,
-            fourthTimeline: {
-              ...existingTimeline,
-              suggestions: normalizedSuggestions,
-              acceptedSuggestions: [],
-            },
-            updatedAt: now,
-          };
-        });
-
-        setActiveTimeline('fourth');
-        setToastState({
-          id: crypto.randomUUID(),
-          message: result.isMock
-            ? 'Director advice generated (mock suggestions shown while Gemini is offline).'
-            : 'Director advice generated successfully.',
-          kind: 'success',
-        });
-      } else {
-        setToastState({
-          id: crypto.randomUUID(),
-          message:
-            result.error ||
-            'No director advice suggestions were generated. Update your project context and try again.',
-          kind: 'warning',
-        });
-      }
-    } catch (error) {
-      console.error('Failed to generate director advice:', error);
-      setToastState({
-        id: crypto.randomUUID(),
-        message: 'Director advice generation failed. Please try again.',
-        kind: 'error',
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [project, setProject, setToastState, setActiveTimeline]);
 
   const handleAcceptSuggestion = useCallback(
     (suggestionId: string) => {
