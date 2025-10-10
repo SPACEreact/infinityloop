@@ -553,7 +553,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-1/4 p-4 border-r border-gray-700 overflow-y-auto">
+        <div className="w-1/4 p-4 overflow-y-auto">
           <AssetLibraryPanel onAddAsset={handleAddAsset} />
         </div>
 
@@ -591,10 +591,10 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
           </div>
         </main>
 
-        {isChatOpen && (
-          <div className="w-1/3 border-l border-gray-700">
-            <ChatAssistant
-              messages={chatMessages}
+          {isChatOpen && (
+            <div className="w-1/3 bg-black/30 backdrop-blur-sm">
+              <ChatAssistant
+                messages={chatMessages}
               isLoading={isChatLoading}
               generatedOutput={generatedOutput}
               onSendMessage={handleSendMessage}
@@ -605,8 +605,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
           </div>
         )}
 
-        {!isChatOpen && (
-          <div className="w-1/4 p-4 border-l border-gray-700 overflow-y-auto">
+          {!isChatOpen && (
+            <div className="w-1/4 p-4 overflow-y-auto">
             {selectedAssetId ? (
               <AssetDetailsPanel
                 selectedAssetId={selectedAssetId}
