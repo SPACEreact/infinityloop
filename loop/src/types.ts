@@ -116,6 +116,8 @@ export interface DirectorSuggestion {
   type: 'addition' | 'removal' | 'edit' | 'color_grading' | 'transition' | 'other';
   description: string;
   targetAssetId?: string; // Asset this suggestion applies to
+  targetAssetName?: string;
+  advice?: string;
   accepted: boolean;
   createdAt: Date;
 }
