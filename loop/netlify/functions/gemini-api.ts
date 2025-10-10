@@ -176,6 +176,357 @@ const SECURITY_HEADERS = {
 };
 
 
+type UsageTotals = {
+  promptTokens: number;
+  completionTokens: number;
+};
+
+const ZERO_USAGE: UsageTotals = { promptTokens: 0, completionTokens: 0 };
+
+const sanitizeUsageTotals = (usage?: UsageTotals | null): UsageTotals => {
+  if (!usage) {
+    return ZERO_USAGE;
+  }
+
+  const prompt = Number.isFinite(usage.promptTokens)
+    ? Math.max(0, Math.round(usage.promptTokens))
+    : 0;
+  const completion = Number.isFinite(usage.completionTokens)
+    ? Math.max(0, Math.round(usage.completionTokens))
+    : 0;
+
+  if (!prompt && !completion) {
+    return ZERO_USAGE;
+  }
+
+  return { promptTokens: prompt, completionTokens: completion };
+};
+
+const coerceNumeric = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const candidate =
+      (value as { tokens?: unknown }).tokens ??
+      (value as { tokenCount?: unknown }).tokenCount ??
+      (value as { value?: unknown }).value ??
+      (value as { amount?: unknown }).amount;
+
+    if (candidate !== undefined) {
+      return coerceNumeric(candidate);
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = coerceNumeric(item);
+        if (result !== undefined) {
+          return result;
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const buildUsageFromNumbers = (
+  prompt?: number,
+  completion?: number,
+  total?: number
+): UsageTotals | null => {
+  const normalizedPrompt = prompt ?? (total !== undefined ? total : undefined);
+  let normalizedCompletion = completion;
+
+  if (normalizedPrompt !== undefined && total !== undefined) {
+    const derived = total - normalizedPrompt;
+    if (Number.isFinite(derived)) {
+      normalizedCompletion = Math.max(0, Math.round(derived));
+    }
+  }
+
+  if (normalizedCompletion === undefined && total !== undefined && normalizedPrompt === undefined) {
+    normalizedCompletion = Math.max(0, Math.round(total));
+  }
+
+  if (normalizedPrompt === undefined && normalizedCompletion === undefined) {
+    return null;
+  }
+
+  return sanitizeUsageTotals({
+    promptTokens: normalizedPrompt ?? 0,
+    completionTokens: normalizedCompletion ?? 0
+  });
+};
+
+const parseUsageObject = (candidate: unknown): UsageTotals | null => {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const promptKeys = [
+    'promptTokens',
+    'promptTokenCount',
+    'prompt_token_count',
+    'prompt_tokens',
+    'inputTokens',
+    'inputTokenCount',
+    'input_token_count',
+    'input_tokens',
+    'totalPromptTokens',
+    'promptTotalTokens'
+  ];
+
+  const completionKeys = [
+    'completionTokens',
+    'completionTokenCount',
+    'completion_token_count',
+    'completion_tokens',
+    'outputTokens',
+    'outputTokenCount',
+    'output_token_count',
+    'output_tokens',
+    'candidatesTokenCount',
+    'candidates_tokens',
+    'candidatesTotalTokens'
+  ];
+
+  const totalKeys = [
+    'totalTokenCount',
+    'totalTokens',
+    'total_tokens',
+    'totalTokenUsage',
+    'total_token_count',
+    'tokenCount',
+    'total'
+  ];
+
+  const resolveKeys = (keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const value = (candidate as Record<string, unknown>)[key];
+      const numeric = coerceNumeric(value);
+      if (numeric !== undefined) {
+        return numeric;
+      }
+      if (value && typeof value === 'object') {
+        const nested = coerceNumeric((value as { count?: unknown }).count);
+        if (nested !== undefined) {
+          return nested;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const prompt = resolveKeys(promptKeys);
+  const completion = resolveKeys(completionKeys);
+  const total = resolveKeys(totalKeys);
+
+  const promptFromObject = coerceNumeric((candidate as { prompt?: unknown }).prompt);
+  const completionFromObject = coerceNumeric((candidate as { completion?: unknown }).completion);
+
+  return (
+    buildUsageFromNumbers(
+      prompt ?? promptFromObject,
+      completion ?? completionFromObject,
+      total
+    ) ?? null
+  );
+};
+
+const parseUsageTree = (value: unknown, seen: Set<object>): UsageTotals | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const ref = value as object;
+  if (seen.has(ref)) {
+    return null;
+  }
+  seen.add(ref);
+
+  const direct = parseUsageObject(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseUsageTree(item, seen);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  const nestedKeys = [
+    'usageMetadata',
+    'usage',
+    'tokenUsage',
+    'usageData',
+    'usage_data',
+    'metadata',
+    'data',
+    'result',
+    'response',
+    'extra',
+    'billing',
+    'tokens',
+    'candidates'
+  ];
+
+  for (const key of nestedKeys) {
+    const nested = (value as Record<string, unknown>)[key];
+    if (!nested) {
+      continue;
+    }
+
+    if (Array.isArray(nested)) {
+      for (const item of nested) {
+        const parsed = parseUsageTree(item, seen);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    } else if (typeof nested === 'object') {
+      const parsed = parseUsageTree(nested, seen);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const resolveUsageFromPayload = (payload: unknown): UsageTotals | null =>
+  parseUsageTree(payload, new Set<object>());
+
+const estimatePromptTokens = (text: string): number => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return 0;
+  }
+  return Math.max(1, Math.round(trimmed.length / 4));
+};
+
+const estimateCompletionTokens = (text: string): number => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return 0;
+  }
+  return Math.max(1, Math.round(trimmed.length / 4));
+};
+
+const safeCountTokens = async (
+  model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
+  request: unknown
+): Promise<number | undefined> => {
+  try {
+    const countResult = await model.countTokens(request as Record<string, unknown>);
+    const usage = resolveUsageFromPayload(countResult);
+    if (usage && usage.promptTokens > 0) {
+      return usage.promptTokens;
+    }
+
+    const numeric = coerceNumeric(
+      (countResult as { totalTokens?: unknown }).totalTokens ??
+        (countResult as { totalTokenCount?: unknown }).totalTokenCount ??
+        (countResult as { tokenCount?: unknown }).tokenCount
+    );
+    if (numeric !== undefined) {
+      return Math.max(0, Math.round(numeric));
+    }
+  } catch (error) {
+    console.warn('Token counting failed:', error);
+  }
+
+  return undefined;
+};
+
+const normalizeUsageCandidate = (usage?: UsageTotals | null): UsageTotals | null => {
+  if (!usage) {
+    return null;
+  }
+  return sanitizeUsageTotals(usage);
+};
+
+const ensureTextUsage = async (
+  model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
+  request: Record<string, unknown>,
+  prompt: string,
+  responseText: string,
+  existingUsage?: UsageTotals | null
+): Promise<UsageTotals> => {
+  let usage = normalizeUsageCandidate(existingUsage);
+
+  if (usage && usage.promptTokens === 0) {
+    usage = null;
+  }
+
+  let promptTokens = usage?.promptTokens ?? 0;
+  let completionTokens = usage?.completionTokens ?? 0;
+
+  if (promptTokens === 0) {
+    const counted = await safeCountTokens(model, request);
+    if (counted !== undefined) {
+      promptTokens = counted;
+    }
+  }
+
+  if (promptTokens === 0) {
+    promptTokens = estimatePromptTokens(prompt);
+  }
+
+  if (completionTokens === 0 && responseText.trim()) {
+    completionTokens = estimateCompletionTokens(responseText);
+  }
+
+  return sanitizeUsageTotals({ promptTokens, completionTokens });
+};
+
+const ensureImageUsage = async (
+  model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>,
+  request: Record<string, unknown>,
+  prompt: string,
+  existingUsage?: UsageTotals | null
+): Promise<UsageTotals> => {
+  let usage = normalizeUsageCandidate(existingUsage);
+  let promptTokens = usage?.promptTokens ?? 0;
+
+  if (promptTokens === 0) {
+    const counted = await safeCountTokens(model, request);
+    if (counted !== undefined) {
+      promptTokens = counted;
+    }
+  }
+
+  if (promptTokens === 0) {
+    promptTokens = estimatePromptTokens(prompt);
+  }
+
+  return sanitizeUsageTotals({ promptTokens, completionTokens: 0 });
+};
+
+const buildTextRequest = (text: string): { contents: Array<{ role: 'user'; parts: Array<{ text: string }> }> } => ({
+  contents: [
+    {
+      role: 'user',
+      parts: [{ text }]
+    }
+  ]
+});
+
+
 
 // Retry utility function
 async function retryApiCall<T>(fn: () => Promise<T>, retries = 3, baseDelay = 1000): Promise<T> {
@@ -421,13 +772,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
         const invokeModel = async (modelName: string) => {
           const generativeModel = client.getGenerativeModel({ model: modelName });
-          const result = await generativeModel.generateContent(prompt);
+          const requestPayload = buildTextRequest(prompt);
+          const result = await generativeModel.generateContent(requestPayload);
           const response = await result.response;
-          return response.text().trim();
+          const text = response.text().trim();
+          const usageCandidate =
+            normalizeUsageCandidate(resolveUsageFromPayload(result)) ??
+            normalizeUsageCandidate(resolveUsageFromPayload(response));
+          const usage = await ensureTextUsage(
+            generativeModel,
+            requestPayload,
+            prompt,
+            text,
+            usageCandidate
+          );
+
+          return { text, usage };
         };
 
         try {
-          const data = await retryApiCall(() => invokeModel(primary));
+          const { text: data, usage } = await retryApiCall(() => invokeModel(primary));
           return {
             statusCode: 200,
             headers,
@@ -436,7 +800,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               data,
               isMock: false,
               modelUsed: finalModel,
-              usedFallback
+              usedFallback,
+              usage
             })
           };
         } catch (error: unknown) {
@@ -454,7 +819,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           finalModel = fallback;
 
           try {
-            const data = await retryApiCall(() => invokeModel(fallback));
+            const { text: data, usage } = await retryApiCall(() => invokeModel(fallback));
 
             return {
               statusCode: 200,
@@ -464,7 +829,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 data,
                 isMock: false,
                 modelUsed: finalModel,
-                usedFallback
+                usedFallback,
+                usage
               })
             };
           } catch (fallbackError: unknown) {
@@ -513,6 +879,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
         const invokeModel = async (modelName: string) => {
           const imageModel = client.getGenerativeModel({ model: modelName });
+          const requestPayload = buildTextRequest(prompt);
           const result = await imageModel.generateContent([prompt]);
           const response = await result.response;
 
@@ -522,7 +889,17 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
               const part = candidate.content.parts[0];
               if (part.inlineData && part.inlineData.data) {
-                return part.inlineData.data;
+                const usageCandidate =
+                  normalizeUsageCandidate(resolveUsageFromPayload(result)) ??
+                  normalizeUsageCandidate(resolveUsageFromPayload(response));
+                const usage = await ensureImageUsage(
+                  imageModel,
+                  requestPayload,
+                  prompt,
+                  usageCandidate
+                );
+
+                return { image: part.inlineData.data, usage };
               }
             }
           }
@@ -531,7 +908,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         };
 
         try {
-          const data = await retryApiCall(() => invokeModel(primary));
+          const { image: data, usage } = await retryApiCall(() => invokeModel(primary));
 
           return {
             statusCode: 200,
@@ -541,7 +918,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               data: data,
               isMock: false,
               modelUsed: finalModel,
-              usedFallback
+              usedFallback,
+              usage
             })
           };
         } catch (error: unknown) {
@@ -560,7 +938,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           finalModel = fallback;
 
           try {
-            const data = await retryApiCall(() => invokeModel(fallback));
+            const { image: data, usage } = await retryApiCall(() => invokeModel(fallback));
 
             return {
               statusCode: 200,
@@ -570,7 +948,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 data,
                 isMock: false,
                 modelUsed: finalModel,
-                usedFallback
+                usedFallback,
+                usage
               })
             };
           } catch (fallbackError: unknown) {

@@ -116,9 +116,15 @@ export interface DirectorSuggestion {
   type: 'addition' | 'removal' | 'edit' | 'color_grading' | 'transition' | 'other';
   description: string;
   targetAssetId?: string; // Asset this suggestion applies to
+  targetAssetName?: string; // Human-readable asset label when available
   advice?: string;
   accepted: boolean;
   createdAt: Date;
+}
+
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
 }
 
 export interface Project {

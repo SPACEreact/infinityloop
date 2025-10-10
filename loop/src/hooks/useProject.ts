@@ -281,71 +281,9 @@ const mapTimelineBlocksToDirectorEntries = (
       summary: asset?.summary,
       contentPreview: toContentPreview(asset?.content, 360),
     };
-  });
-};
+  }
 
-const buildDirectorAdviceContext = (project: Project): DirectorAdviceContext => {
-  const assetsById = new Map(project.assets.map((asset) => [asset.id, asset]));
-
-  return {
-    projectName: project.name,
-    assets: project.assets.map((asset) => ({
-      id: asset.id,
-      type: asset.type,
-      name: asset.name,
-      summary: asset.summary,
-      tags: asset.tags,
-      contentPreview: toContentPreview(asset.content, 800),
-    })),
-    primaryTimeline: {
-      story: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.story,
-        assetsById,
-      ),
-      image: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.image,
-        assetsById,
-      ),
-      text_to_video: mapTimelineBlocksToDirectorEntries(
-        project.primaryTimeline.folders?.text_to_video,
-        assetsById,
-      ),
-    },
-    secondaryTimeline: project.secondaryTimeline
-      ? {
-          masterAssets: project.secondaryTimeline.masterAssets.map((asset) => ({
-            id: asset.id,
-            name: asset.name,
-            summary: asset.summary,
-          })),
-          shotLists: project.secondaryTimeline.shotLists.map((shotList) => ({
-            id: shotList.id,
-            masterAssetId: shotList.masterAssetId,
-            shots: shotList.shots.map((shot) => ({
-              id: shot.id,
-              name: shot.name,
-              description: toContentPreview(shot.content, 400),
-            })),
-          })),
-        }
-      : undefined,
-    thirdTimeline: project.thirdTimeline
-      ? {
-          styledShots: project.thirdTimeline.styledShots.map((shot) => ({
-            id: shot.id,
-            name: shot.name,
-            description: toContentPreview(shot.content, 400),
-          })),
-        }
-      : undefined,
-    existingSuggestions:
-      project.fourthTimeline?.suggestions?.map((suggestion) => ({
-        id: suggestion.id,
-        type: suggestion.type,
-        description: suggestion.description,
-        accepted: suggestion.accepted,
-      })) ?? [],
-  };
+  return normalizedProject;
 };
 
 export const useProject = (initialProject: Project) => {
@@ -380,6 +318,32 @@ export const useProject = (initialProject: Project) => {
   >('primary');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDirectorAdviceLoading, setIsDirectorAdviceLoading] = useState(false);
+
+  const updateUsage = useCallback((usage?: UsageTotals | null) => {
+    if (!usage) {
+      return;
+    }
+
+    const sanitized = normalizeUsageTotals(usage);
+
+    setProjectState(prev => {
+      const current = prev.usage ?? DEFAULT_USAGE;
+      if (usageTotalsEqual(current, sanitized)) {
+        if (prev.usage) {
+          return prev;
+        }
+      }
+
+      if (prev.usage && usageTotalsEqual(prev.usage, sanitized)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        usage: sanitized,
+      };
+    });
+  }, []);
 
   const handleAddAsset = useCallback(
     (templateType: string) => {
@@ -622,81 +586,6 @@ export const useProject = (initialProject: Project) => {
     }));
   };
 
-  const handleGenerateDirectorAdviceLegacy = useCallback(async () => {
-    setIsGenerating(true);
-    setToastState({
-      id: crypto.randomUUID(),
-      message: 'Generating director advice...',
-      kind: 'info',
-    });
-
-    try {
-      const context = buildDirectorAdviceContext(project);
-      const result = await generateDirectorAdvice(context);
-      const suggestions: DirectorAdviceSuggestionPayload[] = result.data ?? [];
-
-      if (suggestions.length) {
-        const now = new Date();
-        setProject((prev) => {
-          const existingTimeline =
-            prev.fourthTimeline ?? {
-              suggestions: [],
-              acceptedSuggestions: [],
-            };
-
-          const normalizedSuggestions = suggestions.map((suggestion) => {
-            const providedId = suggestion.id?.trim();
-            return {
-              id: providedId && providedId.length > 0 ? providedId : crypto.randomUUID(),
-              type: suggestion.type,
-              description: suggestion.description,
-              targetAssetId: suggestion.targetAssetId,
-              advice: suggestion.advice,
-              accepted: false,
-              createdAt: now,
-            };
-          });
-
-          return {
-            ...prev,
-            fourthTimeline: {
-              ...existingTimeline,
-              suggestions: normalizedSuggestions,
-              acceptedSuggestions: [],
-            },
-            updatedAt: now,
-          };
-        });
-
-        setActiveTimeline('fourth');
-        setToastState({
-          id: crypto.randomUUID(),
-          message: result.isMock
-            ? 'Director advice generated (mock suggestions shown while Gemini is offline).'
-            : 'Director advice generated successfully.',
-          kind: 'success',
-        });
-      } else {
-        setToastState({
-          id: crypto.randomUUID(),
-          message:
-            result.error ||
-            'No director advice suggestions were generated. Update your project context and try again.',
-          kind: 'warning',
-        });
-      }
-    } catch (error) {
-      console.error('Failed to generate director advice:', error);
-      setToastState({
-        id: crypto.randomUUID(),
-        message: 'Director advice generation failed. Please try again.',
-        kind: 'error',
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [project, setProject, setToastState, setActiveTimeline]);
-
   const handleAcceptSuggestion = useCallback(
     (suggestionId: string) => {
       let didUpdate = false;
@@ -763,6 +652,8 @@ export const useProject = (initialProject: Project) => {
       const outputType =
         target === 'story' ? 'Master Story' : 'Master Visual Style';
       const result = await generateFromWorkspace(workspace, {}, 50, outputType);
+
+      updateUsage(result.usage);
 
       if (result.data && !result.error) {
         const now = new Date();
@@ -877,6 +768,8 @@ export const useProject = (initialProject: Project) => {
           tagWeights: options?.tagWeights,
           styleRigidity: options?.styleRigidity,
         });
+
+        updateUsage(result.usage);
 
         if (result.data) {
           const incomingSuggestions = result.data.map(suggestion => ({
@@ -1041,6 +934,7 @@ export const useProject = (initialProject: Project) => {
     () => ({
       project,
       setProject,
+      updateUsage,
       selectedAssetId,
       setSelectedAssetId,
       pendingDeleteAsset,
@@ -1072,6 +966,7 @@ export const useProject = (initialProject: Project) => {
     [
       project,
       setProject,
+      updateUsage,
       selectedAssetId,
       setSelectedAssetId,
       pendingDeleteAsset,
