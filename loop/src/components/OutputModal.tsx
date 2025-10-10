@@ -424,7 +424,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 p-1 rounded"
+            className="text-indigo-200/70 hover:text-indigo-100 p-1 rounded"
             aria-label="Close modal"
           >
             ✕
@@ -435,13 +435,13 @@ export const OutputModal: React.FC<OutputModalProps> = ({
         </p>
         
         {/* Tab Navigation */}
-        <div className="flex border-b border-white/20">
+        <div className="flex border-b border-indigo-500/30">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-4 py-3 text-sm font-medium transition-all duration-300 hover-lift ${
-              activeTab === 'overview' 
-                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)' 
-                : 'text-gray-400 hover:text-gray-200'
+              activeTab === 'overview'
+                ? 'border-b-2 border-indigo-400 text-indigo-200 ink-strong transform translateY(-1px)'
+                : 'text-indigo-200/60 hover:text-indigo-100'
             }`}
           >
             📊 Overview
@@ -449,9 +449,9 @@ export const OutputModal: React.FC<OutputModalProps> = ({
           <button
             onClick={() => setActiveTab('details')}
             className={`px-4 py-3 text-sm font-medium transition-all duration-300 hover-lift ${
-              activeTab === 'details' 
-                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)' 
-                : 'text-gray-400 hover:text-gray-200'
+              activeTab === 'details'
+                ? 'border-b-2 border-indigo-400 text-indigo-200 ink-strong transform translateY(-1px)'
+                : 'text-indigo-200/60 hover:text-indigo-100'
             }`}
           >
             📋 Asset Details
@@ -460,8 +460,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
             onClick={() => setActiveTab('prompts')}
             className={`px-4 py-3 text-sm font-medium transition-all duration-300 hover-lift ${
               activeTab === 'prompts'
-                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)'
-                : 'text-gray-400 hover:text-gray-200'
+                ? 'border-b-2 border-indigo-400 text-indigo-200 ink-strong transform translateY(-1px)'
+                : 'text-indigo-200/60 hover:text-indigo-100'
             }`}
           >
             🧾 Prompt Library
@@ -469,9 +469,9 @@ export const OutputModal: React.FC<OutputModalProps> = ({
           <button
             onClick={() => setActiveTab('export')}
             className={`px-4 py-3 text-sm font-medium transition-all duration-300 hover-lift ${
-              activeTab === 'export' 
-                ? 'border-b-2 border-green-500 text-green-600 ink-strong transform translateY(-1px)' 
-                : 'text-gray-400 hover:text-gray-200'
+              activeTab === 'export'
+                ? 'border-b-2 border-indigo-400 text-indigo-200 ink-strong transform translateY(-1px)'
+                : 'text-indigo-200/60 hover:text-indigo-100'
             }`}
           >
             💾 Export Options
@@ -527,8 +527,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                   const group = groupLabels[groupKey as keyof typeof groupLabels];
                   
                   return (
-                    <div key={groupKey} className="border border-white/10 rounded-lg overflow-hidden">
-                      <div className={`p-3 bg-${group.color}-500/10 border-b border-white/10`}>
+                    <div key={groupKey} className="border border-indigo-500/30 rounded-lg overflow-hidden bg-slate-950/40">
+                      <div className={`p-3 bg-${group.color}-500/10 border-b border-indigo-500/30`}>
                         <h4 className="font-medium ink-strong flex items-center gap-2">
                           <span>{group.icon}</span>
                           {group.title} ({assets.length})
@@ -536,7 +536,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                       </div>
                       <div className="p-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
                         {assets.map(asset => (
-                          <div key={asset.id} className="text-sm ink-subtle flex justify-between items-center p-2 hover:bg-white/5 rounded">
+                          <div key={asset.id} className="text-sm ink-subtle flex justify-between items-center p-2 rounded transition-colors hover:bg-indigo-500/10">
                             <span>{asset.name}</span>
                             <span className="text-xs">{asset.seedId.slice(0, 8)}...</span>
                           </div>
@@ -556,15 +556,15 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                 {/* Asset List */}
                 <div className="space-y-2">
                   <h3 className="font-medium ink-strong">Select Asset for Details</h3>
-                  <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg">
+                  <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar border border-indigo-500/30 rounded-lg bg-slate-950/40">
                     {finalAssets.map(asset => (
                       <button
                         key={asset.id}
                         onClick={() => setSelectedAsset(asset)}
                         className={`w-full text-left p-3 transition-colors ${
-                          selectedAsset?.id === asset.id 
-                            ? 'bg-green-500/20 border-l-4 border-green-500' 
-                            : 'hover:bg-white/5'
+                          selectedAsset?.id === asset.id
+                            ? 'bg-emerald-500/20 border-l-4 border-emerald-400'
+                            : 'hover:bg-indigo-500/10'
                         }`}
                       >
                         <div className="font-medium ink-strong text-sm">{asset.name}</div>
@@ -580,7 +580,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                 <div className="space-y-4">
                   <h3 className="font-medium ink-strong">Asset Details</h3>
                   {selectedAsset ? (
-                    <div className="space-y-3 p-4 border border-white/10 rounded-lg bg-white/5">
+                    <div className="space-y-3 p-4 border border-indigo-500/30 rounded-lg bg-slate-900/60">
                       <div>
                         <h4 className="font-medium ink-strong">{selectedAsset.name}</h4>
                         <p className="text-xs ink-subtle">
@@ -591,7 +591,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                       {selectedAsset.summary && (
                         <div>
                           <h5 className="text-sm font-medium ink-strong">Summary</h5>
-                          <p className="text-sm ink-subtle p-2 bg-white/10 rounded">
+                          <p className="text-sm ink-subtle p-2 bg-slate-900/70 rounded">
                             {selectedAsset.summary}
                           </p>
                         </div>
@@ -601,8 +601,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                         selectedAsset.content && (
                           <div>
                             <h5 className="text-sm font-medium ink-strong">Content</h5>
-                            <div 
-                              className="text-sm ink-subtle p-2 bg-white/10 rounded max-h-40 overflow-y-auto custom-scrollbar"
+                            <div
+                              className="text-sm ink-subtle p-2 bg-slate-900/70 rounded max-h-40 overflow-y-auto custom-scrollbar"
                               dangerouslySetInnerHTML={{
                                 __html: selectedAsset.content
                                   .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -629,14 +629,14 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                       {selectedAsset.metadata && (
                         <div>
                           <h5 className="text-sm font-medium ink-strong">Configuration</h5>
-                          <pre className="text-xs ink-subtle p-2 bg-white/10 rounded max-h-32 overflow-auto custom-scrollbar">
+                          <pre className="text-xs ink-subtle p-2 bg-slate-900/70 rounded max-h-32 overflow-auto custom-scrollbar">
                             {JSON.stringify(selectedAsset.metadata, null, 2)}
                           </pre>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm ink-subtle text-center py-8 border border-dashed border-white/20 rounded-lg">
+                    <p className="text-sm ink-subtle text-center py-8 border border-dashed border-indigo-500/30 rounded-lg bg-slate-950/40">
                       Select an asset from the list to view details
                     </p>
                   )}
@@ -648,7 +648,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
           {/* Prompt Library Tab */}
           {activeTab === 'prompts' && (
             <div className="space-y-6 fade-in">
-              <div className="p-4 border border-white/10 rounded-lg bg-white/5">
+              <div className="p-4 border border-indigo-500/30 rounded-lg bg-slate-900/60">
                 <h3 className="font-medium ink-strong mb-2">Copy prompts into your favourite AI tools</h3>
                 <p className="text-sm ink-subtle">
                   Each prompt packages scene intent, shot design, and stylistic notes so you can paste directly into Midjourney, Runway, Sora, or any creative AI surface.
@@ -675,7 +675,7 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                         return (
                           <article
                             key={asset.id}
-                            className="p-4 border border-white/10 rounded-xl bg-black/30 backdrop-blur-sm hover:border-white/20 transition-shadow shadow-sm"
+                            className="p-4 border border-indigo-500/30 rounded-xl bg-black/40 backdrop-blur-sm hover:border-indigo-500/40 transition-shadow shadow-md"
                           >
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                               <div className="space-y-1">
@@ -692,8 +692,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                                 onClick={() => handleCopyPrompt(asset.id, prompt)}
                                 className={`self-start px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
                                   isCopied
-                                    ? 'bg-green-500/80 text-black shadow-lg'
-                                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:shadow-md'
+                                    ? 'bg-emerald-400 text-black shadow-lg'
+                                    : 'bg-indigo-500/20 text-white border border-indigo-500/40 hover:bg-indigo-500/30 hover:shadow-lg'
                                 }`}
                                 aria-live="polite"
                               >
@@ -701,13 +701,13 @@ export const OutputModal: React.FC<OutputModalProps> = ({
                               </button>
                             </div>
 
-                            <pre className="mt-3 text-sm ink-subtle whitespace-pre-wrap bg-white/5 border border-white/10 rounded-lg p-4 max-h-72 overflow-y-auto custom-scrollbar">{prompt}</pre>
+                            <pre className="mt-3 text-sm ink-subtle whitespace-pre-wrap bg-slate-900/60 border border-indigo-500/30 rounded-lg p-4 max-h-72 overflow-y-auto custom-scrollbar">{prompt}</pre>
                           </article>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-sm ink-subtle border border-dashed border-white/20 rounded-lg p-4">
+                    <p className="text-sm ink-subtle border border-dashed border-indigo-500/30 rounded-lg p-4 bg-slate-950/40">
                       No {group.label.toLowerCase()} yet. Generate assets to unlock ready-to-copy prompts.
                     </p>
                   )}

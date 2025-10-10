@@ -545,7 +545,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-screen text-indigo-100" style={{ background: 'radial-gradient(circle at top left, rgba(68, 56, 148, 0.35), rgba(8, 6, 18, 0.92))' }}>
       <WorkspaceHeader 
         appLabel={appLabel} 
         isChatOpen={isChatOpen} 

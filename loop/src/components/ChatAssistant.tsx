@@ -958,7 +958,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
           />
           {isSuggestionOpen && filteredSuggestions.length > 0 && (
             <div
-              className="absolute left-0 right-0 z-20 mt-2 glass-card border border-indigo-300/40 shadow-pastel-md bg-white/5 backdrop-blur"
+              className="absolute left-0 right-0 z-20 mt-2 glass-card border border-indigo-500/30 shadow-pastel-md bg-slate-950/70 backdrop-blur"
               id={suggestionListId}
             >
               <ul className="max-h-60 overflow-y-auto custom-scrollbar py-1" role="listbox">
@@ -970,8 +970,8 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({
                     aria-selected={highlightedIndex === index}
                     className={`mx-1 my-0.5 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${
                       highlightedIndex === index
-                        ? 'bg-white/20 text-indigo-100 shadow-pastel-sm'
-                        : 'text-indigo-200 hover:bg-white/10'
+                        ? 'bg-indigo-500/20 text-indigo-50 shadow-pastel-sm'
+                        : 'text-indigo-200 hover:bg-indigo-500/10'
                     }`}
                     onMouseDown={(event) => {
                       event.preventDefault();

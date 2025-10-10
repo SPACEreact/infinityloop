@@ -690,7 +690,15 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
     };
 
     return (
-      <div className="space-y-8" style={{ background: 'rgba(255, 218, 185, 0.05)' }}>
+      <div
+        className="space-y-8"
+        style={{
+          background: 'linear-gradient(140deg, rgba(32, 26, 55, 0.65), rgba(16, 14, 24, 0.8))',
+          borderRadius: '18px',
+          border: '1px solid rgba(149, 130, 255, 0.18)',
+          boxShadow: '0 20px 40px rgba(10, 8, 20, 0.55)'
+        }}
+      >
       {/* Director's Advice Actions */}
       <div className="flex justify-center mb-6">
         <div className="group inline-flex items-center gap-2">
@@ -702,11 +710,11 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
             }`}
             aria-busy={isDirectorAdviceLoading}
             style={{
-              background: 'linear-gradient(145deg, #FFDAB9, #FFCBA4)',
-              boxShadow: '0 10px 20px rgba(255, 218, 185, 0.3), inset 0 2px 0 rgba(255,255,255,0.9)',
-              border: '3px solid #FFCBA4',
-              color: '#8B4513',
-              filter: 'drop-shadow(4px 4px 0 rgba(139, 69, 19, 0.3)) contrast(1.2)'
+              background: 'radial-gradient(circle at 25% 25%, rgba(120, 96, 255, 0.9), rgba(40, 28, 68, 0.95))',
+              boxShadow: '0 12px 30px rgba(36, 26, 64, 0.55), inset 0 2px 0 rgba(255,255,255,0.08)',
+              border: '1px solid rgba(160, 140, 255, 0.4)',
+              color: '#E9E7FF',
+              filter: 'drop-shadow(0 0 8px rgba(120, 96, 255, 0.35))'
             }}
           >
             <SparklesIcon className="w-6 h-6" />
@@ -725,8 +733,8 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                   <h4 className="font-semibold ink-strong text-orange-300">{suggestion.type.toUpperCase()}</h4>
                   <p className="text-sm ink-subtle mt-2">{suggestion.description}</p>
                   {suggestion.advice && (
-                    <div className="mt-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                      <p className="text-sm text-orange-200">{suggestion.advice}</p>
+                    <div className="mt-3 p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/10">
+                      <p className="text-sm text-indigo-100">{suggestion.advice}</p>
                     </div>
                   )}
                 </div>
@@ -737,7 +745,7 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
                   {!suggestion.accepted && (
                     <button
                       onClick={() => acceptSuggestion(suggestion.id)}
-                      className="px-3 py-1 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded hover:bg-green-500/30 transition-colors"
+                      className="px-3 py-1 text-xs rounded transition-colors bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/30"
                     >
                       Accept
                     </button>
@@ -748,10 +756,14 @@ const renderAssetBlock = (block: TimelineBlock, index: number, assetTypeCounts?:
           ))}
         </div>
       ) : (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">🎬</div>
-          <h3 className="text-lg font-semibold ink-strong mb-2">No Director Suggestions Yet</h3>
-          <p className="ink-subtle mb-6">Generate AI-powered director advice based on your project's story, shots, and style.</p>
+        <div className="text-center py-12 space-y-3">
+          <div className="mx-auto h-14 w-14 rounded-full border border-indigo-500/40 bg-indigo-500/10 flex items-center justify-center shadow-lg shadow-indigo-900/40">
+            <SparklesIcon className="w-6 h-6 text-indigo-200" />
+          </div>
+          <h3 className="text-lg font-semibold ink-strong">No Director Suggestions Yet</h3>
+          <p className="ink-subtle">
+            Generate AI-powered director advice based on your project's story, shots, and style.
+          </p>
         </div>
       )}
     </div>

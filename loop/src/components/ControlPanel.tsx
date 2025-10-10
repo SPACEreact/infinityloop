@@ -77,43 +77,47 @@ export const ControlPanel = ({
           disabled={isMcpLoading}
           className={`w-full cta-button py-3 px-4 shadow-lg transform hover:scale-105 transition-all duration-200 ${isMcpLoading ? 'is-disabled' : ''}`}
           style={{
-            background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-            boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-            border: '2px solid #ccc'
+            background: 'radial-gradient(circle at 30% 25%, rgba(103, 92, 210, 0.9), rgba(28, 24, 43, 0.95))',
+            boxShadow: '0 12px 28px rgba(18, 16, 32, 0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+            border: '1px solid rgba(162, 148, 255, 0.35)'
           }}
         >
           Save Project
         </button>
 
-        <div className="border-t border-white/20 pt-4 space-y-3">
+        <div className="border-t border-indigo-500/20 pt-4 space-y-3">
           <h3 className="text-sm font-semibold ink-strong mb-3">Tools & References</h3>
 
-          <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm rounded-lg border border-white/10 bg-white/5">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm rounded-lg border border-indigo-500/30 bg-slate-900/60 shadow-inner shadow-indigo-900/20">
             <div className="flex flex-col">
               <span className="font-medium ink-strong">ChromaDB Service</span>
               <span className="text-xs ink-subtle">
                 {isChromaEnabled ? 'Enabled for vector memory sync.' : 'Disabled — no data will sync.'}
               </span>
             </div>
-            <label className="inline-flex items-center gap-2">
-              <span className="text-xs ink-strong">{isChromaEnabled ? 'On' : 'Off'}</span>
-              <input
-                type="checkbox"
-                checked={isChromaEnabled}
-                onChange={(event) => onToggleChroma(event.target.checked)}
-                className="h-4 w-4 accent-blue-500"
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-indigo-200">
+                {isChromaEnabled ? 'Active' : 'Standby'}
+              </span>
+              <button
+                type="button"
+                onClick={() => onToggleChroma(!isChromaEnabled)}
+                className={`chroma-toggle ${isChromaEnabled ? 'is-on' : 'is-off'}`}
+                aria-pressed={isChromaEnabled}
                 aria-label="Toggle ChromaDB service"
-              />
-            </label>
+              >
+                <span className="chroma-toggle__thumb" />
+              </button>
+            </div>
           </div>
 
           <button
             onClick={onOpenReference}
-            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong rounded-lg transition-all duration-200 cta-button shadow-lg transform hover:translate-y-[-2px]"
             style={{
-              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-              border: '2px solid #ccc'
+              background: 'radial-gradient(circle at 30% 25%, rgba(103, 92, 210, 0.9), rgba(28, 24, 43, 0.95))',
+              boxShadow: '0 12px 28px rgba(18, 16, 32, 0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+              border: '1px solid rgba(162, 148, 255, 0.35)'
             }}
           >
             Reference Library
@@ -121,11 +125,11 @@ export const ControlPanel = ({
 
           <button
             onClick={onOpenHelp}
-            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong rounded-lg transition-all duration-200 cta-button shadow-lg transform hover:translate-y-[-2px]"
             style={{
-              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-              border: '2px solid #ccc'
+              background: 'radial-gradient(circle at 30% 25%, rgba(103, 92, 210, 0.9), rgba(28, 24, 43, 0.95))',
+              boxShadow: '0 12px 28px rgba(18, 16, 32, 0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+              border: '1px solid rgba(162, 148, 255, 0.35)'
             }}
           >
             Help & Guide
@@ -133,17 +137,17 @@ export const ControlPanel = ({
 
           <button
             onClick={onOpenApi}
-            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong hover:bg-white/10 rounded-lg transition-colors cta-button shadow-lg transform hover:scale-105"
+            className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong rounded-lg transition-all duration-200 cta-button shadow-lg transform hover:translate-y-[-2px]"
             style={{
-              background: 'linear-gradient(145deg, #ffffff, #e6e6e6)',
-              boxShadow: '0 8px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.8)',
-              border: '2px solid #ccc'
+              background: 'radial-gradient(circle at 30% 25%, rgba(103, 92, 210, 0.9), rgba(28, 24, 43, 0.95))',
+              boxShadow: '0 12px 28px rgba(18, 16, 32, 0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+              border: '1px solid rgba(162, 148, 255, 0.35)'
             }}
           >
             API Configuration
           </button>
 
-          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-white/10 bg-white/5">
+          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-indigo-500/30 bg-slate-900/60 shadow-inner shadow-indigo-900/20">
             <label htmlFor="prompt-model-select" className="font-medium ink-strong">
               Prompt Output Model
             </label>
@@ -151,7 +155,7 @@ export const ControlPanel = ({
               id="prompt-model-select"
               value={targetModel ?? ''}
               onChange={handleModelSelect}
-              className="w-full bg-white/90 text-gray-900 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="w-full rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-950/90 text-indigo-100 border border-indigo-500/30"
             >
               <option value="">Loop Standard (default)</option>
               {PROMPT_CONVERSION_OPTIONS.map(option => (
@@ -165,7 +169,7 @@ export const ControlPanel = ({
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-white/10 bg-white/5" aria-live="polite">
+          <div className="flex flex-col gap-2 px-4 py-3 text-sm rounded-lg border border-indigo-500/30 bg-slate-900/60 shadow-inner shadow-indigo-900/20" aria-live="polite">
             <div className="flex items-center justify-between">
               <span className="font-medium ink-strong">Daily Token Usage</span>
               {usageStats ? (
@@ -174,7 +178,7 @@ export const ControlPanel = ({
             </div>
             {usageStats ? (
               <>
-                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-2 rounded-full bg-slate-950/50 overflow-hidden">
                   <div
                     className={`h-full ${usageStats.percent >= 100 ? 'bg-red-500' : 'bg-blue-500'}`}
                     style={{ width: `${clampedPercent}%` }}
