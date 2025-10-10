@@ -557,7 +557,7 @@ export const useProject = (initialProject: Project) => {
     }));
   };
 
-  const handleGenerateDirectorAdvice = useCallback(async () => {
+  const handleGenerateDirectorAdviceLegacy = useCallback(async () => {
     setIsGenerating(true);
     setToastState({
       id: crypto.randomUUID(),
@@ -822,15 +822,25 @@ export const useProject = (initialProject: Project) => {
           setProject(prev => {
             const existingAccepted = prev.fourthTimeline?.acceptedSuggestions ?? [];
             const acceptedMap = new Map(existingAccepted.map(item => [item.id, item] as const));
-            incomingSuggestions.filter(item => item.accepted).forEach(item => {
-              acceptedMap.set(item.id, item);
+
+            const synchronizedSuggestions = incomingSuggestions.map(suggestion => {
+              if (acceptedMap.has(suggestion.id) || suggestion.accepted) {
+                const updatedSuggestion = { ...suggestion, accepted: true };
+                acceptedMap.set(suggestion.id, updatedSuggestion);
+                return updatedSuggestion;
+              }
+              return suggestion;
             });
+
+            const acceptedSuggestions = synchronizedSuggestions.filter(
+              suggestion => suggestion.accepted,
+            );
 
             return {
               ...prev,
               fourthTimeline: {
-                suggestions: incomingSuggestions,
-                acceptedSuggestions: Array.from(acceptedMap.values()),
+                suggestions: synchronizedSuggestions,
+                acceptedSuggestions,
               },
               updatedAt: new Date(),
             };

@@ -1,0 +1,85 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import type { Project } from '../../types';
+import { useProject } from '../useProject';
+
+const mockGenerateDirectorAdvice = vi.fn();
+
+vi.mock('../../services/geminiService', () => ({
+  generateDirectorAdvice: (...args: unknown[]) => mockGenerateDirectorAdvice(...args),
+  generateFromWorkspace: vi.fn(),
+}));
+
+const createProject = (): Project => ({
+  id: 'project-1',
+  name: 'Director Advice Project',
+  assets: [],
+  primaryTimeline: {
+    folders: {
+      story: [],
+      image: [],
+      text_to_video: [],
+    },
+  },
+  createdAt: new Date('2024-01-01T00:00:00Z'),
+  updatedAt: new Date('2024-01-01T00:00:00Z'),
+  fourthTimeline: {
+    suggestions: [],
+    acceptedSuggestions: [],
+  },
+});
+
+describe('useProject director advice handling', () => {
+  beforeEach(() => {
+    mockGenerateDirectorAdvice.mockReset();
+  });
+
+  it('preserves acceptance for regenerated suggestions with matching ids', async () => {
+    mockGenerateDirectorAdvice
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: 'suggestion-1',
+            type: 'addition',
+            description: 'Initial director suggestion',
+            advice: 'Try a wide establishing shot.',
+          },
+        ],
+        error: null,
+        isMock: false,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: 'suggestion-1',
+            type: 'addition',
+            description: 'Updated director suggestion',
+            advice: 'Refine the establishing shot pacing.',
+          },
+        ],
+        error: null,
+        isMock: false,
+      });
+
+    const { result } = renderHook(() => useProject(createProject()));
+
+    await act(async () => {
+      await result.current.handleGenerateDirectorAdvice();
+    });
+
+    act(() => {
+      result.current.handleAcceptSuggestion('suggestion-1');
+    });
+
+    await act(async () => {
+      await result.current.handleGenerateDirectorAdvice();
+    });
+
+    const timeline = result.current.project.fourthTimeline;
+    expect(timeline?.suggestions).toHaveLength(1);
+    const [suggestion] = timeline!.suggestions;
+    expect(suggestion.accepted).toBe(true);
+    expect(timeline?.acceptedSuggestions).toHaveLength(1);
+    expect(timeline?.acceptedSuggestions[0]).toBe(suggestion);
+  });
+});
