@@ -63,6 +63,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     handleGenerateDirectorAdvice,
     handleAcceptSuggestion,
     handleSetTargetModel,
+    handleImportScript,
     usageStats
   } = useWorkspace();
 
@@ -99,6 +100,28 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
       content: message
     };
     setChatMessages(prev => [...prev, userMessage]);
+
+    const importResult = handleImportScript(message);
+    if (importResult) {
+      const sceneList = importResult.sceneTitles
+        .map(title => `• ${title}`)
+        .join('\n');
+
+      const confirmation = [
+        `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
+        sceneList ? '\n' + sceneList : ''
+      ].join('').trim();
+
+      setChatMessages(prev => [
+        ...prev,
+        {
+          role: ChatRole.MODEL,
+          content: confirmation || 'Script imported into the timeline.'
+        }
+      ]);
+      return null;
+    }
+
     setIsChatLoading(true);
 
     try {
@@ -138,7 +161,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     } finally {
       setIsChatLoading(false);
     }
-  }, [chatMessages, tagWeights, styleRigidity]);
+  }, [chatMessages, tagWeights, styleRigidity, handleImportScript]);
 
   const handleRequestFieldSuggestion = useCallback(async ({ assetId, fieldKey, fieldLabel, currentValue }: any) => {
     const asset = project.assets.find(a => a.id === assetId);

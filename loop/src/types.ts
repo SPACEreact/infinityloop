@@ -2,7 +2,26 @@
 export interface Asset {
   id: string;
   seedId: string; // Core lineage identifier (e.g., "A", "A.1", "A.1.3")
-  type: 'primary' | 'secondary' | 'tertiary' | 'master_story' | 'master_image' | 'master_video' | 'shot' | 'multi_shot' | 'batch_style';
+  type:
+    | 'primary'
+    | 'secondary'
+    | 'tertiary'
+    | 'master_story'
+    | 'master_image'
+    | 'master_video'
+    | 'shot'
+    | 'multi_shot'
+    | 'batch_style'
+    | 'character'
+    | 'plot_point'
+    | 'scene'
+    | 'image_input'
+    | 'camera_settings'
+    | 'depth_of_field'
+    | 'lighting_setup'
+    | 'color_grading'
+    | 'audio_design'
+    | 'vfx_compositing';
   name: string;
   content: string;
   tags: string[];
