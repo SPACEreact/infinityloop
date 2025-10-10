@@ -12,6 +12,7 @@ export const ControlPanel = ({
   onOpenReference,
   onOpenHelp,
   onOpenApi,
+  onOpenScriptImport,
   onOpenOutput,
   isChromaEnabled,
   onToggleChroma,
@@ -28,6 +29,7 @@ export const ControlPanel = ({
   onOpenReference: () => void;
   onOpenHelp: () => void;
   onOpenApi: () => void;
+  onOpenScriptImport: () => void;
   onOpenOutput: () => void;
   isChromaEnabled: boolean;
   onToggleChroma: (enabled: boolean) => void;
@@ -83,6 +85,18 @@ export const ControlPanel = ({
           }}
         >
           Save Project
+        </button>
+
+        <button
+          onClick={onOpenScriptImport}
+          className="w-full flex items-center justify-start gap-3 px-4 py-3 text-sm ink-strong rounded-lg transition-all duration-200 cta-button shadow-lg transform hover:translate-y-[-2px]"
+          style={{
+            background: 'radial-gradient(circle at 30% 25%, rgba(103, 92, 210, 0.9), rgba(28, 24, 43, 0.95))',
+            boxShadow: '0 12px 28px rgba(18, 16, 32, 0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+            border: '1px solid rgba(162, 148, 255, 0.35)'
+          }}
+        >
+          Import Script to Timeline
         </button>
 
         <div className="border-t border-indigo-500/20 pt-4 space-y-3">
