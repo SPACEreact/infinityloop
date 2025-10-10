@@ -21,8 +21,6 @@ const sluglinePattern = new RegExp(
   `^(?:${SLUGLINE_PREFIXES.map(prefix => prefix.replace(/[\\/]/g, '\\$&')).join('|')})(?:\\.|\\s|$)`
 );
 
-const MINIMUM_SCRIPT_LINES = 2;
-
 const isLikelySlugline = (line: string): boolean => {
   if (!line) {
     return false;
@@ -92,27 +90,36 @@ const buildSceneSummary = (slugline: string, lines: string[]): string => {
   return source.length > 240 ? `${source.slice(0, 237).trimEnd()}…` : source;
 };
 
-export const parseScriptScenes = (input: string): ParsedScene[] => {
-  if (!input || !input.trim()) {
-    return [];
+const extractCharactersFromLine = (line: string, accumulator: Set<string>): void => {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return;
   }
 
-  const normalized = input.replace(/\r\n/g, '\n');
-  if (!normalized.includes('\n')) {
-    return [];
+  if (isLikelyCharacterLine(trimmed)) {
+    const normalizedName = trimmed.replace(/\s+\([^)]*\)$/, '').trim();
+    if (normalizedName) {
+      accumulator.add(normalizedName);
+    }
+    return;
   }
 
-  const lines = normalized.split('\n');
-  if (lines.length < MINIMUM_SCRIPT_LINES) {
-    return [];
+  const colonMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9'().\-\s]{0,39})\s*:/);
+  if (colonMatch) {
+    const name = colonMatch[1]?.trim();
+    if (name) {
+      accumulator.add(name.toUpperCase());
+    }
   }
+};
 
-  type WorkingScene = {
-    slugline: string;
-    lines: string[];
-    characters: Set<string>;
-  };
+type WorkingScene = {
+  slugline: string;
+  lines: string[];
+  characters: Set<string>;
+};
 
+const buildStructuredScenes = (lines: string[]): WorkingScene[] => {
   const scenes: WorkingScene[] = [];
   let currentScene: WorkingScene | null = null;
 
@@ -136,32 +143,75 @@ export const parseScriptScenes = (input: string): ParsedScene[] => {
     }
 
     currentScene.lines.push(line);
-
-    const trimmed = line.trim();
-    if (isLikelyCharacterLine(trimmed)) {
-      const normalizedName = trimmed.replace(/\s+\([^)]*\)$/, '').trim();
-      if (normalizedName) {
-        currentScene.characters.add(normalizedName);
-      }
-    }
+    extractCharactersFromLine(line, currentScene.characters);
   });
 
   if (currentScene) {
     scenes.push(currentScene);
   }
 
-  return scenes.map((scene, index) => {
-    const contentLines = [scene.slugline, ...scene.lines];
-    const content = contentLines.join('\n').replace(/\s+$/, '').replace(/^\s+/, '');
+  return scenes;
+};
+
+const buildFallbackScenes = (input: string): ParsedScene[] => {
+  const blocks = input
+    .split(/\n{3,}/)
+    .map(block => block.trim())
+    .filter(Boolean);
+
+  const meaningfulBlocks = blocks.length > 0 ? blocks : [input.trim()].filter(Boolean);
+  if (meaningfulBlocks.length === 0) {
+    return [];
+  }
+
+  return meaningfulBlocks.map((block, index) => {
+    const lines = block.split('\n');
+    const firstMeaningful = lines.find(line => line.trim())?.trim();
+    const snippet = firstMeaningful ? firstMeaningful.replace(/\s+/g, ' ').trim() : '';
+    const slugline = snippet
+      ? `SCENE ${index + 1} - ${snippet.length > 80 ? `${snippet.slice(0, 77).trimEnd()}…` : snippet}`
+      : `SCENE ${index + 1}`;
+
+    const characters = new Set<string>();
+    lines.forEach(line => extractCharactersFromLine(line, characters));
+
+    const content = block.trim();
 
     return {
-      slugline: scene.slugline,
+      slugline,
       content,
-      summary: buildSceneSummary(scene.slugline, scene.lines),
-      characters: Array.from(scene.characters),
+      summary: buildSceneSummary(snippet || slugline, lines),
+      characters: Array.from(characters),
       order: index,
     } satisfies ParsedScene;
   });
+};
+
+export const parseScriptScenes = (input: string): ParsedScene[] => {
+  if (!input || !input.trim()) {
+    return [];
+  }
+
+  const normalized = input.replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+
+  const structuredScenes = buildStructuredScenes(lines);
+  if (structuredScenes.length > 0) {
+    return structuredScenes.map((scene, index) => {
+      const contentLines = [scene.slugline, ...scene.lines];
+      const content = contentLines.join('\n').replace(/\s+$/, '').replace(/^\s+/, '');
+
+      return {
+        slugline: scene.slugline,
+        content,
+        summary: buildSceneSummary(scene.slugline, scene.lines),
+        characters: Array.from(scene.characters),
+        order: index,
+      } satisfies ParsedScene;
+    });
+  }
+
+  return buildFallbackScenes(normalized);
 };
 
 export const hasImportableScript = (input: string): boolean => {
