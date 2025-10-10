@@ -1,6 +1,8 @@
+import type { Asset, DirectorSuggestion, Project } from '../types';
 import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
+import type { DirectorSuggestion } from '../types';
 
 type ProjectAsset = {
   id: string;
@@ -612,24 +614,57 @@ const CORE_KNOWLEDGE_PRIORITY = [
   'Camera Movements and Techniques'
 ];
 
-const truncateConversationHistory = (historyText: string, maxLength: number): string => {
-  if (historyText.length <= maxLength) return historyText;
-  
-  const messages = historyText.split('\n');
-  let truncated = '';
-  let totalLength = 0;
-  
-  // Keep only the 2-3 most recent exchanges for context efficiency
-  const recentMessages = messages.slice(-6); // Last 6 lines = ~3 exchanges
-  
-  for (let i = recentMessages.length - 1; i >= 0; i--) {
-    const messageLength = recentMessages[i].length + 1;
-    if (totalLength + messageLength > maxLength) break;
-    truncated = recentMessages[i] + '\n' + truncated;
-    totalLength += messageLength;
+const truncateConversationHistory = (
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  maxLength: number
+): string[] => {
+  if (!history.length || maxLength <= 0) {
+    return [];
   }
-  
-  return truncated || messages[messages.length - 1] || '';
+
+  const collected: string[] = [];
+  let totalLength = 0;
+  let truncated = false;
+
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i];
+    const formatted = `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`;
+    const addition = formatted.length + (collected.length ? 1 : 0);
+
+    if (totalLength + addition > maxLength) {
+      truncated = true;
+      break;
+    }
+
+    collected.push(formatted);
+    totalLength += addition;
+  }
+
+  collected.reverse();
+
+  if (!truncated) {
+    return collected;
+  }
+
+  const indicator = '[Earlier context truncated]';
+  let indicatorBlock = indicator;
+
+  if (indicatorBlock.length > maxLength) {
+    indicatorBlock = indicatorBlock.slice(0, maxLength);
+    return [indicatorBlock];
+  }
+
+  const resultWithIndicator = [indicatorBlock, ...collected];
+
+  while (resultWithIndicator.join('\n').length > maxLength && resultWithIndicator.length > 1) {
+    resultWithIndicator.splice(1, 1);
+  }
+
+  if (resultWithIndicator.join('\n').length > maxLength) {
+    return [indicatorBlock.slice(0, maxLength)];
+  }
+
+  return resultWithIndicator;
 };
 
 const validateAndOptimizePrompt = (fullPrompt: string): string => {
@@ -813,6 +848,43 @@ const createMockBuildResponse = (
   ].join('\n');
 };
 
+const createMockDirectorAdvice = (
+  context: DirectorAdviceContext
+): DirectorAdviceSuggestionPayload[] => {
+  const firstStoryBeat = context.primaryTimeline.story[0];
+  const firstImageBeat = context.primaryTimeline.image[0];
+  const firstMasterAsset = context.secondaryTimeline?.masterAssets?.[0];
+  const firstStyledShot = context.thirdTimeline?.styledShots?.[0];
+  const focalName = firstStoryBeat?.name ?? firstMasterAsset?.name ?? context.projectName;
+
+  return [
+    {
+      type: 'addition',
+      description: `Add an establishing shot to reinforce the world of "${focalName}" before the conflict escalates.`,
+      advice: 'Open with a wide or overhead angle that telegraphs tone and geography, then cut into the inciting action.',
+      targetAssetId: firstStoryBeat?.assetId ?? firstMasterAsset?.id
+    },
+    {
+      type: 'edit',
+      description: 'Tighten the midpoint exchange to keep momentum high.',
+      advice: 'Trim redundant dialogue and let a reaction shot breathe for two beats before the reversal lands.',
+      targetAssetId: firstStoryBeat?.assetId ?? firstImageBeat?.assetId
+    },
+    {
+      type: 'color_grading',
+      description: 'Warm the climax beat to emphasize emotional release.',
+      advice: 'Introduce a golden-hour lift on the hero shot and balance it with a cooler rim-light on supporting characters.',
+      targetAssetId: firstStyledShot?.id ?? firstImageBeat?.assetId
+    },
+    {
+      type: 'transition',
+      description: 'Bridge the final two scenes with a motivated match cut.',
+      advice: 'Match a gesture or prop between the closing shot of scene two and the opener of scene three to signal thematic continuity.',
+      targetAssetId: firstStyledShot?.id ?? firstStoryBeat?.assetId
+    }
+  ];
+};
+
 // Mock function for sandbox chat responses
 export const listModels = async (): Promise<any> => {
   const endpoint = getGeminiEndpoint();
@@ -835,14 +907,10 @@ export const generateSandboxResponse = async (
   tagWeights: Record<string, number>,
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
-  const historyText = conversationHistory
-    .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-    .join('\n');
-
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext('chat', tagWeights);
   // Simplified system prompt for quota efficiency
   let systemPrompt = `You are Loop, an expert filmmaker and storyteller. ${optimizedKnowledgeContext}`;
-  
+
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
     .slice(0, 3) // Limit to top 3 tags only
@@ -854,7 +922,8 @@ export const generateSandboxResponse = async (
   systemPrompt += styleRigidity > 50 ? 'Be precise.' : 'Be creative.';
 
   // Aggressively limit conversation history for quota efficiency
-  const optimizedHistoryText = truncateConversationHistory(historyText, MAX_CONVERSATION_CONTEXT);
+  const optimizedHistoryBlocks = truncateConversationHistory(conversationHistory, MAX_CONVERSATION_CONTEXT);
+  const optimizedHistoryText = optimizedHistoryBlocks.join('\n');
 
   const fullPrompt = validateAndOptimizePrompt(
     `${systemPrompt}\n\nConversation History:\n${optimizedHistoryText}\n\nUser: ${userMessage}\nAssistant:`
@@ -869,6 +938,39 @@ export const generateSandboxResponse = async (
   }
 };
 
+export const generateDirectorAdvice = async (
+  context: DirectorAdviceContext
+): Promise<GeminiResult<DirectorAdviceSuggestionPayload[]>> => {
+  const { existingSuggestions = [], ...projectSnapshot } = context;
+
+  const promptSections = [
+    'You are Loop, an award-winning film director AI embedded inside a collaborative workspace.',
+    'Study the project context and return 3-5 actionable suggestions that a director or editor could apply right now.',
+    'Respond only with compact JSON matching this schema: { "suggestions": [ { "id": "optional", "type": "addition|removal|edit|color_grading|transition|other", "description": "string", "advice": "string (optional)", "targetAssetId": "string (optional)" } ] }.',
+    'Each suggestion should focus on cinematic craft (blocking, pacing, transitions, color, etc.) and avoid duplicating previously accepted notes.',
+    existingSuggestions.length
+      ? `Previously surfaced suggestions (accepted indicates if the user already locked them in):\n${JSON.stringify(existingSuggestions, null, 2)}`
+      : 'No earlier director suggestions have been accepted yet.',
+    `Project context:\n${JSON.stringify(projectSnapshot, null, 2)}`
+  ];
+
+  const fullPrompt = validateAndOptimizePrompt(promptSections.join('\n\n'));
+
+  try {
+    const { text } = await requestTextWithFallback(fullPrompt);
+    const suggestions = parseDirectorAdviceResponse(text);
+
+    if (!suggestions.length) {
+      return createResult(createMockDirectorAdvice(context), null, true);
+    }
+
+    return createResult(suggestions, null, false);
+  } catch (error) {
+    console.warn('Gemini director advice generation failed, falling back to mock mode:', error);
+    return createResult(createMockDirectorAdvice(context), null, true);
+  }
+};
+
 export const generateFromWorkspace = async (
   project: {
     assets: ProjectAsset[];
@@ -876,6 +978,7 @@ export const generateFromWorkspace = async (
       nodes: Array<{ id: string; assetId: string; position: { x: number; y: number }; size: number }>;
       connections: Array<{ from: string; to: string; type: 'harmony' | 'tension'; harmonyLevel: number }>;
     };
+    targetModel?: string | null;
   },
   tagWeights: Record<string, number>,
   styleRigidity: number,
@@ -883,11 +986,11 @@ export const generateFromWorkspace = async (
 ): Promise<GeminiResult<string>> => {
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext(outputType, tagWeights);
   let systemPrompt = `Create ${outputType} with filmmaking expertise. ${optimizedKnowledgeContext}`;
-  
+
   if (outputType === 'Master Story') {
     systemPrompt += `\nInclude: Logline, Synopsis (3-5 sentences), Key Scene script.`;
   }
-  
+
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
     .slice(0, 2) // Limit to top 2 tags
@@ -932,11 +1035,12 @@ export const runBuild = async (
   answers: Record<string, string>,
   sandboxContext: Record<string, string>,
   tagWeights: Record<string, number>,
-  styleRigidity: number
+  styleRigidity: number,
+  targetModel?: string | null
 ): Promise<GeminiResult<string>> => {
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext(buildType, tagWeights);
   let systemPrompt = `Process ${buildType} build with film expertise. ${optimizedKnowledgeContext}`;
-  
+
   const weightedTags = Object.entries(tagWeights || {})
     .filter(([, weight]) => weight > TAG_WEIGHT_THRESHOLD)
     .slice(0, 2) // Limit to top 2 tags
@@ -944,6 +1048,14 @@ export const runBuild = async (
     .join(', ');
   if (weightedTags) {
     systemPrompt += `\nFocus: ${weightedTags}.`;
+  }
+
+  const conversion = getPromptConversion(targetModel);
+  if (conversion) {
+    systemPrompt += `\nWhen providing visual prompts, follow this format: ${conversion.promptFormat}.`;
+    if (conversion.notes) {
+      systemPrompt += ` ${conversion.notes}`;
+    }
   }
 
   const answersText = Object.entries(answers)
@@ -962,6 +1074,166 @@ export const runBuild = async (
   } catch (error: unknown) {
     console.warn('Gemini build generation failed, falling back to mock mode:', error);
     return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
+  }
+};
+
+type DirectorAdviceOptions = {
+  tagWeights?: Record<string, number>;
+  styleRigidity?: number;
+};
+
+const summarizeShotLists = (project: Project): string => {
+  const shotLists = project.secondaryTimeline?.shotLists ?? [];
+  if (!shotLists.length) {
+    return 'No shot plans generated yet.';
+  }
+
+  return shotLists
+    .slice(0, 3)
+    .map(shotList => {
+      const masterName = project.assets.find(asset => asset.id === shotList.masterAssetId)?.name ?? 'Unnamed Master';
+      const shotNames = shotList.shots.slice(0, 3).map(shot => shot.name).join(', ');
+      const extra = shotList.shots.length > 3 ? `… +${shotList.shots.length - 3} more` : '';
+      return `${masterName}: ${shotList.shots.length} shots (${shotNames}${extra})`;
+    })
+    .join('\n');
+};
+
+const summarizeStyledShots = (project: Project): string => {
+  const styledShots = project.thirdTimeline?.styledShots ?? [];
+  if (!styledShots.length) {
+    return 'No styled shots recorded.';
+  }
+
+  return styledShots
+    .slice(0, 4)
+    .map(shot => {
+      const styleName = shot.metadata?.styleName || shot.metadata?.look || shot.metadata?.colorGrading;
+      return `${shot.name}${styleName ? ` — style: ${styleName}` : ''}`;
+    })
+    .join('\n');
+};
+
+export const generateDirectorAdvice = async (
+  project: Project,
+  options: DirectorAdviceOptions = {}
+): Promise<GeminiResult<DirectorSuggestion[]>> => {
+  const { tagWeights = {}, styleRigidity = 50 } = options;
+  const tagsSummary = prominentTags(tagWeights);
+  const tone = styleRigidity > 60 ? 'precision-first' : 'exploratory';
+  const conversion = getPromptConversion(project.targetModel);
+
+  let systemPrompt = 'You are Loop, a veteran film director. Provide sharp, actionable notes that strengthen story momentum, cinematography, and pacing.';
+  systemPrompt += ` Keep guidance ${tone}. Limit yourself to at most three suggestions.`;
+  if (tagsSummary) {
+    systemPrompt += ` Weighted creative focuses: ${tagsSummary}.`;
+  }
+  if (conversion) {
+    systemPrompt += ` Reference the ${conversion.displayName} format (${conversion.promptFormat}) when suggesting new prompts or visual beats.`;
+  }
+
+  systemPrompt += '\nReturn valid JSON with the shape {"suggestions": [{"id": string?, "type": "addition"|"removal"|"edit"|"color_grading"|"transition"|"other", "description": string, "advice": string, "targetAssetName": string?, "targetAssetId": string?}]}. Every suggestion must have a description and advice field.';
+
+  const assetsContext = formatAssetsForPrompt(project.assets);
+  const masterAssetsContext = project.secondaryTimeline?.masterAssets?.length
+    ? formatAssetsForPrompt(project.secondaryTimeline.masterAssets as Asset[])
+    : 'No master assets locked yet.';
+  const shotPlanSummary = summarizeShotLists(project);
+  const styledShotSummary = summarizeStyledShots(project);
+  const acceptedSuggestions = project.fourthTimeline?.acceptedSuggestions ?? [];
+  const acceptedSummary = acceptedSuggestions.length
+    ? acceptedSuggestions
+        .slice(0, 3)
+        .map(suggestion => `${suggestion.type}: ${suggestion.description}`)
+        .join('\n')
+    : 'None accepted yet.';
+
+  const fullPrompt = validateAndOptimizePrompt(
+    [
+      systemPrompt,
+      '---',
+      `Project Assets:\n${assetsContext}`,
+      `Master Assets:\n${masterAssetsContext}`,
+      `Shot Plans:\n${shotPlanSummary}`,
+      `Styled Shots:\n${styledShotSummary}`,
+      `Accepted Suggestions:\n${acceptedSummary}`,
+      'Return JSON only.'
+    ].join('\n\n')
+  );
+
+  try {
+    const { text } = await requestTextWithFallback(fullPrompt);
+    const rawSuggestions = parseDirectorAdviceResponse(text);
+    const timestamp = new Date();
+
+    const normalizedSuggestions = rawSuggestions
+      .map(raw => {
+        const description =
+          typeof raw.description === 'string' && raw.description.trim()
+            ? raw.description.trim()
+            : typeof raw.summary === 'string' && raw.summary.trim()
+              ? raw.summary.trim()
+              : '';
+        if (!description) {
+          return null;
+        }
+
+        const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : generateSuggestionId();
+        const advice =
+          typeof raw.advice === 'string' && raw.advice.trim()
+            ? raw.advice.trim()
+            : typeof raw.note === 'string' && raw.note.trim()
+              ? raw.note.trim()
+              : undefined;
+
+        const rawTargetId =
+          (typeof raw.targetAssetId === 'string' && raw.targetAssetId.trim())
+            || (typeof raw.target_asset_id === 'string' && raw.target_asset_id.trim())
+            || '';
+
+        let targetAssetId = rawTargetId || undefined;
+        let targetAssetName =
+          (typeof raw.targetAssetName === 'string' && raw.targetAssetName.trim())
+            || (typeof raw.target_asset_name === 'string' && raw.target_asset_name.trim())
+            || undefined;
+
+        if (targetAssetId) {
+          const matched = project.assets.find(asset => asset.id === targetAssetId);
+          if (matched && !targetAssetName) {
+            targetAssetName = matched.name;
+          }
+        } else if (targetAssetName) {
+          const matched = project.assets.find(
+            asset => asset.name.toLowerCase() === targetAssetName!.toLowerCase()
+          );
+          if (matched) {
+            targetAssetId = matched.id;
+            targetAssetName = matched.name;
+          }
+        }
+
+        return {
+          id,
+          type: normalizeSuggestionType(raw.type),
+          description,
+          advice,
+          targetAssetId,
+          targetAssetName,
+          accepted: false,
+          createdAt: timestamp,
+        } satisfies DirectorSuggestion;
+      })
+      .filter(Boolean) as DirectorSuggestion[];
+
+    const limitedSuggestions = normalizedSuggestions.slice(0, 3);
+    if (!limitedSuggestions.length) {
+      throw new Error('No director suggestions parsed.');
+    }
+
+    return createResult(limitedSuggestions, null, false);
+  } catch (error) {
+    console.warn('Director advice generation failed, using mock suggestions:', error);
+    return createResult(createMockDirectorAdvice(project), null, true);
   }
 };
 
@@ -990,4 +1262,9 @@ export const generateImageFromPrompt = async (
       true
     );
   }
+};
+
+export const __testables = {
+  truncateConversationHistory,
+  MAX_CONVERSATION_CONTEXT
 };
