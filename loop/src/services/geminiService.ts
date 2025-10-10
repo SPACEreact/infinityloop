@@ -603,24 +603,57 @@ const CORE_KNOWLEDGE_PRIORITY = [
   'Camera Movements and Techniques'
 ];
 
-const truncateConversationHistory = (historyText: string, maxLength: number): string => {
-  if (historyText.length <= maxLength) return historyText;
-  
-  const messages = historyText.split('\n');
-  let truncated = '';
-  let totalLength = 0;
-  
-  // Keep only the 2-3 most recent exchanges for context efficiency
-  const recentMessages = messages.slice(-6); // Last 6 lines = ~3 exchanges
-  
-  for (let i = recentMessages.length - 1; i >= 0; i--) {
-    const messageLength = recentMessages[i].length + 1;
-    if (totalLength + messageLength > maxLength) break;
-    truncated = recentMessages[i] + '\n' + truncated;
-    totalLength += messageLength;
+const truncateConversationHistory = (
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  maxLength: number
+): string[] => {
+  if (!history.length || maxLength <= 0) {
+    return [];
   }
-  
-  return truncated || messages[messages.length - 1] || '';
+
+  const collected: string[] = [];
+  let totalLength = 0;
+  let truncated = false;
+
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i];
+    const formatted = `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`;
+    const addition = formatted.length + (collected.length ? 1 : 0);
+
+    if (totalLength + addition > maxLength) {
+      truncated = true;
+      break;
+    }
+
+    collected.push(formatted);
+    totalLength += addition;
+  }
+
+  collected.reverse();
+
+  if (!truncated) {
+    return collected;
+  }
+
+  const indicator = '[Earlier context truncated]';
+  let indicatorBlock = indicator;
+
+  if (indicatorBlock.length > maxLength) {
+    indicatorBlock = indicatorBlock.slice(0, maxLength);
+    return [indicatorBlock];
+  }
+
+  const resultWithIndicator = [indicatorBlock, ...collected];
+
+  while (resultWithIndicator.join('\n').length > maxLength && resultWithIndicator.length > 1) {
+    resultWithIndicator.splice(1, 1);
+  }
+
+  if (resultWithIndicator.join('\n').length > maxLength) {
+    return [indicatorBlock.slice(0, maxLength)];
+  }
+
+  return resultWithIndicator;
 };
 
 const validateAndOptimizePrompt = (fullPrompt: string): string => {
@@ -789,10 +822,6 @@ export const generateSandboxResponse = async (
   tagWeights: Record<string, number>,
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
-  const historyText = conversationHistory
-    .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-    .join('\n');
-
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext('chat', tagWeights);
   // Simplified system prompt for quota efficiency
   let systemPrompt = `You are Loop, an expert filmmaker and storyteller. ${optimizedKnowledgeContext}`;
@@ -808,7 +837,8 @@ export const generateSandboxResponse = async (
   systemPrompt += styleRigidity > 50 ? 'Be precise.' : 'Be creative.';
 
   // Aggressively limit conversation history for quota efficiency
-  const optimizedHistoryText = truncateConversationHistory(historyText, MAX_CONVERSATION_CONTEXT);
+  const optimizedHistoryBlocks = truncateConversationHistory(conversationHistory, MAX_CONVERSATION_CONTEXT);
+  const optimizedHistoryText = optimizedHistoryBlocks.join('\n');
 
   const fullPrompt = validateAndOptimizePrompt(
     `${systemPrompt}\n\nConversation History:\n${optimizedHistoryText}\n\nUser: ${userMessage}\nAssistant:`
@@ -940,4 +970,9 @@ export const generateImageFromPrompt = async (
       true
     );
   }
+};
+
+export const __testables = {
+  truncateConversationHistory,
+  MAX_CONVERSATION_CONTEXT
 };
