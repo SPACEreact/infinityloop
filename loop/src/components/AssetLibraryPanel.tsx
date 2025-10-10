@@ -29,14 +29,17 @@ export function AssetLibraryPanel({
     e.dataTransfer.setData('text/plain', templateType);
   };
 
-  const getAssetCardColor = (templateType: string) => {
+  const getAssetCardVariant = (templateType: string) => {
     const template = ASSET_TEMPLATES[templateType];
     if (template?.category === 'story') {
-      return '#FFFACD'; // muted warm yellow
-    } else if (template?.category === 'visual') {
-      return '#E0F6FF'; // muted cool blue
+      return 'asset-card--story';
     }
-    return undefined;
+
+    if (template?.category === 'visual') {
+      return 'asset-card--visual';
+    }
+
+    return '';
   };
 
   return (
@@ -70,8 +73,7 @@ export function AssetLibraryPanel({
                     key={template.type}
                     draggable
                     onDragStart={(e) => handleDragStart(e, template.type)}
-                    className="p-2 asset-card cursor-move group"
-                    style={{ backgroundColor: getAssetCardColor(template.type) }}
+                    className={`p-2 asset-card cursor-move group ${getAssetCardVariant(template.type)}`}
                   >
                     <div className="font-medium ink-strong">{template.name}</div>
                     <div className="overflow-hidden max-h-0 group-hover:max-h-96 opacity-0 group-hover:opacity-100 transition-all duration-200 text-xs">
