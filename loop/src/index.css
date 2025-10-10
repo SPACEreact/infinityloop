@@ -51,7 +51,75 @@
     --timeline-director-surface: 32 58% 18%;
     --timeline-director-highlight: 32 54% 24%;
     --timeline-director-edge: 32 64% 38%;
+    --workspace-header-surface: 268 40% 14%;
+    --workspace-header-border: 268 36% 28%;
+    --theme-toggle-surface: 268 42% 20%;
+    --theme-toggle-highlight: 266 58% 32%;
+    --theme-toggle-text: 266 36% 92%;
+    --theme-toggle-glow: 268 78% 58%;
+    --chat-button-surface: 327 86% 60%;
+    --chat-button-highlight: 266 84% 64%;
+    --chat-button-muted-surface: 326 52% 30%;
+    --chat-button-muted-highlight: 262 48% 32%;
+    --chat-button-muted-text: 266 32% 90%;
+    --story-card-bg: 45 88% 82%;
+    --story-card-border: 45 80% 60%;
+    --visual-card-bg: 200 86% 78%;
+    --visual-card-border: 200 68% 58%;
     --radius: 1rem;
+  }
+
+  :root[data-theme='light'] {
+    --background: 270 35% 98%;
+    --foreground: 268 40% 18%;
+    --card: 270 34% 99%;
+    --card-foreground: 268 42% 22%;
+    --popover: 270 30% 100%;
+    --popover-foreground: 268 45% 22%;
+    --primary: 268 84% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 70% 56%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 270 24% 92%;
+    --muted-foreground: 268 42% 34%;
+    --accent: 20 82% 58%;
+    --accent-foreground: 18 86% 18%;
+    --destructive: 358 74% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 270 24% 84%;
+    --input: 270 22% 90%;
+    --ring: 268 78% 58%;
+    --ink: 268 44% 18%;
+    --timeline-scene-surface: 358 52% 88%;
+    --timeline-scene-highlight: 358 68% 72%;
+    --timeline-scene-edge: 358 68% 64%;
+    --timeline-visual-surface: 220 48% 86%;
+    --timeline-visual-highlight: 220 64% 72%;
+    --timeline-visual-edge: 220 66% 62%;
+    --timeline-multishot-surface: 150 44% 82%;
+    --timeline-multishot-highlight: 150 56% 66%;
+    --timeline-multishot-edge: 150 58% 58%;
+    --timeline-masterasset-surface: 282 54% 86%;
+    --timeline-masterasset-highlight: 282 64% 72%;
+    --timeline-masterasset-edge: 282 66% 60%;
+    --timeline-director-surface: 32 58% 88%;
+    --timeline-director-highlight: 32 70% 72%;
+    --timeline-director-edge: 32 72% 60%;
+    --workspace-header-surface: 270 34% 96%;
+    --workspace-header-border: 270 24% 84%;
+    --theme-toggle-surface: 270 30% 96%;
+    --theme-toggle-highlight: 270 26% 90%;
+    --theme-toggle-text: 268 42% 22%;
+    --theme-toggle-glow: 268 78% 58%;
+    --chat-button-surface: 327 86% 62%;
+    --chat-button-highlight: 266 82% 62%;
+    --chat-button-muted-surface: 325 94% 94%;
+    --chat-button-muted-highlight: 260 80% 92%;
+    --chat-button-muted-text: 268 40% 24%;
+    --story-card-bg: 45 88% 94%;
+    --story-card-border: 45 72% 74%;
+    --visual-card-bg: 200 88% 94%;
+    --visual-card-border: 200 72% 74%;
   }
 
   body {
@@ -809,6 +877,102 @@
     hsl(var(--secondary) / 0.15) 50%,
     hsl(var(--accent) / 0.15) 100%
   );
+}
+
+.workspace-header {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--workspace-header-surface) / 0.95),
+    hsl(var(--muted) / 0.85)
+  );
+  border-bottom: 1px solid hsl(var(--workspace-header-border));
+  backdrop-filter: blur(20px);
+  box-shadow: 0 14px 40px hsl(var(--workspace-header-border) / 0.25);
+  color: hsl(var(--ink));
+}
+
+.workspace-header__chat-button {
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--chat-button-muted-surface) / 0.9),
+    hsl(var(--chat-button-muted-highlight) / 0.9)
+  );
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.9rem;
+  color: hsl(var(--chat-button-muted-text));
+  display: inline-flex;
+  font-weight: 600;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+  box-shadow:
+    0 12px 30px hsl(var(--border) / 0.25),
+    inset 0 1px 0 hsl(var(--card) / 0.9);
+}
+
+.workspace-header__chat-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 36px hsl(var(--ring) / 0.28),
+    inset 0 1px 0 hsl(var(--card));
+}
+
+.workspace-header__chat-button.is-open {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--chat-button-surface) / 0.95),
+    hsl(var(--chat-button-highlight) / 0.9)
+  );
+  border-color: hsl(var(--ring));
+  color: hsl(var(--primary-foreground));
+  box-shadow:
+    0 18px 40px hsl(var(--chat-button-surface) / 0.35),
+    inset 0 1px 0 hsl(var(--card));
+}
+
+.theme-toggle {
+  align-items: center;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--theme-toggle-surface) / 0.9),
+    hsl(var(--theme-toggle-highlight) / 0.85)
+  );
+  border: 1px solid hsl(var(--border));
+  border-radius: 9999px;
+  box-shadow: 0 12px 30px hsl(var(--theme-toggle-glow) / 0.18);
+  color: hsl(var(--theme-toggle-text));
+  display: inline-flex;
+  font-weight: 600;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 36px hsl(var(--theme-toggle-glow) / 0.3);
+}
+
+.theme-toggle--light {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--theme-toggle-surface) / 0.95),
+    hsl(var(--theme-toggle-highlight) / 0.9)
+  );
+}
+
+.theme-toggle--dark {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--theme-toggle-surface) / 0.85),
+    hsl(var(--theme-toggle-highlight) / 0.8)
+  );
+}
+
+.theme-toggle__icon {
+  font-size: 1.1rem;
 }
 
 /* Glass morphism effect - Pastel translucent */
@@ -1604,6 +1768,22 @@ textarea:focus-visible {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
+.asset-card--story {
+  background: hsl(var(--story-card-bg) / 0.85);
+  border-color: hsl(var(--story-card-border) / 0.8);
+  box-shadow:
+    0 10px 24px hsl(var(--story-card-border) / 0.3),
+    inset 0 1px 0 hsl(var(--card) / 0.95);
+}
+
+.asset-card--visual {
+  background: hsl(var(--visual-card-bg) / 0.85);
+  border-color: hsl(var(--visual-card-border) / 0.8);
+  box-shadow:
+    0 10px 24px hsl(var(--visual-card-border) / 0.3),
+    inset 0 1px 0 hsl(var(--card) / 0.95);
+}
+
 /* Chat assistant theme */
 .chat-pane {
   background: linear-gradient(165deg, hsl(var(--card) / 0.82), hsl(var(--muted) / 0.7));
@@ -2254,14 +2434,6 @@ textarea:focus-visible {
   );
   border-color: hsl(var(--timeline-glow));
   color: hsl(var(--ink));
-}
-
-.workspace-header {
-  background: linear-gradient(135deg, hsl(var(--card) / 0.82) 0%, hsl(var(--secondary) / 0.2) 65%, hsl(var(--accent) / 0.35) 100%);
-  color: hsl(var(--ink));
-  position: relative;
-  isolation: isolate;
-  box-shadow: 0 40px 70px hsl(var(--secondary) / 0.25);
 }
 
 .glass-toggle {
