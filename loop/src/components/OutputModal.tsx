@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Asset } from '../types';
 import { generateImageFromPrompt, listModels } from '../services/geminiService';
+import { useWorkspace } from '../state/WorkspaceContext';
 
 interface OutputModalProps {
   isOpen: boolean;
@@ -22,6 +23,8 @@ export const OutputModal: React.FC<OutputModalProps> = ({
   const [selectedModel, setSelectedModel] = useState<string>('imagen-3.0-generate-001');
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  const { updateUsage } = useWorkspace();
   
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const titleId = React.useId();
@@ -170,7 +173,9 @@ export const OutputModal: React.FC<OutputModalProps> = ({
     try {
       const prompt = `Create a cinematic visual representation of: ${selectedAsset.content || selectedAsset.name}. ${selectedAsset.summary || ''}. Professional cinematography style.`;
       const result = await generateImageFromPrompt(prompt, selectedModel);
-      
+
+      updateUsage(result.usage);
+
       if (result.data && !result.isMock) {
         setGeneratedImage(result.data);
       } else {

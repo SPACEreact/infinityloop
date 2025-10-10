@@ -1,4 +1,4 @@
-import type { Asset, DirectorSuggestion, Project } from '../types';
+import type { Asset, DirectorSuggestion, Project, UsageTotals } from '../types';
 import { MASTER_PROMPT } from '../constants';
 import { apiConfig, DEFAULT_GEMINI_BASE_URL } from './config';
 import { knowledgeBase } from './knowledgeService';
@@ -177,19 +177,19 @@ const fetchModelCatalogDirect = async (endpoint: DirectGeminiEndpoint): Promise<
 };
 
 const fetchModelCatalogViaProxy = async (endpoint: ProxyGeminiEndpoint): Promise<GeminiModel[]> => {
-  const proxyResponse = await requestGeminiProxy(
+  const { payload } = await requestGeminiProxy(
     endpoint,
     'listModels',
     {},
     'Gemini proxy models request'
   );
 
-  if (Array.isArray(proxyResponse?.data?.models)) {
-    return proxyResponse.data.models as GeminiModel[];
+  if (Array.isArray(payload?.data?.models)) {
+    return payload.data.models as GeminiModel[];
   }
 
-  if (Array.isArray(proxyResponse?.data)) {
-    return proxyResponse.data as GeminiModel[];
+  if (Array.isArray(payload?.data)) {
+    return payload.data as GeminiModel[];
   }
 
   return [];
@@ -275,13 +275,314 @@ export interface GeminiResult<T> {
   data: T | null;
   error: string | null;
   isMock: boolean;
+  usage?: UsageTotals;
 }
 
-const createResult = <T>(data: T | null, error: string | null, isMock: boolean): GeminiResult<T> => ({
+const ZERO_USAGE: UsageTotals = { promptTokens: 0, completionTokens: 0 };
+
+const sanitizeUsageTotals = (usage?: UsageTotals | null): UsageTotals | undefined => {
+  if (!usage) {
+    return undefined;
+  }
+
+  const prompt = Number.isFinite(usage.promptTokens)
+    ? Math.max(0, Math.round(usage.promptTokens))
+    : 0;
+  const completion = Number.isFinite(usage.completionTokens)
+    ? Math.max(0, Math.round(usage.completionTokens))
+    : 0;
+
+  if (!prompt && !completion) {
+    return ZERO_USAGE;
+  }
+
+  return { promptTokens: prompt, completionTokens: completion };
+};
+
+const createResult = <T>(
+  data: T | null,
+  error: string | null,
+  isMock: boolean,
+  usage?: UsageTotals | null
+): GeminiResult<T> => ({
   data,
   error,
-  isMock
+  isMock,
+  usage: sanitizeUsageTotals(usage)
 });
+
+const coerceNumeric = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const candidateTokens =
+      (value as { tokens?: unknown }).tokens ??
+      (value as { tokenCount?: unknown }).tokenCount ??
+      (value as { value?: unknown }).value ??
+      (value as { amount?: unknown }).amount;
+
+    if (candidateTokens !== undefined) {
+      return coerceNumeric(candidateTokens);
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = coerceNumeric(item);
+        if (result !== undefined) {
+          return result;
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const buildUsageFromNumbers = (
+  prompt?: number,
+  completion?: number,
+  total?: number
+): UsageTotals | undefined => {
+  const normalizedPrompt = prompt ?? (total !== undefined ? total : undefined);
+  let normalizedCompletion = completion;
+
+  if (normalizedPrompt !== undefined && total !== undefined) {
+    const derivedCompletion = total - normalizedPrompt;
+    if (Number.isFinite(derivedCompletion)) {
+      normalizedCompletion = Math.max(0, Math.round(derivedCompletion));
+    }
+  }
+
+  if (normalizedCompletion === undefined && total !== undefined && normalizedPrompt === undefined) {
+    normalizedCompletion = Math.max(0, Math.round(total));
+  }
+
+  if (normalizedPrompt === undefined && normalizedCompletion === undefined) {
+    return undefined;
+  }
+
+  return sanitizeUsageTotals({
+    promptTokens: normalizedPrompt ?? 0,
+    completionTokens: normalizedCompletion ?? 0
+  });
+};
+
+const parseUsageObject = (candidate: unknown): UsageTotals | undefined => {
+  if (!candidate || typeof candidate !== 'object') {
+    return undefined;
+  }
+
+  const promptCandidates = [
+    'promptTokens',
+    'promptTokenCount',
+    'prompt_token_count',
+    'prompt_tokens',
+    'inputTokens',
+    'inputTokenCount',
+    'input_token_count',
+    'input_tokens',
+    'totalPromptTokens',
+    'promptTotalTokens'
+  ];
+
+  const completionCandidates = [
+    'completionTokens',
+    'completionTokenCount',
+    'completion_token_count',
+    'completion_tokens',
+    'outputTokens',
+    'outputTokenCount',
+    'output_token_count',
+    'output_tokens',
+    'candidatesTokenCount',
+    'candidates_tokens',
+    'candidatesTotalTokens'
+  ];
+
+  const totalCandidates = [
+    'totalTokenCount',
+    'totalTokens',
+    'total_tokens',
+    'totalTokenUsage',
+    'total_token_count',
+    'total',
+    'tokenCount'
+  ];
+
+  const resolveFromKeyList = (keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const value = (candidate as Record<string, unknown>)[key];
+      const numeric = coerceNumeric(value);
+      if (numeric !== undefined) {
+        return numeric;
+      }
+      if (value && typeof value === 'object') {
+        const nestedNumeric = coerceNumeric((value as { count?: unknown }).count);
+        if (nestedNumeric !== undefined) {
+          return nestedNumeric;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const prompt = resolveFromKeyList(promptCandidates);
+  const completion = resolveFromKeyList(completionCandidates);
+  const total = resolveFromKeyList(totalCandidates);
+
+  const promptObject = (candidate as { prompt?: unknown }).prompt;
+  const completionObject = (candidate as { completion?: unknown }).completion;
+
+  const promptFromObject = coerceNumeric(promptObject);
+  const completionFromObject = coerceNumeric(completionObject);
+
+  return (
+    buildUsageFromNumbers(
+      prompt ?? promptFromObject,
+      completion ?? completionFromObject,
+      total
+    ) ?? undefined
+  );
+};
+
+const parseUsageTree = (
+  value: unknown,
+  seen: Set<object>
+): UsageTotals | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const reference = value as object;
+  if (seen.has(reference)) {
+    return undefined;
+  }
+  seen.add(reference);
+
+  const direct = parseUsageObject(value);
+  if (direct) {
+    return direct;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseUsageTree(item, seen);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return undefined;
+  }
+
+  const nestedKeys = [
+    'usageMetadata',
+    'usage',
+    'tokenUsage',
+    'usageData',
+    'usage_data',
+    'metadata',
+    'data',
+    'result',
+    'response',
+    'extra',
+    'billing',
+    'tokens',
+    'candidates'
+  ];
+
+  for (const key of nestedKeys) {
+    const nested = (value as Record<string, unknown>)[key];
+    if (!nested) {
+      continue;
+    }
+
+    if (Array.isArray(nested)) {
+      for (const item of nested) {
+        const parsed = parseUsageTree(item, seen);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    } else if (typeof nested === 'object') {
+      const parsed = parseUsageTree(nested, seen);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const extractUsageFromPayload = (payload: unknown): UsageTotals | undefined =>
+  parseUsageTree(payload, new Set<object>());
+
+const extractUsageFromHeaders = (headers?: Headers | null): UsageTotals | undefined => {
+  if (!headers) {
+    return undefined;
+  }
+
+  const promptHeaderCandidates = [
+    'x-usage-prompt-tokens',
+    'x-prompt-tokens',
+    'x-token-usage-prompt',
+    'x-google-usage-prompt-tokens'
+  ];
+
+  const completionHeaderCandidates = [
+    'x-usage-completion-tokens',
+    'x-completion-tokens',
+    'x-token-usage-completion',
+    'x-google-usage-completion-tokens'
+  ];
+
+  const totalHeaderCandidates = [
+    'x-usage-total-tokens',
+    'x-total-tokens',
+    'x-token-usage-total',
+    'x-google-usage-total-tokens'
+  ];
+
+  const readHeaderValue = (names: string[]): number | undefined => {
+    for (const name of names) {
+      const raw = headers.get(name);
+      if (raw) {
+        const numeric = coerceNumeric(raw);
+        if (numeric !== undefined) {
+          return numeric;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  return buildUsageFromNumbers(
+    readHeaderValue(promptHeaderCandidates),
+    readHeaderValue(completionHeaderCandidates),
+    readHeaderValue(totalHeaderCandidates)
+  );
+};
+
+const resolveUsage = (
+  ...sources: Array<UsageTotals | undefined>
+): UsageTotals | undefined => {
+  for (const source of sources) {
+    const sanitized = sanitizeUsageTotals(source);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return undefined;
+};
 
 const parseResponseJson = async (response: Response, requestDescription: string): Promise<any> => {
   const rawText = await response.text();
@@ -430,12 +731,17 @@ const extractImageDataFromResponse = (data: any): string => {
 
 type GeminiProxyAction = 'generateContent' | 'generateImage' | 'listModels';
 
+type GeminiProxyResult<T = any> = {
+  payload: T;
+  usage?: UsageTotals;
+};
+
 const requestGeminiProxy = async (
   endpoint: ProxyGeminiEndpoint,
   action: GeminiProxyAction,
   payload: Record<string, unknown>,
   description: string
-): Promise<any> => {
+): Promise<GeminiProxyResult<any>> => {
   const response = await fetch(endpoint.baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -452,14 +758,19 @@ const requestGeminiProxy = async (
     throw new Error(errorMessage);
   }
 
-  return data;
+  const usage = resolveUsage(
+    extractUsageFromPayload(data),
+    extractUsageFromHeaders(response.headers)
+  );
+
+  return { payload: data, usage };
 };
 
 const requestGeminiContentDirect = async (
   endpoint: DirectGeminiEndpoint,
   prompt: string,
   model: string
-): Promise<string> => {
+): Promise<{ text: string; usage?: UsageTotals }> => {
   const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
   const normalizedModel = normalizeModelName(model);
   const url = `${normalizedBase}/${normalizedModel}:generateContent?key=${encodeURIComponent(endpoint.apiKey)}`;
@@ -478,14 +789,19 @@ const requestGeminiContentDirect = async (
   });
 
   const data = await parseResponseJson(response, 'Gemini text request');
-  return extractTextFromResponse(data);
+  const usage = resolveUsage(
+    extractUsageFromPayload(data),
+    extractUsageFromHeaders(response.headers)
+  );
+
+  return { text: extractTextFromResponse(data), usage };
 };
 
 const requestGeminiImageDirect = async (
   endpoint: DirectGeminiEndpoint,
   prompt: string,
   model: string
-): Promise<string> => {
+): Promise<{ image: string; usage?: UsageTotals }> => {
   const normalizedBase = endpoint.baseUrl.replace(/\/$/, '');
   const normalizedModel = normalizeModelName(model);
   const url = `${normalizedBase}/${normalizedModel}:generateImage?key=${encodeURIComponent(endpoint.apiKey)}`;
@@ -504,13 +820,18 @@ const requestGeminiImageDirect = async (
   });
 
   const data = await parseResponseJson(response, 'Gemini image request');
-  return extractImageDataFromResponse(data);
+  const usage = resolveUsage(
+    extractUsageFromPayload(data),
+    extractUsageFromHeaders(response.headers)
+  );
+
+  return { image: extractImageDataFromResponse(data), usage };
 };
 
 const requestTextWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_TEXT_MODEL
-): Promise<{ text: string; modelUsed: string; usedFallback: boolean }> => {
+): Promise<{ text: string; modelUsed: string; usedFallback: boolean; usage?: UsageTotals }> => {
   const endpoint = getGeminiEndpoint();
   if (!endpoint) {
     throw new Error('Gemini API key is not configured');
@@ -529,36 +850,55 @@ const requestTextWithFallback = async (
       'Gemini proxy text request'
     );
 
-    const text = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    const payload = proxyResponse.payload ?? {};
+    const payloadData = (payload as { data?: unknown }).data;
+    const textSource =
+      typeof payloadData === 'string'
+        ? payloadData
+        : typeof payload === 'string'
+          ? (payload as string)
+          : typeof (payload as { text?: unknown }).text === 'string'
+            ? (payload as { text: string }).text
+            : '';
+
+    const text = typeof textSource === 'string' ? textSource.trim() : '';
     if (!text) {
       throw new Error('Gemini proxy text request returned no data');
     }
 
-    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : selection.primary;
-    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean'
-      ? proxyResponse.usedFallback
+    const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
+      ? (payload as { modelUsed: string }).modelUsed
+      : selection.primary;
+    const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
+      ? (payload as { usedFallback: boolean }).usedFallback
       : false;
 
-    return { text, modelUsed, usedFallback };
+    const usage = resolveUsage(
+      proxyResponse.usage,
+      extractUsageFromPayload(payload),
+      extractUsageFromPayload(payloadData)
+    );
+
+    return { text, modelUsed, usedFallback, usage };
   }
 
   try {
-    const text = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
-    return { text, modelUsed: selection.primary, usedFallback: false };
+    const { text, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
+    return { text, modelUsed: selection.primary, usedFallback: false, usage };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
       throw error;
     }
 
-    const fallbackText = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
-    return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true };
+    const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
+    return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
   }
 };
 
 const requestImageWithFallback = async (
   prompt: string,
   preferredModel: string = DEFAULT_IMAGE_MODEL
-): Promise<{ image: string; modelUsed: string; usedFallback: boolean }> => {
+): Promise<{ image: string; modelUsed: string; usedFallback: boolean; usage?: UsageTotals }> => {
   const endpoint = getGeminiEndpoint();
   if (!endpoint) {
     throw new Error('Gemini API key is not configured');
@@ -577,29 +917,48 @@ const requestImageWithFallback = async (
       'Gemini proxy image request'
     );
 
-    const image = typeof proxyResponse?.data === 'string' ? proxyResponse.data.trim() : '';
+    const payload = proxyResponse.payload ?? {};
+    const payloadData = (payload as { data?: unknown }).data;
+    const imageSource =
+      typeof payloadData === 'string'
+        ? payloadData
+        : typeof payload === 'string'
+          ? (payload as string)
+          : typeof (payload as { image?: unknown }).image === 'string'
+            ? (payload as { image: string }).image
+            : '';
+
+    const image = typeof imageSource === 'string' ? imageSource.trim() : '';
     if (!image) {
       throw new Error('Gemini proxy image request returned no data');
     }
 
-    const modelUsed = typeof proxyResponse?.modelUsed === 'string' ? proxyResponse.modelUsed : selection.primary;
-    const usedFallback = typeof proxyResponse?.usedFallback === 'boolean'
-      ? proxyResponse.usedFallback
+    const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
+      ? (payload as { modelUsed: string }).modelUsed
+      : selection.primary;
+    const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
+      ? (payload as { usedFallback: boolean }).usedFallback
       : false;
 
-    return { image, modelUsed, usedFallback };
+    const usage = resolveUsage(
+      proxyResponse.usage,
+      extractUsageFromPayload(payload),
+      extractUsageFromPayload(payloadData)
+    );
+
+    return { image, modelUsed, usedFallback, usage };
   }
 
   try {
-    const image = await requestGeminiImageDirect(endpoint, prompt, selection.primary);
-    return { image, modelUsed: selection.primary, usedFallback: false };
+    const { image, usage } = await requestGeminiImageDirect(endpoint, prompt, selection.primary);
+    return { image, modelUsed: selection.primary, usedFallback: false, usage };
   } catch (error) {
     if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
       throw error;
     }
 
-    const fallbackImage = await requestGeminiImageDirect(endpoint, prompt, selection.fallback);
-    return { image: fallbackImage, modelUsed: selection.fallback, usedFallback: true };
+    const { image: fallbackImage, usage } = await requestGeminiImageDirect(endpoint, prompt, selection.fallback);
+    return { image: fallbackImage, modelUsed: selection.fallback, usedFallback: true, usage };
   }
 };
 
@@ -1083,11 +1442,44 @@ export const generateSandboxResponse = async (
   );
 
   try {
-    const { text } = await requestTextWithFallback(fullPrompt);
-    return createResult(text, null, false);
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false, usage);
   } catch (error: unknown) {
     console.warn('Gemini chat generation failed, falling back to mock mode:', error);
     return createResult(createMockChatResponse(userMessage, conversationHistory, tagWeights, styleRigidity), null, true);
+  }
+};
+
+export const generateDirectorAdvice = async (
+  context: DirectorAdviceContext
+): Promise<GeminiResult<DirectorAdviceSuggestionPayload[]>> => {
+  const { existingSuggestions = [], ...projectSnapshot } = context;
+
+  const promptSections = [
+    'You are Loop, an award-winning film director AI embedded inside a collaborative workspace.',
+    'Study the project context and return 3-5 actionable suggestions that a director or editor could apply right now.',
+    'Respond only with compact JSON matching this schema: { "suggestions": [ { "id": "optional", "type": "addition|removal|edit|color_grading|transition|other", "description": "string", "advice": "string (optional)", "targetAssetId": "string (optional)" } ] }.',
+    'Each suggestion should focus on cinematic craft (blocking, pacing, transitions, color, etc.) and avoid duplicating previously accepted notes.',
+    existingSuggestions.length
+      ? `Previously surfaced suggestions (accepted indicates if the user already locked them in):\n${JSON.stringify(existingSuggestions, null, 2)}`
+      : 'No earlier director suggestions have been accepted yet.',
+    `Project context:\n${JSON.stringify(projectSnapshot, null, 2)}`
+  ];
+
+  const fullPrompt = validateAndOptimizePrompt(promptSections.join('\n\n'));
+
+  try {
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    const suggestions = parseDirectorAdviceResponse(text);
+
+    if (!suggestions.length) {
+      return createResult(createMockDirectorAdvice(context), null, true);
+    }
+
+    return createResult(suggestions, null, false, usage);
+  } catch (error) {
+    console.warn('Gemini director advice generation failed, falling back to mock mode:', error);
+    return createResult(createMockDirectorAdvice(context), null, true);
   }
 };
 
@@ -1142,8 +1534,8 @@ export const generateFromWorkspace = async (
   }
 
   try {
-    const { text } = await requestTextWithFallback(fullPrompt);
-    return createResult(text, null, false);
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false, usage);
   } catch (error: unknown) {
     console.warn('Gemini workspace generation failed, falling back to mock mode:', error);
     return createResult(createMockWorkspaceResponse(project, outputType, tagWeights, styleRigidity), null, true);
@@ -1189,8 +1581,8 @@ export const runBuild = async (
   const fullPrompt = validateAndOptimizePrompt(fullPromptContent);
 
   try {
-    const { text } = await requestTextWithFallback(fullPrompt);
-    return createResult(text, null, false);
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    return createResult(text, null, false, usage);
   } catch (error: unknown) {
     console.warn('Gemini build generation failed, falling back to mock mode:', error);
     return createResult(createMockBuildResponse(buildType, answers, sandboxContext), null, true);
@@ -1282,7 +1674,7 @@ export const generateDirectorAdvice = async (
   );
 
   try {
-    const { text } = await requestTextWithFallback(fullPrompt);
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
     const rawSuggestions = parseDirectorAdviceResponse(text);
     const timestamp = new Date();
 
@@ -1350,7 +1742,7 @@ export const generateDirectorAdvice = async (
       throw new Error('No director suggestions parsed.');
     }
 
-    return createResult(limitedSuggestions, null, false);
+    return createResult(limitedSuggestions, null, false, usage);
   } catch (error) {
     console.warn('Director advice generation failed, using mock suggestions:', error);
     return createResult(createMockDirectorAdvice(project), null, true);
@@ -1364,8 +1756,8 @@ export const generateImageFromPrompt = async (
   const enhancedPrompt = `${prompt}\n\nDraw from cinematography and visual storytelling expertise when generating this image.`;
 
   try {
-    const { image } = await requestImageWithFallback(enhancedPrompt, model);
-    return createResult(image, null, false);
+    const { image, usage } = await requestImageWithFallback(enhancedPrompt, model);
+    return createResult(image, null, false, usage);
   } catch (error: unknown) {
     console.warn('Gemini image generation failed, falling back to mock mode:', error);
     const mockCaption = [

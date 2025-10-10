@@ -35,6 +35,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   const {
     project,
     setProject,
+    updateUsage,
     selectedAssetId,
     setSelectedAssetId,
     pendingDeleteAsset,
@@ -109,6 +110,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
         tagWeights,
         styleRigidity
       );
+
+      updateUsage(response.usage);
 
       setChatMessages(prev => {
         const next = [...prev];
