@@ -724,7 +724,8 @@ const requestGeminiContentDirect = async (
 
 const requestTextWithFallback = async (
   prompt: string,
-  preferredModel: string = DEFAULT_TEXT_MODEL
+  preferredModel: string = DEFAULT_TEXT_MODEL,
+  retryCount: number = 2
 ): Promise<{ text: string; modelUsed: string; usedFallback: boolean; usage?: UsageTotals }> => {
   const endpoint = getGeminiEndpoint();
   if (!endpoint) {
@@ -736,57 +737,105 @@ const requestTextWithFallback = async (
     throw new Error('No text generation models available for this API key.');
   }
 
-  if (endpoint.type === 'proxy') {
-    const proxyResponse = await requestGeminiProxy(
-      endpoint,
-      'generateContent',
-      { prompt, model: selection.primary },
-      'Gemini proxy text request'
-    );
+  let lastError: unknown;
 
-    const payload = proxyResponse.payload ?? {};
-    const payloadData = (payload as { data?: unknown }).data;
-    const textSource =
-      typeof payloadData === 'string'
-        ? payloadData
-        : typeof payload === 'string'
-          ? (payload as string)
-          : typeof (payload as { text?: unknown }).text === 'string'
-            ? (payload as { text: string }).text
-            : '';
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
+    try {
+      if (endpoint.type === 'proxy') {
+        const proxyResponse = await requestGeminiProxy(
+          endpoint,
+          'generateContent',
+          { prompt, model: selection.primary },
+          'Gemini proxy text request'
+        );
 
-    const text = typeof textSource === 'string' ? textSource.trim() : '';
-    if (!text) {
-      throw new Error('Gemini proxy text request returned no data');
-    }
+        const payload = proxyResponse.payload ?? {};
+        const payloadData = (payload as { data?: unknown }).data;
+        const textSource =
+          typeof payloadData === 'string'
+            ? payloadData
+            : typeof payload === 'string'
+              ? (payload as string)
+              : typeof (payload as { text?: unknown }).text === 'string'
+                ? (payload as { text: string }).text
+                : '';
 
-    const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
-      ? (payload as { modelUsed: string }).modelUsed
-      : selection.primary;
-    const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
-      ? (payload as { usedFallback: boolean }).usedFallback
-      : false;
+        const text = typeof textSource === 'string' ? textSource.trim() : '';
+        if (!text) {
+          throw new Error('Gemini proxy text request returned no data');
+        }
 
-    const usage = resolveUsage(
-      proxyResponse.usage,
-      extractUsageFromPayload(payload),
-      extractUsageFromPayload(payloadData)
-    );
+        const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
+          ? (payload as { modelUsed: string }).modelUsed
+          : selection.primary;
+        const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
+          ? (payload as { usedFallback: boolean }).usedFallback
+          : false;
 
-    return { text, modelUsed, usedFallback, usage };
-  }
+        const usage = resolveUsage(
+          proxyResponse.usage,
+          extractUsageFromPayload(payload),
+          extractUsageFromPayload(payloadData)
+        );
 
-  try {
-    const { text, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
-    return { text, modelUsed: selection.primary, usedFallback: false, usage };
-  } catch (error) {
-    if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
+        return { text, modelUsed, usedFallback, usage };
+      }
+
+      try {
+        const { text, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
+        return { text, modelUsed: selection.primary, usedFallback: false, usage };
+      } catch (error) {
+        if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
+          throw error;
+        }
+
+        const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
+        return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
+      }
+    } catch (error) {
+      lastError = error;
+      
+      // If it's a network error or timeout, retry with exponential backoff
+      if (attempt < retryCount && isRetryableError(error)) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // If it's a quota/permission error and we have more attempts, wait longer
+      if (attempt < retryCount && shouldUseFallbackModel(error)) {
+        const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
       throw error;
     }
-
-    const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
-    return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
   }
+
+  throw lastError || new Error('Max retry attempts exceeded');
+};
+
+const isRetryableError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+
+  // Network errors
+  if (message.includes('network') || message.includes('timeout') || message.includes('connection')) {
+    return true;
+  }
+
+  // HTTP status codes that are retryable
+  const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
+  if (status === 429 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  return false;
 };
 
 // Smarter prompt optimization for reduced quota usage while maintaining quality
@@ -1562,6 +1611,80 @@ const summarizeStyledShots = (project: Project): string => {
       return `${shot.name}${styleName ? ` — style: ${styleName}` : ''}`;
     })
     .join('\n');
+};
+
+export const generateAssetFieldSuggestion = async (
+  context: {
+    assetId: string;
+    fieldKey: string;
+    fieldLabel: string;
+    currentValue: string;
+    assetType?: string;
+    otherFields?: Record<string, string>;
+  }
+): Promise<GeminiResult<string>> => {
+  const optimizedKnowledgeContext = getOptimizedKnowledgeContext(context.assetType || 'asset');
+  
+  // Focused prompt for specific field improvements
+  let systemPrompt = `You are Loop, a film expert providing concise, actionable suggestions for asset fields. ${optimizedKnowledgeContext.substring(0, 500)}`;
+  
+  // Field-specific guidance
+  if (context.fieldKey.includes('name') || context.fieldKey.includes('title')) {
+    systemPrompt += '\nFor names/titles: Be memorable, specific, and evocative. 2-6 words max.';
+  } else if (context.fieldKey.includes('description') || context.fieldKey.includes('summary')) {
+    systemPrompt += '\nFor descriptions: Be vivid but concise. Focus on key visual or emotional elements. 1-2 sentences max.';
+  } else if (context.fieldKey.includes('style') || context.fieldKey.includes('look')) {
+    systemPrompt += '\nFor style: Reference specific techniques, movements, or visual qualities. Be precise.';
+  } else if (context.fieldKey.includes('dialogue') || context.fieldKey.includes('script')) {
+    systemPrompt += '\nFor dialogue: Natural speech patterns, subtext, character voice. Keep authentic.';
+  } else {
+    systemPrompt += '\nProvide specific, actionable suggestions that enhance cinematic storytelling.';
+  }
+  
+  systemPrompt += '\nIMPORTANT: Keep suggestions to 1-2 sentences maximum. Be specific, not generic.';
+  
+  const contextFields = context.otherFields ? 
+    Object.entries(context.otherFields)
+      .slice(0, 3)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n') : '';
+  
+  const fullPrompt = validateAndOptimizePrompt([
+    systemPrompt,
+    `Asset Type: ${context.assetType || 'Unknown'}`,
+    contextFields ? `Related Fields:\n${contextFields}` : '',
+    `Current ${context.fieldLabel}: "${context.currentValue || '(empty)'}"`,
+    `Suggest an improved ${context.fieldLabel.toLowerCase()}:`
+  ].filter(Boolean).join('\n\n'));
+
+  try {
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    
+    // Post-process to ensure appropriate length
+    const processedText = text
+      .split('\n')
+      .filter(line => line.trim())
+      .slice(0, 2) // Max 2 lines
+      .join(' ')
+      .substring(0, 200) // Max 200 characters
+      .trim();
+    
+    return createResult(processedText || text.substring(0, 200), null, false, usage);
+  } catch (error: unknown) {
+    console.warn('Asset field suggestion generation failed:', error);
+    
+    // Better fallback suggestions based on field type
+    let fallback = '';
+    if (context.fieldKey.includes('name')) {
+      fallback = 'Consider a more evocative, specific name that hints at the character or theme.';
+    } else if (context.fieldKey.includes('description')) {
+      fallback = 'Add visual details, emotional tone, or cinematic qualities to strengthen the description.';
+    } else {
+      fallback = 'Enhance with more specific, filmmaking-focused details for stronger impact.';
+    }
+    
+    return createResult(fallback, null, true);
+  }
 };
 
 export const generateDirectorAdvice = async (

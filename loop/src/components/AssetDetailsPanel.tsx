@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Project, Asset } from '../types';
 import { FIELD_OPTIONS } from '../constants';
 import { SparklesIcon, TrashIcon, XMarkIcon } from './IconComponents';
@@ -41,12 +41,13 @@ export const AssetDetailsPanel = ({
   const asset = project.assets.find(a => a.id === selectedAssetId);
   if (!asset) return null;
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     onDeleteAsset(asset);
-  };
+    onClose(); // Close the panel after deletion
+  }, [asset, onDeleteAsset, onClose]);
 
-  // Parse content into fields and values
-  const parseContent = (content: string) => {
+  // Parse content into fields and values - memoized for performance
+  const parseContent = useCallback((content: string) => {
     const lines = content.split('\n');
     const fields: Record<string, string> = {};
 
@@ -60,11 +61,14 @@ export const AssetDetailsPanel = ({
     });
 
     return fields;
-  };
+  }, []);
 
-  // Update content when a field changes
-  const updateField = (fieldName: string, value: string) => {
-    const fields = parseContent(asset.content);
+  // Memoize parsed fields to prevent unnecessary recalculations
+  const parsedFields = useMemo(() => parseContent(asset.content), [asset.content, parseContent]);
+
+  // Update content when a field changes - optimized
+  const updateField = useCallback((fieldName: string, value: string) => {
+    const fields = { ...parsedFields };
     fields[fieldName] = value;
 
     // Reconstruct content
@@ -73,9 +77,7 @@ export const AssetDetailsPanel = ({
       .join('\n');
 
     onUpdateAsset(asset.id, { content: newContent });
-  };
-
-  const parsedFields = parseContent(asset.content);
+  }, [parsedFields, asset.id, onUpdateAsset]);
 
   const requestSuggestionForField = async (fieldKey: string, fieldLabel: string, currentValue: string) => {
     setSuggestionStates(prev => ({
