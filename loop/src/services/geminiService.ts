@@ -605,38 +605,25 @@ const CORE_KNOWLEDGE_PRIORITY = [
   'Camera Movements and Techniques'
 ];
 
-type ConversationEntry = { role: 'user' | 'assistant'; content: string };
-
-const formatConversationEntry = (entry: ConversationEntry): string =>
-  `${entry.role === 'user' ? 'User' : 'Assistant'}: ${entry.content}`.trimEnd();
-
 const truncateConversationHistory = (
-  history: ConversationEntry[],
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
   maxLength: number
 ): string[] => {
-  if (!history.length) {
+  if (!history.length || maxLength <= 0) {
     return [];
   }
 
   const collected: string[] = [];
   let totalLength = 0;
-  let wasTrimmed = false;
+  let truncated = false;
 
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const formatted = formatConversationEntry(history[index]);
-    const isFirstEntry = collected.length === 0;
-    const newlineLength = isFirstEntry ? 0 : 1;
-    const addition = formatted.length + newlineLength;
-
-    if (isFirstEntry && addition > maxLength) {
-      collected.push(formatted);
-      wasTrimmed = index > 0;
-      totalLength = formatted.length;
-      break;
-    }
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i];
+    const formatted = `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`;
+    const addition = formatted.length + (collected.length ? 1 : 0);
 
     if (totalLength + addition > maxLength) {
-      wasTrimmed = true;
+      truncated = true;
       break;
     }
 
@@ -644,43 +631,31 @@ const truncateConversationHistory = (
     totalLength += addition;
   }
 
-  if (!collected.length) {
-    const lastMessage = formatConversationEntry(history[history.length - 1]);
-    return [lastMessage];
+  collected.reverse();
+
+  if (!truncated) {
+    return collected;
   }
 
-  const ordered = collected.reverse();
-  if (ordered.length < history.length) {
-    wasTrimmed = true;
+  const indicator = '[Earlier context truncated]';
+  let indicatorBlock = indicator;
+
+  if (indicatorBlock.length > maxLength) {
+    indicatorBlock = indicatorBlock.slice(0, maxLength);
+    return [indicatorBlock];
   }
 
-  if (!wasTrimmed) {
-    return ordered;
+  const resultWithIndicator = [indicatorBlock, ...collected];
+
+  while (resultWithIndicator.join('\n').length > maxLength && resultWithIndicator.length > 1) {
+    resultWithIndicator.splice(1, 1);
   }
 
-  const indicator = '[Earlier conversation trimmed]';
-  let adjustedMessages = [...ordered];
-  let adjustedLength = totalLength;
-
-  const indicatorAddition = (messagesCount: number) =>
-    indicator.length + (messagesCount > 0 ? 1 : 0);
-
-  while (adjustedMessages.length && adjustedLength + indicatorAddition(adjustedMessages.length) > maxLength) {
-    const removed = adjustedMessages.shift();
-    if (!removed) {
-      break;
-    }
-    adjustedLength -= removed.length;
-    if (adjustedMessages.length > 0) {
-      adjustedLength -= 1;
-    }
+  if (resultWithIndicator.join('\n').length > maxLength) {
+    return [indicatorBlock.slice(0, maxLength)];
   }
 
-  if (adjustedLength + indicatorAddition(adjustedMessages.length) > maxLength) {
-    return [indicator];
-  }
-
-  return [indicator, ...adjustedMessages];
+  return resultWithIndicator;
 };
 
 const validateAndOptimizePrompt = (fullPrompt: string): string => {
@@ -1037,8 +1012,8 @@ export const generateSandboxResponse = async (
   systemPrompt += styleRigidity > 50 ? 'Be precise.' : 'Be creative.';
 
   // Aggressively limit conversation history for quota efficiency
-  const optimizedHistory = truncateConversationHistory(conversationHistory, MAX_CONVERSATION_CONTEXT);
-  const optimizedHistoryText = optimizedHistory.join('\n');
+  const optimizedHistoryBlocks = truncateConversationHistory(conversationHistory, MAX_CONVERSATION_CONTEXT);
+  const optimizedHistoryText = optimizedHistoryBlocks.join('\n');
 
   const fullPrompt = validateAndOptimizePrompt(
     `${systemPrompt}\n\nConversation History:\n${optimizedHistoryText}\n\nUser: ${userMessage}\nAssistant:`
@@ -1398,7 +1373,7 @@ export const generateImageFromPrompt = async (
   }
 };
 
-export const __testing = {
+export const __testables = {
   truncateConversationHistory,
-  formatAssetsForPrompt,
+  MAX_CONVERSATION_CONTEXT
 };
