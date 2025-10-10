@@ -117,7 +117,7 @@ If you only added the environment variable (no code changes), you can still use 
 You can test your API key directly:
 
 ```bash
-curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=YOUR_API_KEY \
+curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=YOUR_API_KEY \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [{
@@ -126,7 +126,7 @@ curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-
   }'
 ```
 
-Replace `YOUR_API_KEY` with your actual key. A successful response indicates the key is working.
+Replace `YOUR_API_KEY` with your actual key. The free tier supports the `gemini-pro` text model and the multimodal `gemini-pro-vision` model. A successful response indicates the key is working.
 
 ## Supported Features
 

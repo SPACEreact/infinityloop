@@ -76,7 +76,7 @@ export const ApiConfig: React.FC<ApiConfigProps> = ({ isOpen, onClose }) => {
 
     try {
       const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-      const GEMINI_TEST_MODEL = 'gemini-2.5-flash';
+      const GEMINI_TEST_MODEL = 'gemini-pro';
 
       const normalizeBaseUrl = (raw: string, fallback = ''): string => {
         const trimmed = raw.trim();

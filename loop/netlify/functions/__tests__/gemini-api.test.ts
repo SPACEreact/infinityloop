@@ -7,11 +7,11 @@ const mockModelImplementations = vi.hoisted(() =>
 
 const defaultModelCatalog = [
   {
-    name: 'models/gemini-1.5-pro-latest',
+    name: 'models/gemini-pro',
     supportedGenerationMethods: ['generateContent']
   },
   {
-    name: 'models/gemini-1.5-flash-latest',
+    name: 'models/gemini-pro-vision',
     supportedGenerationMethods: ['generateContent']
   },
   {
@@ -128,11 +128,11 @@ describe('gemini-api quota fallback', () => {
   });
 
   it('falls back to the free tier text model when quota is exceeded', async () => {
-    mockModelImplementations.set('gemini-1.5-pro-latest', async () => {
+    mockModelImplementations.set('gemini-pro', async () => {
       throw createQuotaError();
     });
 
-    mockModelImplementations.set('gemini-1.5-flash-latest', async () => ({
+    mockModelImplementations.set('gemini-pro-vision', async () => ({
       response: Promise.resolve({
         text: () => 'fallback text response'
       })
@@ -147,19 +147,19 @@ describe('gemini-api quota fallback', () => {
     const payload = JSON.parse(response.body);
     expect(payload.success).toBe(true);
     expect(payload.data).toBe('fallback text response');
-    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.modelUsed).toBe('gemini-pro-vision');
     expect(payload.usedFallback).toBe(true);
     expect(warnSpy).toHaveBeenCalledWith(
-      'Quota exceeded for model "gemini-1.5-pro-latest". Falling back to available model "gemini-1.5-flash-latest".'
+      'Quota exceeded for model "gemini-pro". Falling back to available model "gemini-pro-vision".'
     );
   });
 
   it('returns a mock response when the fallback text model also fails', async () => {
-    mockModelImplementations.set('gemini-1.5-pro-latest', async () => {
+    mockModelImplementations.set('gemini-pro', async () => {
       throw createQuotaError();
     });
 
-    mockModelImplementations.set('gemini-1.5-flash-latest', async () => {
+    mockModelImplementations.set('gemini-pro-vision', async () => {
       throw createAccessDeniedError(404, 'Model not found');
     });
 
@@ -172,34 +172,37 @@ describe('gemini-api quota fallback', () => {
     const payload = JSON.parse(response.body);
     expect(payload.success).toBe(false);
     expect(payload.isMock).toBe(true);
-    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.modelUsed).toBe('gemini-pro-vision');
     expect(payload.usedFallback).toBe(true);
     expect(payload.error).toBe('Gemini text generation failed after fallback. Using mock response.');
     expect(payload.detail).toContain('Model not found');
   });
 
-  it('returns a mock response when the fallback text model also fails', async () => {
-    mockModelImplementations.set('gemini-2.5-flash', async () => {
+  it('falls back to Gemini Pro when the requested vision model exceeds quota', async () => {
+    mockModelImplementations.set('gemini-pro-vision', async () => {
       throw createQuotaError();
     });
 
-    mockModelImplementations.set('gemini-1.5-flash-latest', async () => {
-      throw createAccessDeniedError(404, 'Model not found');
-    });
+    mockModelImplementations.set('gemini-pro', async () => ({
+      response: Promise.resolve({
+        text: () => 'fallback text response'
+      })
+    }));
 
     const response = await handler(
-      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt' }),
+      createHandlerEvent({ action: 'generateContent', prompt: 'Test prompt', model: 'gemini-pro-vision' }),
       {} as HandlerContext
     );
 
     expect(response.statusCode).toBe(200);
     const payload = JSON.parse(response.body);
-    expect(payload.success).toBe(false);
-    expect(payload.isMock).toBe(true);
-    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.success).toBe(true);
+    expect(payload.data).toBe('fallback text response');
+    expect(payload.modelUsed).toBe('gemini-pro');
     expect(payload.usedFallback).toBe(true);
-    expect(payload.error).toBe('Gemini text generation failed after fallback. Using mock response.');
-    expect(payload.detail).toContain('Model not found');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Quota exceeded for model "gemini-pro-vision". Falling back to available model "gemini-pro".'
+    );
   });
 
   it('falls back to the free tier image model when quota is exceeded', async () => {
@@ -266,11 +269,11 @@ describe('gemini-api quota fallback', () => {
   });
 
   it('falls back to the free tier text model when access is denied', async () => {
-    mockModelImplementations.set('gemini-1.5-pro-latest', async () => {
+    mockModelImplementations.set('gemini-pro', async () => {
       throw createAccessDeniedError(403, 'Permission denied for project');
     });
 
-    mockModelImplementations.set('gemini-1.5-flash-latest', async () => ({
+    mockModelImplementations.set('gemini-pro-vision', async () => ({
       response: Promise.resolve({
         text: () => 'fallback text response'
       })
@@ -285,7 +288,7 @@ describe('gemini-api quota fallback', () => {
     const payload = JSON.parse(response.body);
     expect(payload.success).toBe(true);
     expect(payload.data).toBe('fallback text response');
-    expect(payload.modelUsed).toBe('gemini-1.5-flash-latest');
+    expect(payload.modelUsed).toBe('gemini-pro-vision');
     expect(payload.usedFallback).toBe(true);
   });
 
@@ -338,7 +341,7 @@ describe('gemini-api configuration', () => {
     mockModelImplementations.clear();
     global.fetch = vi.fn();
     setFetchModels();
-    mockModelImplementations.set('gemini-1.5-pro-latest', async () => ({
+    mockModelImplementations.set('gemini-pro', async () => ({
       response: Promise.resolve({
         text: () => 'ok'
       })
