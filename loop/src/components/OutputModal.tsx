@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Asset, StructuredInputData, ShotDetails, IndividualShot } from '../types';
+import { knowledgeBase } from '../services/knowledgeService';
 
 interface OutputModalProps {
   isOpen: boolean;
@@ -53,22 +54,28 @@ const formatStructuredData = (data?: StructuredInputData): string[] => {
     }
   };
 
+  // Scene Foundation (from knowledge base scene writing techniques)
   pushLine('Scene Description', data.sceneDescription);
   pushLine('Character Focus', data.characterDetails);
-  pushLine('Location Details', data.locationDetails);
-  pushLine('Mood & Tone', data.moodAndTone);
-  pushLine('Visual Style', data.visualStyle);
-  pushLine('Narrative Purpose', data.narrativePurpose);
+  pushLine('Location & Environment', data.locationDetails);
+  
+  // Visual Style & Cinematic Elements
+  pushLine('Visual Style Reference', data.visualStyle);
+  pushLine('Lighting & Mood', data.moodAndTone);
   pushLine('Cinematic References', data.cinematicReferences);
-  pushLine('Specific Instructions', data.specificInstructions);
+  
+  // Narrative Purpose & Story Context
+  pushLine('Narrative Purpose', data.narrativePurpose);
+  pushLine('Director\'s Vision', data.specificInstructions);
 
+  // Key Moments with Visual Cues
   if (Array.isArray(data.keyMoments) && data.keyMoments.length) {
     const sanitized = data.keyMoments
       .map(moment => stripHtml(moment))
       .filter(Boolean)
       .map((moment, index) => `${index + 1}. ${moment}`);
     if (sanitized.length) {
-      entries.push(`Key Moments:\n${sanitized.join('\n')}`);
+      entries.push(`Key Visual Moments:\n${sanitized.join('\n')}`);
     }
   }
 
@@ -97,26 +104,60 @@ const formatIndividualShots = (shots?: IndividualShot[]): string[] => {
 
   return shots.map(shot => {
     const lines: string[] = [];
-    lines.push(`Shot ${shot.shotNumber}${shot.shotType ? ` — ${humanizeLabel(shot.shotType)}` : ''}`);
+    lines.push(`■ SHOT ${shot.shotNumber}${shot.shotType ? ` — ${humanizeLabel(shot.shotType)}` : ''}`);
 
-    const fieldEntries: Array<[keyof IndividualShot, string]> = [
-      ['description', 'Description'],
-      ['duration', 'Duration'],
-      ['cameraMovement', 'Camera Movement'],
+    // Scene Context and Description
+    if (shot.description) {
+      lines.push(`  Scene: ${stripHtml(String(shot.description))}`);
+    }
+
+    // Camera and Technical Specifications
+    const technicalSpecs: Array<[keyof IndividualShot, string]> = [
       ['cameraAngle', 'Camera Angle'],
-      ['lensType', 'Lens'],
-      ['lightingStyle', 'Lighting'],
-      ['framing', 'Framing'],
-      ['colorGrading', 'Color Grading'],
-      ['notes', 'Notes'],
+      ['framing', 'Framing & Composition'],
+      ['lensType', 'Lens Type'],
+      ['cameraMovement', 'Camera Movement'],
     ];
 
-    fieldEntries.forEach(([key, label]) => {
+    // Lighting and Visual Style
+    const visualSpecs: Array<[keyof IndividualShot, string]> = [
+      ['lightingStyle', 'Lighting Setup'],
+      ['colorGrading', 'Color Grading'],
+    ];
+
+    // Timing and Performance
+    const performanceSpecs: Array<[keyof IndividualShot, string]> = [
+      ['duration', 'Duration'],
+    ];
+
+    // Add technical specifications
+    technicalSpecs.forEach(([key, label]) => {
       const value = shot[key];
       if (value) {
-        lines.push(`  • ${label}: ${stripHtml(String(value))}`);
+        lines.push(`  ${label}: ${stripHtml(String(value))}`);
       }
     });
+
+    // Add visual style specifications
+    visualSpecs.forEach(([key, label]) => {
+      const value = shot[key];
+      if (value) {
+        lines.push(`  ${label}: ${stripHtml(String(value))}`);
+      }
+    });
+
+    // Add timing and performance
+    performanceSpecs.forEach(([key, label]) => {
+      const value = shot[key];
+      if (value) {
+        lines.push(`  ${label}: ${stripHtml(String(value))}`);
+      }
+    });
+
+    // Additional notes for special instructions
+    if (shot.notes) {
+      lines.push(`  Special Notes: ${stripHtml(String(shot.notes))}`);
+    }
 
     return lines.join('\n');
   });
@@ -163,74 +204,114 @@ const formatMetadataEntries = (metadata?: Record<string, unknown>): string[] => 
   }, []);
 };
 
+// Enhanced knowledge-based prompt enhancement
+const enhancePromptWithKnowledgeBase = (asset: Asset): string => {
+  const knowledgeContext = knowledgeBase.getCompactContext();
+  const visualCues: string[] = [];
+  
+  // Add cinematic context from knowledge base
+  if (asset.type === 'shot' || asset.type === 'multi_shot') {
+    visualCues.push('Apply professional cinematography principles:');
+    visualCues.push('• Use 3-point lighting setup (key, fill, back light)');
+    visualCues.push('• Follow rule of thirds for composition');
+    visualCues.push('• Consider depth of field for visual hierarchy');
+    visualCues.push('• Match camera movement to emotional rhythm');
+  }
+  
+  if (asset.type === 'master_story' || asset.type === 'master_image') {
+    visualCues.push('Ensure strong visual storytelling:');
+    visualCues.push('• Every visual element serves character and story');
+    visualCues.push('• Use visual subtext to convey internal state');
+    visualCues.push('• Style supports theme and tone');
+  }
+  
+  return visualCues.length ? visualCues.join('\n') : '';
+};
+
 const buildPromptForAsset = (asset: Asset): string => {
   const sections: string[] = [];
 
+  // Main asset identification
   const assetTypeName = humanizeLabel(asset.type);
-  sections.push(`TITLE: ${asset.name}`);
-  sections.push(`ASSET TYPE: ${assetTypeName}`);
-  sections.push(`SEED: ${asset.seedId}`);
-
+  sections.push(`=== ${asset.name.toUpperCase()} ===`);
+  sections.push(`Asset Type: ${assetTypeName} | Seed: ${asset.seedId}`);
+  
+  // Story Context and Scene Description
   if (asset.summary) {
     const summary = stripHtml(asset.summary);
     if (summary) {
-      sections.push(`SUMMARY:\n${summary}`);
+      sections.push(`STORY CONTEXT:\n${summary}`);
     }
   }
 
   if (asset.content) {
     const content = stripHtml(asset.content);
     if (content) {
-      sections.push(`CORE CONCEPT:\n${content}`);
+      sections.push(`SCENE DESCRIPTION:\n${content}`);
     }
   }
 
-  if (asset.tags?.length) {
-    sections.push(`TAGS: ${asset.tags.join(', ')}`);
+  // Enhanced Structured Context with Scene Writing Elements
+  const structuredLines = formatStructuredData(asset.inputData);
+  if (structuredLines.length) {
+    sections.push(`CINEMATIC CONTEXT:\n${structuredLines.map(line => `${line}`).join('\n')}`);
   }
 
+  // Shot Configuration and Visual Style
   if (typeof asset.shotCount === 'number' && asset.shotCount > 0) {
     const shotType = asset.shotType ? humanizeLabel(asset.shotType) : undefined;
     sections.push(
-      `SHOT PLAN: ${asset.shotCount} shot${asset.shotCount === 1 ? '' : 's'}${shotType ? ` • Emphasis: ${shotType}` : ''}`
+      `SHOT CONFIGURATION: ${asset.shotCount} shot${asset.shotCount === 1 ? '' : 's'}${shotType ? ` (${shotType} emphasis)` : ''}`
     );
   }
 
+  // Comprehensive Shot Details with Visual Cues
   const shotDetailLines = formatShotDetails(asset.shotDetails);
   if (shotDetailLines.length) {
-    sections.push(`SHOT DETAILS:\n${shotDetailLines.map(line => `- ${line}`).join('\n')}`);
+    sections.push(`VISUAL SPECIFICATIONS:\n${shotDetailLines.map(line => `• ${line}`).join('\n')}`);
   }
 
-  const structuredLines = formatStructuredData(asset.inputData);
-  if (structuredLines.length) {
-    sections.push(`STRUCTURED CONTEXT:\n${structuredLines.map(line => `- ${line}`).join('\n')}`);
-  }
-
+  // Individual Shot Breakdown with Complete Technical Details
   const individualShotLines = formatIndividualShots(asset.individualShots);
   if (individualShotLines.length) {
-    sections.push(`INDIVIDUAL SHOTS:\n${individualShotLines.join('\n\n')}`);
+    sections.push(`SHOT-BY-SHOT BREAKDOWN:\n${individualShotLines.join('\n\n')}`);
   }
 
+  // Enhanced Metadata with Style & Technical Parameters
   const metadataLines = formatMetadataEntries(asset.metadata);
   if (metadataLines.length) {
-    sections.push(`STYLE & TECHNICAL NOTES:\n${metadataLines.map(line => `- ${line}`).join('\n')}`);
+    sections.push(`TECHNICAL & STYLE PARAMETERS:\n${metadataLines.map(line => `• ${line}`).join('\n')}`);
   }
 
+  // Tags as style keywords
+  if (asset.tags?.length) {
+    sections.push(`STYLE KEYWORDS: ${asset.tags.join(', ')}`);
+  }
+
+  // Knowledge-based enhancements
+  const knowledgeEnhancements = enhancePromptWithKnowledgeBase(asset);
+  if (knowledgeEnhancements) {
+    sections.push(`PROFESSIONAL FILMMAKING GUIDANCE:\n${knowledgeEnhancements}`);
+  }
+
+  // Reference Prompts for Consistency
   if (asset.outputs?.length) {
     const outputs = asset.outputs
       .map(entry => stripHtml(entry))
       .filter(Boolean);
     if (outputs.length) {
-      sections.push(`REFERENCE PROMPTS:\n${outputs.map((entry, index) => `${index + 1}. ${entry}`).join('\n')}`);
+      sections.push(`REFERENCE VARIATIONS:\n${outputs.map((entry, index) => `${index + 1}. ${entry}`).join('\n')}`);
     }
   }
 
+  // Asset Lineage for Context
   if (asset.lineage?.length) {
-    sections.push(`SOURCE LINEAGE: ${asset.lineage.join(' → ')}`);
+    sections.push(`CREATION FLOW: ${asset.lineage.join(' → ')}`);
   }
 
+  // Enhanced Deliverable Instructions
   sections.push(
-    'DELIVERABLE: Craft a polished visual prompt ready for AI generation tools. Maintain cinematic clarity, reference the notes above, and keep the tone aligned with the project.'
+    `AI GENERATION INSTRUCTIONS:\nCreate a cinematic ${assetTypeName.toLowerCase()} that captures the scene description with full technical specifications. Include all visual elements: lighting setup, camera movement, character blocking, environmental details, and atmospheric effects. The output should be production-ready with specific technical parameters for professional video/image generation tools like Runway, Sora, Midjourney, or Luma Dream Machine.`
   );
 
   return sections
@@ -271,13 +352,13 @@ export const OutputModal: React.FC<OutputModalProps> = ({
       {
         id: 'visuals' as const,
         label: 'Visual Prompts',
-        description: 'Copy-ready structured prompts for cinematic image or video generators.',
+        description: 'Production-ready prompts with complete scene descriptions, cinematography specs, and professional guidance for image/video generators.',
         entries: buildEntries(visualAssets),
       },
       {
         id: 'shots' as const,
         label: 'Shot Prompts',
-        description: 'Detailed shot breakdowns ready for storyboard or animation tools.',
+        description: 'Comprehensive shot-by-shot breakdowns with technical camera settings, lighting, and performance details for storyboard and animation tools.',
         entries: buildEntries(shotAssets),
       },
     ];
@@ -649,10 +730,12 @@ export const OutputModal: React.FC<OutputModalProps> = ({
           {activeTab === 'prompts' && (
             <div className="space-y-6 fade-in">
               <div className="p-4 border border-indigo-500/30 rounded-lg bg-slate-900/60">
-                <h3 className="font-medium ink-strong mb-2">Copy prompts into your favourite AI tools</h3>
+                <h3 className="font-medium ink-strong mb-2">Ready-to-Paste AI Generation Prompts</h3>
                 <p className="text-sm ink-subtle">
-                  Each prompt packages scene intent, shot design, and stylistic notes so you can paste directly into Midjourney, Runway, Sora, or any creative AI surface.
-                  Use the copy buttons to grab a structured prompt instantly.
+                  Each prompt is a comprehensive package containing scene descriptions, complete visual specifications, 
+                  professional cinematography guidance, and technical parameters. These prompts include all the context from your 
+                  chat assistance questions and are enhanced with film production knowledge for optimal AI generation results. 
+                  Simply copy and paste into Midjourney, Runway, Sora, Luma Dream Machine, or any creative AI tool.
                 </p>
               </div>
 
