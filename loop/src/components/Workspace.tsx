@@ -193,9 +193,22 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     if (!asset) return null;
 
     const context = `Suggest a new value for the field "${fieldLabel}" for the asset named "${asset.name}". The current value is "${currentValue}".`;
-    const suggestion = await handleSendMessage(context);
-    return suggestion;
-  }, [project.assets, handleSendMessage]);
+    
+    try {
+      const response = await generateSandboxResponse(
+        context,
+        [], // empty conversation history for suggestions
+        tagWeights,
+        styleRigidity
+      );
+      
+      updateUsage(response.usage);
+      return response.data ?? null;
+    } catch (error) {
+      console.error('Suggestion error:', error);
+      return null;
+    }
+  }, [project.assets, tagWeights, styleRigidity, updateUsage]);
 
   const handleToggleMasterStorySelection = (assetId: string) => {
     setSelectedStoryAssets(prev =>
