@@ -25,6 +25,7 @@ import { apiConfig } from '../services/config';
 import { syncAssetsToMcp } from '../services/mcpService';
 import { useWorkspace } from '../state/WorkspaceContext';
 import { ScriptImportModal } from './ScriptImportModal';
+import { containsScreenplaySluglines } from '../utils/scriptParser';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
@@ -103,25 +104,27 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     };
     setChatMessages(prev => [...prev, userMessage]);
 
-    const importResult = handleImportScript(message);
-    if (importResult) {
-      const sceneList = importResult.sceneTitles
-        .map(title => `• ${title}`)
-        .join('\n');
+    if (containsScreenplaySluglines(message)) {
+      const importResult = handleImportScript(message);
+      if (importResult) {
+        const sceneList = importResult.sceneTitles
+          .map(title => `• ${title}`)
+          .join('\n');
 
-      const confirmation = [
-        `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
-        sceneList ? '\n' + sceneList : ''
-      ].join('').trim();
+        const confirmation = [
+          `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
+          sceneList ? '\n' + sceneList : ''
+        ].join('').trim();
 
-      setChatMessages(prev => [
-        ...prev,
-        {
-          role: ChatRole.MODEL,
-          content: confirmation || 'Script imported into the timeline.'
-        }
-      ]);
-      return null;
+        setChatMessages(prev => [
+          ...prev,
+          {
+            role: ChatRole.MODEL,
+            content: confirmation || 'Script imported into the timeline.'
+          }
+        ]);
+        return null;
+      }
     }
 
     setIsChatLoading(true);
