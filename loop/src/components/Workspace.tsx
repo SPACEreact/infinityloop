@@ -9,6 +9,7 @@ import type {
   ShotDetails
 } from '../types';
 import { generateSandboxResponse } from '../services/geminiService';
+import { interpretUserMessage } from '../services/chatEngine';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { ApiConfig } from './ApiConfig';
@@ -25,7 +26,7 @@ import { apiConfig } from '../services/config';
 import { syncAssetsToMcp } from '../services/mcpService';
 import { useWorkspace } from '../state/WorkspaceContext';
 import { ScriptImportModal } from './ScriptImportModal';
-import { containsScreenplaySluglines } from '../utils/scriptParser';
+import { applyFieldUpdate, formatFieldLabel } from '../utils/contentFields';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
@@ -96,45 +97,85 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   }, [isApiConfigOpen]);
 
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
-    if (!message.trim()) return null;
+    const trimmed = message.trim();
+    if (!trimmed) return null;
 
     const userMessage: Message = {
       role: ChatRole.USER,
       content: message
     };
+
+    const selectedAsset = selectedAssetId
+      ? project.assets.find(asset => asset.id === selectedAssetId) ?? null
+      : null;
+
+    const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, userMessage].map(msg => ({
+      role: msg.role === ChatRole.USER ? 'user' : 'assistant',
+      content: msg.content
+    }));
+
     setChatMessages(prev => [...prev, userMessage]);
 
-    if (containsScreenplaySluglines(message)) {
-      const importResult = handleImportScript(message);
-      if (importResult) {
-        const sceneList = importResult.sceneTitles
-          .map(title => `• ${title}`)
-          .join('\n');
+    const actions = interpretUserMessage(message, { selectedAsset });
+    const pendingUpdates: {
+      assetId: string;
+      fieldKey: string;
+      mode?: 'append' | 'replace';
+      source: 'assistantResponse' | 'userMessage';
+      fallbackValue?: string;
+    }[] = [];
 
-        const confirmation = [
-          `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
-          sceneList ? '\n' + sceneList : ''
-        ].join('').trim();
+    let shouldInvokeAssistant = actions.length === 0;
 
-        setChatMessages(prev => [
-          ...prev,
-          {
-            role: ChatRole.MODEL,
-            content: confirmation || 'Script imported into the timeline.'
+    const appendAssistantMessage = (content: string) => {
+      setChatMessages(prev => [...prev, { role: ChatRole.MODEL, content }]);
+    };
+
+    actions.forEach(action => {
+      switch (action.type) {
+        case 'assistantReply':
+          appendAssistantMessage(action.message);
+          shouldInvokeAssistant = false;
+          break;
+        case 'openScriptImportModal':
+          setIsScriptImportOpen(true);
+          shouldInvokeAssistant = false;
+          break;
+        case 'importScript': {
+          const importResult = handleImportScript(action.script);
+          if (importResult) {
+            const sceneList = importResult.sceneTitles
+              .map(title => `• ${title}`)
+              .join('\n');
+
+            const confirmation = [
+              `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
+              sceneList ? '\n' + sceneList : ''
+            ].join('').trim();
+
+            appendAssistantMessage(confirmation || 'Script imported into the timeline.');
+          } else {
+            appendAssistantMessage('No screenplay structure detected. Nothing was imported.');
           }
-        ]);
-        return null;
+          shouldInvokeAssistant = false;
+          break;
+        }
+        case 'updateAssetField':
+          pendingUpdates.push(action);
+          shouldInvokeAssistant = true;
+          break;
+        default:
+          break;
       }
+    });
+
+    if (!shouldInvokeAssistant) {
+      return null;
     }
 
     setIsChatLoading(true);
 
     try {
-      const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, userMessage].map(msg => ({
-        role: msg.role === ChatRole.USER ? 'user' as const : 'assistant' as const,
-        content: msg.content
-      }));
-
       const response = await generateSandboxResponse(
         message,
         conversationHistory,
@@ -144,29 +185,70 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
 
       updateUsage(response.usage);
 
-      setChatMessages(prev => {
-        const next = [...prev];
-        if (response.data) {
-          next.push({ role: ChatRole.MODEL, content: response.data });
-        }
-        if (response.error) {
-          next.push({ role: ChatRole.MODEL, content: `⚠️ ${response.error}` });
-        }
-        return next;
-      });
+      const assistantResponse = response.data ?? null;
 
-      return response.data ?? null;
+      if (assistantResponse) {
+        appendAssistantMessage(assistantResponse);
+      }
+
+      if (response.error) {
+        appendAssistantMessage(`⚠️ ${response.error}`);
+      }
+
+      if (pendingUpdates.length > 0) {
+        const assistantValue = assistantResponse?.trim();
+
+        const updatesByAsset = new Map<string, typeof pendingUpdates>();
+        pendingUpdates.forEach(update => {
+          if (!updatesByAsset.has(update.assetId)) {
+            updatesByAsset.set(update.assetId, []);
+          }
+          updatesByAsset.get(update.assetId)!.push(update);
+        });
+
+        updatesByAsset.forEach((updates, assetId) => {
+          const asset = project.assets.find(a => a.id === assetId);
+          if (!asset) return;
+
+          updates.forEach(update => {
+            const value = assistantValue ?? update.fallbackValue?.trim() ?? '';
+            if (!value) return;
+
+            const nextContent = applyFieldUpdate(
+              asset.content,
+              update.fieldKey,
+              value,
+              update.mode ?? 'replace'
+            );
+            handleUpdateAsset(assetId, { content: nextContent });
+            setToastState({
+              id: crypto.randomUUID(),
+              message: `Saved ${formatFieldLabel(update.fieldKey)} to ${asset.name}.`,
+              kind: 'success'
+            });
+          });
+        });
+      }
+
+      return assistantResponse;
     } catch (error) {
       console.error('Chat error:', error);
-      setChatMessages(prev => [...prev, {
-        role: ChatRole.MODEL,
-        content: 'Sorry, I encountered an unexpected error.'
-      }]);
+      appendAssistantMessage('Sorry, I encountered an unexpected error.');
       return null;
     } finally {
       setIsChatLoading(false);
     }
-  }, [chatMessages, tagWeights, styleRigidity, handleImportScript]);
+  }, [
+    chatMessages,
+    tagWeights,
+    styleRigidity,
+    project.assets,
+    selectedAssetId,
+    handleImportScript,
+    handleUpdateAsset,
+    setToastState,
+    updateUsage
+  ]);
 
   const handleScriptImportFromModal = useCallback((script: string) => {
     const result = handleImportScript(script);
