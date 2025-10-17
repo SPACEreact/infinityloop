@@ -141,11 +141,6 @@ export interface DirectorSuggestion {
   createdAt: Date;
 }
 
-export interface UsageTotals {
-  promptTokens: number;
-  completionTokens: number;
-}
-
 export interface Project {
   id: string;
   name: string;
@@ -167,6 +162,16 @@ export interface UsageTotals {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+}
+
+export interface UsageUpdate {
+  totals: UsageTotals;
+  delta: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  timestamp: Date;
 }
 
 export interface UsageStats {

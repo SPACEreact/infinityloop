@@ -1,25 +1,9 @@
 import React, { useMemo } from 'react';
 import { Cog6ToothIcon } from './IconComponents';
 import { PROMPT_CONVERSION_OPTIONS, getPromptConversion } from '../services/promptConversions';
+import type { UsageUpdate } from '../types';
 
-export const ControlPanel = ({
-  tagWeights: _tagWeights,
-  onTagWeightChange: _onTagWeightChange,
-  onGenerate,
-  isGenerating,
-  onSyncAssetsToMcp,
-  isMcpLoading,
-  onOpenReference,
-  onOpenHelp,
-  onOpenApi,
-  onOpenScriptImport,
-  onOpenOutput,
-  isChromaEnabled,
-  onToggleChroma,
-  targetModel,
-  onTargetModelChange,
-  usageStats,
-}: {
+interface ControlPanelProps {
   tagWeights: Record<string, number>;
   onTagWeightChange: (tagId: string, weight: number) => void;
   onGenerate: () => void;
@@ -41,9 +25,38 @@ export const ControlPanel = ({
     percent: number;
     limit: number;
   } | null;
+  lastUsageUpdate?: UsageUpdate | null;
+}
+
+export const ControlPanel: React.FC<ControlPanelProps> = ({
+  tagWeights: _tagWeights,
+  onTagWeightChange: _onTagWeightChange,
+  onGenerate,
+  isGenerating,
+  onSyncAssetsToMcp,
+  isMcpLoading,
+  onOpenReference,
+  onOpenHelp,
+  onOpenApi,
+  onOpenScriptImport,
+  onOpenOutput,
+  isChromaEnabled,
+  onToggleChroma,
+  targetModel,
+  onTargetModelChange,
+  usageStats,
+  lastUsageUpdate,
 }) => {
   const selectedConversion = getPromptConversion(targetModel ?? undefined);
   const numberFormatter = useMemo(() => new Intl.NumberFormat('en-US'), []);
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      }),
+    [],
+  );
 
   const handleModelSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value;
@@ -65,6 +78,28 @@ export const ControlPanel = ({
     remainingTokens !== null ? numberFormatter.format(remainingTokens) : null;
   const overageTokens = usageStats ? Math.round(Math.max(0, usageStats.used - usageStats.limit)) : 0;
   const formattedOverage = overageTokens ? numberFormatter.format(overageTokens) : null;
+
+  const lastUsageSummary = useMemo(() => {
+    if (!lastUsageUpdate) {
+      return null;
+    }
+
+    const promptDelta = Math.max(0, Math.round(lastUsageUpdate.delta.promptTokens));
+    const completionDelta = Math.max(0, Math.round(lastUsageUpdate.delta.completionTokens));
+    const totalDelta = Math.max(0, Math.round(lastUsageUpdate.delta.totalTokens));
+
+    const formattedPrompt = numberFormatter.format(promptDelta);
+    const formattedCompletion = numberFormatter.format(completionDelta);
+    const formattedTotal = numberFormatter.format(totalDelta);
+    const formattedTime = timeFormatter.format(lastUsageUpdate.timestamp);
+
+    return {
+      formattedPrompt,
+      formattedCompletion,
+      formattedTotal,
+      formattedTime,
+    };
+  }, [lastUsageUpdate, numberFormatter, timeFormatter]);
 
   return (
     <aside className="glass-card w-full p-4 flex flex-col overflow-y-auto custom-scrollbar max-h-full flex-shrink-0 transition-all duration-300">
@@ -193,23 +228,39 @@ export const ControlPanel = ({
             {usageStats ? (
               <>
                   <div className="h-2 rounded-full bg-slate-950/50 overflow-hidden">
-                  <div
-                    className={`h-full ${usageStats.percent >= 100 ? 'bg-red-500' : 'bg-blue-500'}`}
-                    style={{ width: `${clampedPercent}%` }}
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={usageStats.limit}
-                    aria-valuenow={Math.min(usageStats.limit, Math.max(0, usageStats.used))}
-                    aria-label="Daily token consumption"
-                  />
+                <div
+                  className={`h-full ${usageStats.percent >= 100 ? 'bg-red-500' : 'bg-blue-500'}`}
+                  style={{ width: `${clampedPercent}%` }}
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={usageStats.limit}
+                  aria-valuenow={Math.min(usageStats.limit, Math.max(0, usageStats.used))}
+                  aria-label="Daily token consumption"
+                />
+              </div>
+              <p className="text-xs ink-subtle">
+                Used {formattedUsed} of {formattedLimit} tokens
+                {formattedRemaining !== null && usageStats.remaining >= 0
+                  ? ` (${formattedRemaining} remaining)`
+                  : ''}
+                {formattedOverage ? ` (Over by ${formattedOverage})` : ''}
+              </p>
+              {lastUsageSummary ? (
+                <div
+                  className="text-xs ink-subtle border-t border-indigo-500/20 pt-2 mt-1"
+                  data-testid="last-usage-summary"
+                >
+                  <p className="font-medium text-indigo-100/90">
+                    Last request: {lastUsageSummary.formattedTotal} tokens
+                  </p>
+                  <p className="text-[11px]">
+                    Prompt {lastUsageSummary.formattedPrompt} · Completion {lastUsageSummary.formattedCompletion}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-wide text-indigo-200/70">
+                    Updated {lastUsageSummary.formattedTime}
+                  </p>
                 </div>
-                <p className="text-xs ink-subtle">
-                  Used {formattedUsed} of {formattedLimit} tokens
-                  {formattedRemaining !== null && usageStats.remaining >= 0
-                    ? ` (${formattedRemaining} remaining)`
-                    : ''}
-                  {formattedOverage ? ` (Over by ${formattedOverage})` : ''}
-                </p>
+              ) : null}
               </>
             ) : (
               <p className="text-xs ink-subtle">Usage data is not available for this project yet.</p>

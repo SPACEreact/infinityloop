@@ -141,4 +141,68 @@ describe('useProject usage stats', () => {
 
     expect(result.current.usageStats).toBeNull();
   });
+
+  it('records the most recent usage delta when totals increase', () => {
+    const project = createProject({
+      usageTotals: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+    });
+
+    const { result } = renderHook(() => useProject(project));
+
+    act(() => {
+      result.current.updateUsage({
+        promptTokens: 140,
+        completionTokens: 90,
+        totalTokens: 230,
+      });
+    });
+
+    expect(result.current.project.usageTotals).toEqual({
+      promptTokens: 140,
+      completionTokens: 90,
+      totalTokens: 230,
+    });
+
+    const snapshot = result.current.lastUsageUpdate;
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.totals).toEqual({
+      promptTokens: 140,
+      completionTokens: 90,
+      totalTokens: 230,
+    });
+    expect(snapshot?.delta).toEqual({
+      promptTokens: 40,
+      completionTokens: 40,
+      totalTokens: 80,
+    });
+    expect(snapshot?.timestamp).toBeInstanceOf(Date);
+  });
+
+  it('treats lower totals as a reset and uses the new totals as the delta', () => {
+    const project = createProject({
+      usageTotals: { promptTokens: 500, completionTokens: 300, totalTokens: 800 },
+    });
+
+    const { result } = renderHook(() => useProject(project));
+
+    act(() => {
+      result.current.updateUsage({
+        promptTokens: 60,
+        completionTokens: 30,
+        totalTokens: 100,
+      });
+    });
+
+    expect(result.current.project.usageTotals).toEqual({
+      promptTokens: 60,
+      completionTokens: 30,
+      totalTokens: 100,
+    });
+
+    expect(result.current.lastUsageUpdate?.delta).toEqual({
+      promptTokens: 60,
+      completionTokens: 30,
+      totalTokens: 100,
+    });
+  });
 });

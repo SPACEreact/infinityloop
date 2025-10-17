@@ -18,6 +18,7 @@ const baseProps = {
   onToggleChroma: () => {},
   targetModel: null,
   onTargetModelChange: () => {},
+  lastUsageUpdate: null,
 } as const;
 
 describe('ControlPanel usage display', () => {
@@ -54,5 +55,26 @@ describe('ControlPanel usage display', () => {
     expect(
       screen.getByText('Usage data is not available for this project yet.'),
     ).toBeInTheDocument();
+  });
+
+  it('summarizes the latest request when usage data is provided', () => {
+    const timestamp = new Date('2024-05-01T12:34:00Z');
+
+    render(
+      <ControlPanel
+        {...baseProps}
+        usageStats={{ used: 600, remaining: 400, percent: 60, limit: 1_000 }}
+        lastUsageUpdate={{
+          totals: { promptTokens: 350, completionTokens: 250, totalTokens: 600 },
+          delta: { promptTokens: 120, completionTokens: 80, totalTokens: 200 },
+          timestamp,
+        }}
+      />,
+    );
+
+    const summary = screen.getByTestId('last-usage-summary');
+    expect(summary.textContent).toContain('Last request: 200 tokens');
+    expect(summary.textContent).toContain('Prompt 120');
+    expect(summary.textContent).toContain('Completion 80');
   });
 });

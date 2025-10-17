@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { ChatRole } from '../types';
 import type {
   Project,
@@ -9,6 +9,7 @@ import type {
   ShotDetails
 } from '../types';
 import { generateSandboxResponse } from '../services/geminiService';
+import { interpretUserMessage } from '../services/chatEngine';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { ApiConfig } from './ApiConfig';
@@ -25,6 +26,7 @@ import { apiConfig } from '../services/config';
 import { syncAssetsToMcp } from '../services/mcpService';
 import { useWorkspace } from '../state/WorkspaceContext';
 import { ScriptImportModal } from './ScriptImportModal';
+import { applyFieldUpdate, formatFieldLabel } from '../utils/contentFields';
 
 const ReferenceViewer = React.lazy(() => import('./ReferenceViewer'));
 
@@ -65,7 +67,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     handleAcceptSuggestion,
     handleSetTargetModel,
     handleImportScript,
-    usageStats
+    usageStats,
+    lastUsageUpdate
   } = useWorkspace();
 
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
@@ -88,6 +91,14 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   const [isChromaEnabled, setIsChromaEnabled] = useState(() => apiConfig.isEnabled('chromadb'));
   const [isScriptImportOpen, setIsScriptImportOpen] = useState(false);
 
+  const activeAsset = useMemo(() => {
+    if (!selectedAssetId) {
+      return null;
+    }
+
+    return project.assets.find(asset => asset.id === selectedAssetId) ?? null;
+  }, [project.assets, selectedAssetId]);
+
   useEffect(() => {
     if (!isApiConfigOpen) {
       setIsChromaEnabled(apiConfig.isEnabled('chromadb'));
@@ -95,43 +106,121 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   }, [isApiConfigOpen]);
 
   const handleSendMessage = useCallback(async (message: string): Promise<string | null> => {
-    if (!message.trim()) return null;
+    const trimmed = message.trim();
+    if (!trimmed) return null;
 
     const userMessage: Message = {
       role: ChatRole.USER,
       content: message
     };
+
+    const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, userMessage].map(msg => ({
+      role: msg.role === ChatRole.USER ? 'user' : 'assistant',
+      content: msg.content
+    }));
+
     setChatMessages(prev => [...prev, userMessage]);
 
-    const importResult = handleImportScript(message);
-    if (importResult) {
-      const sceneList = importResult.sceneTitles
-        .map(title => `• ${title}`)
-        .join('\n');
+    const actions = interpretUserMessage(message, { selectedAsset: activeAsset });
+    const pendingUpdates: {
+      assetId: string;
+      fieldKey: string;
+      mode?: 'append' | 'replace';
+      source: 'assistantResponse' | 'userMessage';
+      fallbackValue?: string;
+    }[] = [];
 
-      const confirmation = [
-        `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
-        sceneList ? '\n' + sceneList : ''
-      ].join('').trim();
+    const commitPendingUpdates = (assistantText: string | null) => {
+      if (pendingUpdates.length === 0) {
+        return;
+      }
 
-      setChatMessages(prev => [
-        ...prev,
-        {
-          role: ChatRole.MODEL,
-          content: confirmation || 'Script imported into the timeline.'
+      const assistantValue = assistantText?.trim();
+      const updatesByAsset = new Map<string, typeof pendingUpdates>();
+
+      pendingUpdates.forEach(update => {
+        if (!updatesByAsset.has(update.assetId)) {
+          updatesByAsset.set(update.assetId, []);
         }
-      ]);
+        updatesByAsset.get(update.assetId)!.push(update);
+      });
+
+      updatesByAsset.forEach((updates, assetId) => {
+        const asset = project.assets.find(a => a.id === assetId);
+        if (!asset) return;
+
+        updates.forEach(update => {
+          const fallback = update.fallbackValue?.trim() ?? '';
+          const value = assistantValue && assistantValue.length > 0 ? assistantValue : fallback;
+          if (!value) return;
+
+          const nextContent = applyFieldUpdate(
+            asset.content,
+            update.fieldKey,
+            value,
+            update.mode ?? 'replace'
+          );
+          handleUpdateAsset(assetId, { content: nextContent });
+          setToastState({
+            id: crypto.randomUUID(),
+            message: `Saved ${formatFieldLabel(update.fieldKey)} to ${asset.name}.`,
+            kind: 'success'
+          });
+        });
+      });
+    };
+
+    let shouldInvokeAssistant = actions.length === 0;
+
+    const appendAssistantMessage = (content: string) => {
+      setChatMessages(prev => [...prev, { role: ChatRole.MODEL, content }]);
+    };
+
+    actions.forEach(action => {
+      switch (action.type) {
+        case 'assistantReply':
+          appendAssistantMessage(action.message);
+          shouldInvokeAssistant = false;
+          break;
+        case 'openScriptImportModal':
+          setIsScriptImportOpen(true);
+          shouldInvokeAssistant = false;
+          break;
+        case 'importScript': {
+          const importResult = handleImportScript(action.script);
+          if (importResult) {
+            const sceneList = importResult.sceneTitles
+              .map(title => `• ${title}`)
+              .join('\n');
+
+            const confirmation = [
+              `Imported ${importResult.importedScenes} scene${importResult.importedScenes === 1 ? '' : 's'} into the Story timeline.`,
+              sceneList ? '\n' + sceneList : ''
+            ].join('').trim();
+
+            appendAssistantMessage(confirmation || 'Script imported into the timeline.');
+          } else {
+            appendAssistantMessage('No screenplay structure detected. Nothing was imported.');
+          }
+          shouldInvokeAssistant = false;
+          break;
+        }
+        case 'updateAssetField':
+          pendingUpdates.push(action);
+          shouldInvokeAssistant = true;
+          break;
+        default:
+          break;
+      }
+    });
+
+    if (!shouldInvokeAssistant) {
       return null;
     }
 
     setIsChatLoading(true);
 
     try {
-      const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, userMessage].map(msg => ({
-        role: msg.role === ChatRole.USER ? 'user' as const : 'assistant' as const,
-        content: msg.content
-      }));
-
       const response = await generateSandboxResponse(
         message,
         conversationHistory,
@@ -141,29 +230,39 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
 
       updateUsage(response.usage);
 
-      setChatMessages(prev => {
-        const next = [...prev];
-        if (response.data) {
-          next.push({ role: ChatRole.MODEL, content: response.data });
-        }
-        if (response.error) {
-          next.push({ role: ChatRole.MODEL, content: `⚠️ ${response.error}` });
-        }
-        return next;
-      });
+      const assistantResponse = response.data ?? null;
 
-      return response.data ?? null;
+      if (assistantResponse) {
+        appendAssistantMessage(assistantResponse);
+      }
+
+      if (response.error) {
+        appendAssistantMessage(`⚠️ ${response.error}`);
+      }
+
+      commitPendingUpdates(assistantResponse);
+
+      return assistantResponse;
     } catch (error) {
       console.error('Chat error:', error);
-      setChatMessages(prev => [...prev, {
-        role: ChatRole.MODEL,
-        content: 'Sorry, I encountered an unexpected error.'
-      }]);
+      appendAssistantMessage('Sorry, I encountered an unexpected error.');
+      commitPendingUpdates(null);
       return null;
     } finally {
       setIsChatLoading(false);
     }
-  }, [chatMessages, tagWeights, styleRigidity, handleImportScript]);
+  }, [
+    chatMessages,
+    tagWeights,
+    styleRigidity,
+    project.assets,
+    selectedAssetId,
+    activeAsset,
+    handleImportScript,
+    handleUpdateAsset,
+    setToastState,
+    updateUsage
+  ]);
 
   const handleScriptImportFromModal = useCallback((script: string) => {
     const result = handleImportScript(script);
@@ -656,49 +755,50 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
             <div className="w-1/3 bg-black/30 backdrop-blur-sm">
               <ChatAssistant
                 messages={chatMessages}
-              isLoading={isChatLoading}
-              generatedOutput={generatedOutput}
-              onSendMessage={handleSendMessage}
-              project={project}
-              onCreateAsset={handleAddAsset}
-              onUpdateAsset={handleUpdateAsset}
-            />
-          </div>
-        )}
+                isLoading={isChatLoading}
+                generatedOutput={generatedOutput}
+                onSendMessage={handleSendMessage}
+                project={project}
+                onCreateAsset={handleAddAsset}
+                onUpdateAsset={handleUpdateAsset}
+              />
+            </div>
+          )}
 
           {!isChatOpen && (
             <div className="w-1/4 p-4 overflow-y-auto">
-            {selectedAssetId ? (
-              <AssetDetailsPanel
-                selectedAssetId={selectedAssetId}
-                project={project}
-                onUpdateAsset={handleUpdateAsset}
-                onDeleteAsset={handleRequestDeleteAsset}
-                onClose={() => setSelectedAssetId(null)}
-                onRequestSuggestion={handleRequestFieldSuggestion}
-              />
-            ) : (
-              <ControlPanel
-                tagWeights={tagWeights}
-                onTagWeightChange={handleTagWeightChange}
-                onGenerate={handleGenerate}
-                isGenerating={isGenerating}
-                onSyncAssetsToMcp={handleSyncAssetsToMcp}
-                isMcpLoading={isMcpLoading}
-                onOpenReference={() => setIsReferenceViewerOpen(true)}
-                onOpenHelp={() => setIsUserGuideOpen(true)}
-                onOpenApi={() => setIsApiConfigOpen(true)}
-                onOpenScriptImport={() => setIsScriptImportOpen(true)}
-                onOpenOutput={() => setIsOutputModalOpen(true)}
-                isChromaEnabled={isChromaEnabled}
-                onToggleChroma={handleToggleChromaService}
-                targetModel={project.targetModel ?? null}
-                onTargetModelChange={handleSetTargetModel}
-                usageStats={usageStats}
-              />
-            )}
-          </div>
-        )}
+              {activeAsset ? (
+                <AssetDetailsPanel
+                  selectedAssetId={selectedAssetId}
+                  project={project}
+                  onUpdateAsset={handleUpdateAsset}
+                  onDeleteAsset={handleRequestDeleteAsset}
+                  onClose={() => setSelectedAssetId(null)}
+                  onRequestSuggestion={handleRequestFieldSuggestion}
+                />
+              ) : (
+                <ControlPanel
+                  tagWeights={tagWeights}
+                  onTagWeightChange={handleTagWeightChange}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  onSyncAssetsToMcp={handleSyncAssetsToMcp}
+                  isMcpLoading={isMcpLoading}
+                  onOpenReference={() => setIsReferenceViewerOpen(true)}
+                  onOpenHelp={() => setIsUserGuideOpen(true)}
+                  onOpenApi={() => setIsApiConfigOpen(true)}
+                  onOpenScriptImport={() => setIsScriptImportOpen(true)}
+                  onOpenOutput={() => setIsOutputModalOpen(true)}
+                  isChromaEnabled={isChromaEnabled}
+                  onToggleChroma={handleToggleChromaService}
+                  targetModel={project.targetModel ?? null}
+                  onTargetModelChange={handleSetTargetModel}
+                  usageStats={usageStats}
+                  lastUsageUpdate={lastUsageUpdate}
+                />
+              )}
+            </div>
+          )}
       </div>
 
       <ToastNotification
