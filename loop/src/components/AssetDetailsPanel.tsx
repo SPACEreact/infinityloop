@@ -3,6 +3,11 @@ import type { Project, Asset } from '../types';
 import { FIELD_OPTIONS } from '../constants';
 import { SparklesIcon, TrashIcon, XMarkIcon } from './IconComponents';
 import { OptimizedDropdown } from './OptimizedDropdown';
+import {
+  applyFieldUpdate,
+  formatFieldLabel,
+  parseStructuredFields
+} from '../utils/contentFields';
 
 const ASSET_NAME_SUGGESTION_KEY = 'asset_name';
 
@@ -39,43 +44,26 @@ export const AssetDetailsPanel = ({
   if (!selectedAssetId) return null;
 
   const asset = project.assets.find(a => a.id === selectedAssetId);
+
+  useEffect(() => {
+    if (selectedAssetId && !asset) {
+      onClose();
+    }
+  }, [asset, onClose, selectedAssetId]);
+
   if (!asset) return null;
 
   const handleDelete = () => {
     onDeleteAsset(asset);
   };
 
-  // Parse content into fields and values
-  const parseContent = (content: string) => {
-    const lines = content.split('\n');
-    const fields: Record<string, string> = {};
-
-    lines.forEach(line => {
-      const colonIndex = line.indexOf(':');
-      if (colonIndex > 0) {
-        const fieldName = line.substring(0, colonIndex).trim().toLowerCase().replace(/\s+/g, '_');
-        const fieldValue = line.substring(colonIndex + 1).trim();
-        fields[fieldName] = fieldValue;
-      }
-    });
-
-    return fields;
-  };
-
   // Update content when a field changes
   const updateField = (fieldName: string, value: string) => {
-    const fields = parseContent(asset.content);
-    fields[fieldName] = value;
-
-    // Reconstruct content
-    const newContent = Object.entries(fields)
-      .map(([key, val]) => `${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}: ${val}`)
-      .join('\n');
-
+    const newContent = applyFieldUpdate(asset.content, fieldName, value, 'replace');
     onUpdateAsset(asset.id, { content: newContent });
   };
 
-  const parsedFields = parseContent(asset.content);
+  const parsedFields = parseStructuredFields(asset.content);
 
   const requestSuggestionForField = async (fieldKey: string, fieldLabel: string, currentValue: string) => {
     setSuggestionStates(prev => ({
@@ -312,7 +300,7 @@ export const AssetDetailsPanel = ({
           <label className="block font-bold ink-strong mb-2">Fields</label>
           <div className="space-y-3">
             {Object.entries(parsedFields).map(([fieldKey, fieldValue]) => {
-              const displayName = fieldKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              const displayName = formatFieldLabel(fieldKey);
               const options = getFieldOptions(fieldKey);
 
               if (options && options.length > 0) {
