@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { ChatRole } from '../types';
 import type {
   Project,
@@ -8,7 +8,8 @@ import type {
   IndividualShot,
   ShotDetails
 } from '../types';
-import { generateSandboxResponse, generateAssetFieldSuggestion } from '../services/geminiService';
+import { generateSandboxResponse } from '../services/geminiService';
+import { interpretUserMessage } from '../services/chatEngine';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { ApiConfig } from './ApiConfig';
@@ -89,6 +90,14 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
   const [isChromaEnabled, setIsChromaEnabled] = useState(() => apiConfig.isEnabled('chromadb'));
   const [isScriptImportOpen, setIsScriptImportOpen] = useState(false);
 
+  const activeAsset = useMemo(() => {
+    if (!selectedAssetId) {
+      return null;
+    }
+
+    return project.assets.find(asset => asset.id === selectedAssetId) ?? null;
+  }, [project.assets, selectedAssetId]);
+
   useEffect(() => {
     if (!isApiConfigOpen) {
       setIsChromaEnabled(apiConfig.isEnabled('chromadb'));
@@ -104,10 +113,6 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
       content: message
     };
 
-    const selectedAsset = selectedAssetId
-      ? project.assets.find(asset => asset.id === selectedAssetId) ?? null
-      : null;
-
     const conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [...chatMessages, userMessage].map(msg => ({
       role: msg.role === ChatRole.USER ? 'user' : 'assistant',
       content: msg.content
@@ -115,7 +120,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
 
     setChatMessages(prev => [...prev, userMessage]);
 
-    const actions = interpretUserMessage(message, { selectedAsset });
+    const actions = interpretUserMessage(message, { selectedAsset: activeAsset });
     const pendingUpdates: {
       assetId: string;
       fieldKey: string;
@@ -243,6 +248,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     styleRigidity,
     project.assets,
     selectedAssetId,
+    activeAsset,
     handleImportScript,
     handleUpdateAsset,
     setToastState,
@@ -754,49 +760,49 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
             <div className="w-1/3 bg-black/30 backdrop-blur-sm">
               <ChatAssistant
                 messages={chatMessages}
-              isLoading={isChatLoading}
-              generatedOutput={generatedOutput}
-              onSendMessage={handleSendMessage}
-              project={project}
-              onCreateAsset={handleAddAsset}
-              onUpdateAsset={handleUpdateAsset}
-            />
-          </div>
-        )}
+                isLoading={isChatLoading}
+                generatedOutput={generatedOutput}
+                onSendMessage={handleSendMessage}
+                project={project}
+                onCreateAsset={handleAddAsset}
+                onUpdateAsset={handleUpdateAsset}
+              />
+            </div>
+          )}
 
           {!isChatOpen && (
             <div className="w-1/4 p-4 overflow-y-auto">
-            {selectedAssetId ? (
-              <AssetDetailsPanel
-                selectedAssetId={selectedAssetId}
-                project={project}
-                onUpdateAsset={handleUpdateAsset}
-                onDeleteAsset={handleRequestDeleteAsset}
-                onClose={() => setSelectedAssetId(null)}
-                onRequestSuggestion={handleRequestFieldSuggestion}
-              />
-            ) : (
-              <ControlPanel
-                tagWeights={tagWeights}
-                onTagWeightChange={handleTagWeightChange}
-                onGenerate={handleGenerate}
-                isGenerating={isGenerating}
-                onSyncAssetsToMcp={handleSyncAssetsToMcp}
-                isMcpLoading={isMcpLoading}
-                onOpenReference={() => setIsReferenceViewerOpen(true)}
-                onOpenHelp={() => setIsUserGuideOpen(true)}
-                onOpenApi={() => setIsApiConfigOpen(true)}
-                onOpenScriptImport={() => setIsScriptImportOpen(true)}
-                onOpenOutput={() => setIsOutputModalOpen(true)}
-                isChromaEnabled={isChromaEnabled}
-                onToggleChroma={handleToggleChromaService}
-                targetModel={project.targetModel ?? null}
-                onTargetModelChange={handleSetTargetModel}
-                usageStats={usageStats}
-              />
-            )}
-          </div>
-        )}
+              {activeAsset ? (
+                <AssetDetailsPanel
+                  selectedAssetId={selectedAssetId}
+                  project={project}
+                  onUpdateAsset={handleUpdateAsset}
+                  onDeleteAsset={handleRequestDeleteAsset}
+                  onClose={() => setSelectedAssetId(null)}
+                  onRequestSuggestion={handleRequestFieldSuggestion}
+                />
+              ) : (
+                <ControlPanel
+                  tagWeights={tagWeights}
+                  onTagWeightChange={handleTagWeightChange}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  onSyncAssetsToMcp={handleSyncAssetsToMcp}
+                  isMcpLoading={isMcpLoading}
+                  onOpenReference={() => setIsReferenceViewerOpen(true)}
+                  onOpenHelp={() => setIsUserGuideOpen(true)}
+                  onOpenApi={() => setIsApiConfigOpen(true)}
+                  onOpenScriptImport={() => setIsScriptImportOpen(true)}
+                  onOpenOutput={() => setIsOutputModalOpen(true)}
+                  isChromaEnabled={isChromaEnabled}
+                  onToggleChroma={handleToggleChromaService}
+                  targetModel={project.targetModel ?? null}
+                  onTargetModelChange={handleSetTargetModel}
+                  usageStats={usageStats}
+                />
+              )}
+            </div>
+          )}
       </div>
 
       <ToastNotification
