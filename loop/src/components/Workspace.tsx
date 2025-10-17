@@ -8,8 +8,7 @@ import type {
   IndividualShot,
   ShotDetails
 } from '../types';
-import { generateSandboxResponse } from '../services/geminiService';
-import { interpretUserMessage } from '../services/chatEngine';
+import { generateSandboxResponse, generateAssetFieldSuggestion } from '../services/geminiService';
 import ChatAssistant from './ChatAssistant';
 import UserGuide from './UserGuide';
 import { ApiConfig } from './ApiConfig';
@@ -277,23 +276,37 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     const asset = project.assets.find(a => a.id === assetId);
     if (!asset) return null;
 
-    const context = `Suggest a new value for the field "${fieldLabel}" for the asset named "${asset.name}". The current value is "${currentValue}".`;
-    
     try {
-      const response = await generateSandboxResponse(
-        context,
-        [], // empty conversation history for suggestions
-        tagWeights,
-        styleRigidity
-      );
-      
-      updateUsage(response.usage);
-      return response.data ?? null;
+      // Parse other fields from the asset content for context
+      const lines = asset.content.split('\n');
+      const otherFields: Record<string, string> = {};
+      lines.forEach(line => {
+        const colonIndex = line.indexOf(':');
+        if (colonIndex > 0) {
+          const fieldName = line.substring(0, colonIndex).trim().toLowerCase().replace(/\s+/g, '_');
+          const fieldValue = line.substring(colonIndex + 1).trim();
+          if (fieldName !== fieldKey && fieldValue) {
+            otherFields[fieldName] = fieldValue;
+          }
+        }
+      });
+
+      const result = await generateAssetFieldSuggestion({
+        assetId,
+        fieldKey,
+        fieldLabel,
+        currentValue,
+        assetType: asset.type,
+        otherFields
+      });
+
+      updateUsage(result.usage);
+      return result.data;
     } catch (error) {
-      console.error('Suggestion error:', error);
+      console.error('Field suggestion error:', error);
       return null;
     }
-  }, [project.assets, tagWeights, styleRigidity, updateUsage]);
+  }, [project.assets, updateUsage]);
 
   const handleToggleMasterStorySelection = (assetId: string) => {
     setSelectedStoryAssets(prev =>
