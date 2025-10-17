@@ -187,6 +187,17 @@ const buildFallbackScenes = (input: string): ParsedScene[] => {
   });
 };
 
+export const containsScreenplaySluglines = (input: string): boolean => {
+  if (!input || !input.trim()) {
+    return false;
+  }
+
+  const normalized = input.replace(/\r\n/g, '\n');
+  return normalized
+    .split('\n')
+    .some(line => isLikelySlugline(line));
+};
+
 export const parseScriptScenes = (input: string): ParsedScene[] => {
   if (!input || !input.trim()) {
     return [];

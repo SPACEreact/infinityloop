@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseScriptScenes, hasImportableScript } from '../scriptParser';
+import { parseScriptScenes, hasImportableScript, containsScreenplaySluglines } from '../scriptParser';
 
 describe('parseScriptScenes', () => {
   it('extracts scenes with content and characters', () => {
@@ -77,5 +77,17 @@ describe('hasImportableScript', () => {
 
   it('recognizes unstructured but meaningful scripts', () => {
     expect(hasImportableScript('A single paragraph that still deserves its own scene.')).toBe(true);
+  });
+});
+
+describe('containsScreenplaySluglines', () => {
+  it('returns true when at least one slugline is present', () => {
+    const script = ['INT. LOOP HQ - DAY', 'The control room glows with light.'].join('\n');
+    expect(containsScreenplaySluglines(script)).toBe(true);
+  });
+
+  it('returns false for casual chat messages', () => {
+    const message = 'Hey assistant, can you help me outline the next scene?';
+    expect(containsScreenplaySluglines(message)).toBe(false);
   });
 });

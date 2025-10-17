@@ -3,6 +3,11 @@ import type { Project, Asset } from '../types';
 import { FIELD_OPTIONS } from '../constants';
 import { SparklesIcon, TrashIcon, XMarkIcon } from './IconComponents';
 import { OptimizedDropdown } from './OptimizedDropdown';
+import {
+  applyFieldUpdate,
+  formatFieldLabel,
+  parseStructuredFields
+} from '../utils/contentFields';
 
 const ASSET_NAME_SUGGESTION_KEY = 'asset_name';
 
@@ -314,7 +319,7 @@ export const AssetDetailsPanel = ({
           <label className="block font-bold ink-strong mb-2">Fields</label>
           <div className="space-y-3">
             {Object.entries(parsedFields).map(([fieldKey, fieldValue]) => {
-              const displayName = fieldKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              const displayName = formatFieldLabel(fieldKey);
               const options = getFieldOptions(fieldKey);
 
               if (options && options.length > 0) {
