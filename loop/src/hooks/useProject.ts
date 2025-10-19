@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { SetStateAction } from 'react';
-import type { Project, Asset, TimelineBlock, UsageTotals, UsageStats } from '../types';
+import type { Project, Asset, TimelineBlock, UsageTotals, UsageStats, UsageUpdate } from '../types';
 import { ToastState } from '../components/ToastNotification';
 import { ASSET_TEMPLATES } from '../constants';
 import {
@@ -334,6 +334,7 @@ export const useProject = (initialProject: Project) => {
   >('primary');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDirectorAdviceLoading, setIsDirectorAdviceLoading] = useState(false);
+  const [lastUsageUpdate, setLastUsageUpdate] = useState<UsageUpdate | null>(null);
 
   const updateUsage = useCallback((usage?: UsageTotals | null) => {
     if (!usage) {
@@ -346,9 +347,44 @@ export const useProject = (initialProject: Project) => {
     }
 
     setProject(prev => {
-      const currentTotals = prev.usageTotals;
-      if (usageTotalsEqual(currentTotals, sanitized)) {
+      const previousTotals = normalizeUsageTotals(prev.usageTotals);
+      if (usageTotalsEqual(previousTotals, sanitized)) {
         return prev;
+      }
+
+      const deriveDelta = (current: number, previous?: number): number => {
+        if (!Number.isFinite(previous ?? NaN)) {
+          return Math.max(0, current);
+        }
+
+        const baseline = previous ?? 0;
+        if (current >= baseline) {
+          return Math.max(0, current - baseline);
+        }
+
+        // If usage resets (e.g., new quota window), treat the current total as the delta.
+        return Math.max(0, current);
+      };
+
+      const delta = {
+        promptTokens: deriveDelta(sanitized.promptTokens, previousTotals?.promptTokens),
+        completionTokens: deriveDelta(
+          sanitized.completionTokens,
+          previousTotals?.completionTokens
+        ),
+        totalTokens: deriveDelta(sanitized.totalTokens, previousTotals?.totalTokens)
+      };
+
+      setLastUsageUpdate({
+        totals: sanitized,
+        delta,
+        timestamp: new Date()
+      });
+
+      if (typeof window !== 'undefined') {
+        console.info(
+          `[Gemini] Tokens used: +${delta.totalTokens} (prompt +${delta.promptTokens}, completion +${delta.completionTokens})`
+        );
       }
 
       return {
@@ -357,7 +393,7 @@ export const useProject = (initialProject: Project) => {
         updatedAt: new Date(),
       };
     });
-  }, [setProject]);
+  }, [setProject, setLastUsageUpdate]);
 
   const handleAddAsset = useCallback(
     (templateType: string) => {
@@ -1048,6 +1084,7 @@ export const useProject = (initialProject: Project) => {
       handleAcceptSuggestion,
       handleSetTargetModel,
       usageStats,
+      lastUsageUpdate,
     }),
     [
       project,
@@ -1082,6 +1119,7 @@ export const useProject = (initialProject: Project) => {
       handleAcceptSuggestion,
       handleSetTargetModel,
       usageStats,
+      lastUsageUpdate,
     ],
   );
 };

@@ -53,10 +53,11 @@ export const AssetDetailsPanel = ({
 
   if (!asset) return null;
 
-  const handleDelete = useCallback(() => {
-    onDeleteAsset(asset);
-    onClose(); // Close the panel after deletion
-  }, [asset, onDeleteAsset, onClose]);
+  useEffect(() => {
+    if (selectedAssetId && !asset) {
+      onClose();
+    }
+  }, [asset, onClose, selectedAssetId]);
 
   // Update content when a field changes
   const updateField = (fieldName: string, value: string) => {

@@ -67,7 +67,8 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
     handleAcceptSuggestion,
     handleSetTargetModel,
     handleImportScript,
-    usageStats
+    usageStats,
+    lastUsageUpdate
   } = useWorkspace();
 
   const [tagWeights, setTagWeights] = useState<Record<string, number>>({});
@@ -128,6 +129,46 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
       source: 'assistantResponse' | 'userMessage';
       fallbackValue?: string;
     }[] = [];
+
+    const commitPendingUpdates = (assistantText: string | null) => {
+      if (pendingUpdates.length === 0) {
+        return;
+      }
+
+      const assistantValue = assistantText?.trim();
+      const updatesByAsset = new Map<string, typeof pendingUpdates>();
+
+      pendingUpdates.forEach(update => {
+        if (!updatesByAsset.has(update.assetId)) {
+          updatesByAsset.set(update.assetId, []);
+        }
+        updatesByAsset.get(update.assetId)!.push(update);
+      });
+
+      updatesByAsset.forEach((updates, assetId) => {
+        const asset = project.assets.find(a => a.id === assetId);
+        if (!asset) return;
+
+        updates.forEach(update => {
+          const fallback = update.fallbackValue?.trim() ?? '';
+          const value = assistantValue && assistantValue.length > 0 ? assistantValue : fallback;
+          if (!value) return;
+
+          const nextContent = applyFieldUpdate(
+            asset.content,
+            update.fieldKey,
+            value,
+            update.mode ?? 'replace'
+          );
+          handleUpdateAsset(assetId, { content: nextContent });
+          setToastState({
+            id: crypto.randomUUID(),
+            message: `Saved ${formatFieldLabel(update.fieldKey)} to ${asset.name}.`,
+            kind: 'success'
+          });
+        });
+      });
+    };
 
     let shouldInvokeAssistant = actions.length === 0;
 
@@ -199,45 +240,13 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
         appendAssistantMessage(`⚠️ ${response.error}`);
       }
 
-      if (pendingUpdates.length > 0) {
-        const assistantValue = assistantResponse?.trim();
-
-        const updatesByAsset = new Map<string, typeof pendingUpdates>();
-        pendingUpdates.forEach(update => {
-          if (!updatesByAsset.has(update.assetId)) {
-            updatesByAsset.set(update.assetId, []);
-          }
-          updatesByAsset.get(update.assetId)!.push(update);
-        });
-
-        updatesByAsset.forEach((updates, assetId) => {
-          const asset = project.assets.find(a => a.id === assetId);
-          if (!asset) return;
-
-          updates.forEach(update => {
-            const value = assistantValue ?? update.fallbackValue?.trim() ?? '';
-            if (!value) return;
-
-            const nextContent = applyFieldUpdate(
-              asset.content,
-              update.fieldKey,
-              value,
-              update.mode ?? 'replace'
-            );
-            handleUpdateAsset(assetId, { content: nextContent });
-            setToastState({
-              id: crypto.randomUUID(),
-              message: `Saved ${formatFieldLabel(update.fieldKey)} to ${asset.name}.`,
-              kind: 'success'
-            });
-          });
-        });
-      }
+      commitPendingUpdates(assistantResponse);
 
       return assistantResponse;
     } catch (error) {
       console.error('Chat error:', error);
       appendAssistantMessage('Sorry, I encountered an unexpected error.');
+      commitPendingUpdates(null);
       return null;
     } finally {
       setIsChatLoading(false);
@@ -799,6 +808,7 @@ const Workspace: React.FC<WorkspaceProps> = ({ appLabel }) => {
                   targetModel={project.targetModel ?? null}
                   onTargetModelChange={handleSetTargetModel}
                   usageStats={usageStats}
+                  lastUsageUpdate={lastUsageUpdate}
                 />
               )}
             </div>
