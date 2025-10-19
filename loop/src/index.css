@@ -70,61 +70,61 @@
   }
 
   :root[data-theme='light'] {
-    --background: 330 70% 94%;
-    --foreground: 330 25% 22%;
-    --card: 340 75% 92%;
-    --card-foreground: 330 24% 24%;
-    --popover: 335 68% 93%;
-    --popover-foreground: 330 25% 24%;
-    --primary: 338 82% 72%;
-    --primary-foreground: 338 55% 24%;
-    --secondary: 220 70% 78%;
-    --secondary-foreground: 220 42% 26%;
-    --muted: 328 38% 90%;
-    --muted-foreground: 330 18% 32%;
-    --accent: 20 85% 78%;
-    --accent-foreground: 20 54% 26%;
-    --destructive: 0 68% 76%;
-    --destructive-foreground: 2 55% 24%;
-    --border: 338 52% 84%;
-    --input: 338 50% 88%;
-    --ring: 338 78% 70%;
-    --ink: 330 32% 18%;
-    --timeline-scene: 0 75% 65%;
-    --timeline-scene-surface: 0 75% 92%;
-    --timeline-scene-highlight: 0 75% 96%;
-    --timeline-scene-edge: 0 75% 70%;
-    --timeline-visual: 220 75% 65%;
-    --timeline-visual-surface: 220 75% 92%;
-    --timeline-visual-highlight: 220 75% 96%;
-    --timeline-visual-edge: 220 75% 70%;
-    --timeline-multishot: 120 65% 60%;
-    --timeline-multishot-surface: 120 65% 88%;
-    --timeline-multishot-highlight: 120 65% 94%;
-    --timeline-multishot-edge: 120 65% 65%;
-    --timeline-masterasset: 268 62% 68%;
-    --timeline-masterasset-surface: 268 62% 92%;
-    --timeline-masterasset-highlight: 268 62% 97%;
-    --timeline-masterasset-edge: 268 62% 72%;
-    --timeline-director: 30 85% 65%;
-    --timeline-director-surface: 30 85% 92%;
-    --timeline-director-highlight: 30 85% 96%;
-    --timeline-director-edge: 30 85% 70%;
-    --workspace-header-surface: 0 0% 100%;
-    --workspace-header-border: 330 52% 84%;
-    --theme-toggle-surface: 270 60% 96%;
-    --theme-toggle-highlight: 226 100% 94%;
-    --theme-toggle-text: 330 24% 28%;
-    --theme-toggle-glow: 338 78% 70%;
-    --chat-button-surface: 330 87% 70%;
-    --chat-button-highlight: 266 92% 65%;
-    --chat-button-muted-surface: 326 77% 94%;
-    --chat-button-muted-highlight: 226 100% 94%;
-    --chat-button-muted-text: 220 24% 32%;
-    --story-card-bg: 54 100% 90%;
-    --story-card-border: 45 84% 70%;
-    --visual-card-bg: 198 100% 93%;
-    --visual-card-border: 200 70% 70%;
+    --background: 330 25% 96%;
+    --foreground: 330 18% 45%;
+    --card: 340 20% 94%;
+    --card-foreground: 330 15% 50%;
+    --popover: 335 20% 95%;
+    --popover-foreground: 330 18% 48%;
+    --primary: 338 30% 75%;
+    --primary-foreground: 338 25% 35%;
+    --secondary: 220 25% 80%;
+    --secondary-foreground: 220 20% 40%;
+    --muted: 328 15% 92%;
+    --muted-foreground: 330 12% 55%;
+    --accent: 20 30% 82%;
+    --accent-foreground: 20 20% 40%;
+    --destructive: 0 25% 80%;
+    --destructive-foreground: 2 20% 40%;
+    --border: 338 20% 88%;
+    --input: 338 18% 90%;
+    --ring: 338 25% 75%;
+    --ink: 330 15% 45%;
+    --timeline-scene: 0 25% 78%;
+    --timeline-scene-surface: 0 20% 94%;
+    --timeline-scene-highlight: 0 18% 96%;
+    --timeline-scene-edge: 0 28% 80%;
+    --timeline-visual: 220 25% 78%;
+    --timeline-visual-surface: 220 20% 94%;
+    --timeline-visual-highlight: 220 18% 96%;
+    --timeline-visual-edge: 220 28% 80%;
+    --timeline-multishot: 120 25% 75%;
+    --timeline-multishot-surface: 120 20% 90%;
+    --timeline-multishot-highlight: 120 18% 94%;
+    --timeline-multishot-edge: 120 28% 78%;
+    --timeline-masterasset: 268 25% 80%;
+    --timeline-masterasset-surface: 268 20% 94%;
+    --timeline-masterasset-highlight: 268 18% 97%;
+    --timeline-masterasset-edge: 268 28% 82%;
+    --timeline-director: 30 25% 78%;
+    --timeline-director-surface: 30 20% 94%;
+    --timeline-director-highlight: 30 18% 96%;
+    --timeline-director-edge: 30 28% 80%;
+    --workspace-header-surface: 0 0% 98%;
+    --workspace-header-border: 330 20% 88%;
+    --theme-toggle-surface: 270 25% 94%;
+    --theme-toggle-highlight: 226 30% 90%;
+    --theme-toggle-text: 330 15% 50%;
+    --theme-toggle-glow: 338 25% 75%;
+    --chat-button-surface: 330 30% 85%;
+    --chat-button-highlight: 266 35% 80%;
+    --chat-button-muted-surface: 326 25% 92%;
+    --chat-button-muted-highlight: 226 30% 88%;
+    --chat-button-muted-text: 220 15% 50%;
+    --story-card-bg: 54 30% 88%;
+    --story-card-border: 45 25% 78%;
+    --visual-card-bg: 198 30% 90%;
+    --visual-card-border: 200 25% 80%;
   }
 
   body {
@@ -1493,6 +1493,65 @@ body.theme-light .theme-toggle--classic:hover {
     brightness(1.05);
 }
 
+/* Enhanced clay texture for light theme buttons */
+body.theme-light .timeline-action, 
+body.theme-light .cta-button,
+body.theme-light .btn-primary,
+body.theme-light .modal-button {
+  background: 
+    radial-gradient(ellipse 2px 1px at 20% 30%, rgba(139, 69, 19, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse 1px 2px at 70% 20%, rgba(160, 82, 45, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 3px 1px at 40% 80%, rgba(210, 180, 140, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 1px 1px at 85% 60%, rgba(222, 184, 135, 0.1) 0%, transparent 40%),
+    linear-gradient(145deg, 
+      hsl(30, 15%, 92%) 0%, 
+      hsl(28, 12%, 88%) 25%,
+      hsl(32, 18%, 85%) 50%,
+      hsl(25, 10%, 82%) 75%,
+      hsl(30, 14%, 80%) 100%);
+  border: 2px solid hsl(30, 20%, 75%);
+  box-shadow: 
+    0 6px 12px rgba(139, 69, 19, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(139, 69, 19, 0.1),
+    0 0 0 1px rgba(222, 184, 135, 0.3);
+  
+  /* Matte clay finish */
+  filter: 
+    drop-shadow(2px 2px 0 rgba(139, 69, 19, 0.3))
+    contrast(1.1)
+    saturate(0.9)
+    brightness(0.95);
+}
+
+body.theme-light .timeline-action:hover, 
+body.theme-light .cta-button:hover,
+body.theme-light .btn-primary:hover,
+body.theme-light .modal-button:hover {
+  background: 
+    radial-gradient(ellipse 2px 1px at 25% 35%, rgba(139, 69, 19, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 1px 2px at 75% 25%, rgba(160, 82, 45, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 3px 1px at 45% 85%, rgba(210, 180, 140, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 1px 1px at 90% 65%, rgba(222, 184, 135, 0.15) 0%, transparent 40%),
+    linear-gradient(145deg, 
+      hsl(30, 18%, 88%) 0%, 
+      hsl(28, 15%, 84%) 25%,
+      hsl(32, 22%, 81%) 50%,
+      hsl(25, 12%, 78%) 75%,
+      hsl(30, 16%, 76%) 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 8px 16px rgba(139, 69, 19, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(139, 69, 19, 0.15),
+    0 0 0 1px rgba(222, 184, 135, 0.4);
+  filter: 
+    drop-shadow(3px 3px 0 rgba(139, 69, 19, 0.4))
+    contrast(1.15)
+    saturate(1.0)
+    brightness(0.98);
+}
+
 .timeline-action:before, .cta-button:before {
   content: '';
   position: absolute;
@@ -1720,8 +1779,22 @@ body.theme-light .theme-toggle--classic:hover {
 }
 
 button, a, [role="button"] {
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Reduced from 0.3s */
   will-change: transform;
+}
+
+/* Performance optimization: Use hardware acceleration for transforms */
+.hover-lift,
+.asset-chip,
+.timeline-action,
+.cta-button,
+.glass-card,
+.btn-primary,
+.btn-secondary,
+.modal-button {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 /* Micro-interactions for buttons */

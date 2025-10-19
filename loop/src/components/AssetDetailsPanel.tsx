@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Project, Asset } from '../types';
 import { FIELD_OPTIONS } from '../constants';
 import { SparklesIcon, TrashIcon, XMarkIcon } from './IconComponents';
@@ -53,9 +53,11 @@ export const AssetDetailsPanel = ({
 
   if (!asset) return null;
 
-  const handleDelete = () => {
-    onDeleteAsset(asset);
-  };
+  useEffect(() => {
+    if (selectedAssetId && !asset) {
+      onClose();
+    }
+  }, [asset, onClose, selectedAssetId]);
 
   // Update content when a field changes
   const updateField = (fieldName: string, value: string) => {

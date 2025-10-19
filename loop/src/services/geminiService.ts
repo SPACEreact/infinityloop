@@ -724,7 +724,8 @@ const requestGeminiContentDirect = async (
 
 const requestTextWithFallback = async (
   prompt: string,
-  preferredModel: string = DEFAULT_TEXT_MODEL
+  preferredModel: string = DEFAULT_TEXT_MODEL,
+  retryCount: number = 3
 ): Promise<{ text: string; modelUsed: string; usedFallback: boolean; usage?: UsageTotals }> => {
   const endpoint = getGeminiEndpoint();
   if (!endpoint) {
@@ -736,57 +737,143 @@ const requestTextWithFallback = async (
     throw new Error('No text generation models available for this API key.');
   }
 
-  if (endpoint.type === 'proxy') {
-    const proxyResponse = await requestGeminiProxy(
-      endpoint,
-      'generateContent',
-      { prompt, model: selection.primary },
-      'Gemini proxy text request'
-    );
+  let lastError: unknown;
 
-    const payload = proxyResponse.payload ?? {};
-    const payloadData = (payload as { data?: unknown }).data;
-    const textSource =
-      typeof payloadData === 'string'
-        ? payloadData
-        : typeof payload === 'string'
-          ? (payload as string)
-          : typeof (payload as { text?: unknown }).text === 'string'
-            ? (payload as { text: string }).text
-            : '';
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
+    try {
+      if (endpoint.type === 'proxy') {
+        const proxyResponse = await requestGeminiProxy(
+          endpoint,
+          'generateContent',
+          { prompt, model: selection.primary },
+          'Gemini proxy text request'
+        );
 
-    const text = typeof textSource === 'string' ? textSource.trim() : '';
-    if (!text) {
-      throw new Error('Gemini proxy text request returned no data');
-    }
+        const payload = proxyResponse.payload ?? {};
+        const payloadData = (payload as { data?: unknown }).data;
+        const textSource =
+          typeof payloadData === 'string'
+            ? payloadData
+            : typeof payload === 'string'
+              ? (payload as string)
+              : typeof (payload as { text?: unknown }).text === 'string'
+                ? (payload as { text: string }).text
+                : '';
 
-    const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
-      ? (payload as { modelUsed: string }).modelUsed
-      : selection.primary;
-    const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
-      ? (payload as { usedFallback: boolean }).usedFallback
-      : false;
+        const text = typeof textSource === 'string' ? textSource.trim() : '';
+        if (!text) {
+          throw new Error('Gemini proxy text request returned no data');
+        }
 
-    const usage = resolveUsage(
-      proxyResponse.usage,
-      extractUsageFromPayload(payload),
-      extractUsageFromPayload(payloadData)
-    );
+        const modelUsed = typeof (payload as { modelUsed?: unknown }).modelUsed === 'string'
+          ? (payload as { modelUsed: string }).modelUsed
+          : selection.primary;
+        const usedFallback = typeof (payload as { usedFallback?: unknown }).usedFallback === 'boolean'
+          ? (payload as { usedFallback: boolean }).usedFallback
+          : false;
 
-    return { text, modelUsed, usedFallback, usage };
-  }
+        const usage = resolveUsage(
+          proxyResponse.usage,
+          extractUsageFromPayload(payload),
+          extractUsageFromPayload(payloadData)
+        );
 
-  try {
-    const { text, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
-    return { text, modelUsed: selection.primary, usedFallback: false, usage };
-  } catch (error) {
-    if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
+        return { text, modelUsed, usedFallback, usage };
+      }
+
+      try {
+        const { text, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.primary);
+        return { text, modelUsed: selection.primary, usedFallback: false, usage };
+      } catch (error) {
+        if (!shouldUseFallbackModel(error) || !selection.fallback || selection.fallback === selection.primary) {
+          throw error;
+        }
+
+        const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
+        return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
+      }
+    } catch (error) {
+      lastError = error;
+      
+      // Check if it's a configuration issue first
+      if (isConfigurationError(error)) {
+        console.error('API configuration error:', error);
+        throw error;
+      }
+      
+      // If it's a network error or timeout, retry with exponential backoff
+      if (attempt < retryCount && isRetryableError(error)) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+        console.warn(`Network error, retrying in ${delay}ms... (${attempt + 1}/${retryCount + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // If it's a quota/permission error and we have more attempts, wait longer
+      if (attempt < retryCount && shouldUseFallbackModel(error)) {
+        const delay = Math.min(2000 * Math.pow(2, attempt), 15000);
+        console.warn(`API quota/permission error, retrying in ${delay}ms... (${attempt + 1}/${retryCount + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // Log the error for debugging
+      console.error(`API request failed on attempt ${attempt + 1}:`, error);
+      
       throw error;
     }
-
-    const { text: fallbackText, usage } = await requestGeminiContentDirect(endpoint, prompt, selection.fallback);
-    return { text: fallbackText, modelUsed: selection.fallback, usedFallback: true, usage };
   }
+
+  throw lastError || new Error('Max retry attempts exceeded');
+};
+
+const isRetryableError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+
+  // Network errors
+  if (message.includes('network') || message.includes('timeout') || message.includes('connection')) {
+    return true;
+  }
+
+  // HTTP status codes that are retryable
+  const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
+  if (status === 429 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  return false;
+};
+
+const isConfigurationError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === 'string'
+        ? error.toLowerCase()
+        : '';
+
+  // API key configuration errors
+  if (message.includes('api key') && message.includes('not configured')) {
+    return true;
+  }
+  
+  // Authentication errors that won't be fixed by retrying
+  if (message.includes('authentication failed') || message.includes('invalid api key')) {
+    return true;
+  }
+  
+  // HTTP status codes that indicate configuration issues
+  const status = typeof error === 'object' && error ? (error as { status?: number }).status : undefined;
+  if (status === 401) {
+    return true;
+  }
+
+  return false;
 };
 
 // Smarter prompt optimization for reduced quota usage while maintaining quality
@@ -1391,6 +1478,18 @@ export const generateSandboxResponse = async (
   styleRigidity: number
 ): Promise<GeminiResult<string>> => {
   const optimizedKnowledgeContext = getOptimizedKnowledgeContext('chat', tagWeights);
+  
+  // Check for repetitive patterns in recent conversation
+  const recentAssistantResponses = conversationHistory
+    .filter(msg => msg.role === 'assistant')
+    .slice(-3) // Last 3 assistant responses
+    .map(msg => msg.content.toLowerCase());
+    
+  const isRepetitive = recentAssistantResponses.length >= 2 && 
+    recentAssistantResponses.some((response, index) => 
+      index > 0 && response.includes(recentAssistantResponses[index - 1].slice(0, 50))
+    );
+    
   // Simplified system prompt for quota efficiency
   let systemPrompt = `You are Loop, an expert filmmaker and storyteller. ${optimizedKnowledgeContext}`;
 
@@ -1403,6 +1502,11 @@ export const generateSandboxResponse = async (
     systemPrompt += `\nKey focus: ${weightedTags}. `;
   }
   systemPrompt += styleRigidity > 50 ? 'Be precise.' : 'Be creative.';
+  
+  // Add anti-repetition instruction if needed
+  if (isRepetitive) {
+    systemPrompt += '\nIMPORTANT: Avoid repeating previous responses. Provide fresh, varied perspectives and avoid similar phrasing or concepts you\'ve used recently.';
+  }
 
   // Aggressively limit conversation history for quota efficiency
   const optimizedHistoryBlocks = truncateConversationHistory(conversationHistory, MAX_CONVERSATION_CONTEXT);
@@ -1414,6 +1518,18 @@ export const generateSandboxResponse = async (
 
   try {
     const { text, usage } = await requestTextWithFallback(fullPrompt);
+    
+    // Check if the response is too similar to recent responses
+    const normalizedResponse = text.toLowerCase().slice(0, 100);
+    if (isRepetitive && recentAssistantResponses.some(recent => 
+      recent.slice(0, 50) === normalizedResponse.slice(0, 50)
+    )) {
+      // Force a more diverse response by adding variation prompt
+      const variationPrompt = `${systemPrompt}\nPrevious responses were: ${recentAssistantResponses.join(' | ')}\nUser: ${userMessage}\nProvide a completely different perspective or approach. Be creative and avoid repeating earlier responses:\nAssistant:`;
+      const { text: variationText, usage: variationUsage } = await requestTextWithFallback(variationPrompt);
+      return createResult(variationText, null, false, variationUsage);
+    }
+    
     return createResult(text, null, false, usage);
   } catch (error: unknown) {
     console.warn('Gemini chat generation failed, falling back to mock mode:', error);
@@ -1562,6 +1678,115 @@ const summarizeStyledShots = (project: Project): string => {
       return `${shot.name}${styleName ? ` — style: ${styleName}` : ''}`;
     })
     .join('\n');
+};
+
+export const generateAssetFieldSuggestion = async (
+  context: {
+    assetId: string;
+    fieldKey: string;
+    fieldLabel: string;
+    currentValue: string;
+    assetType?: string;
+    otherFields?: Record<string, string>;
+  }
+): Promise<GeminiResult<string>> => {
+  const optimizedKnowledgeContext = getOptimizedKnowledgeContext(context.assetType || 'asset');
+  
+  // Focused prompt for specific field improvements
+  let systemPrompt = `You are Loop, a film expert providing concise, actionable suggestions for asset fields. ${optimizedKnowledgeContext.substring(0, 500)}`;
+  
+  // Field-specific guidance
+  if (context.fieldKey.includes('name') || context.fieldKey.includes('title')) {
+    systemPrompt += '\nFor names/titles: Return ONLY the suggested name/title. No explanation or context. 2-6 words max.';
+  } else if (context.fieldKey.includes('description') || context.fieldKey.includes('summary')) {
+    systemPrompt += '\nFor descriptions: Return ONLY the improved description text. No quotes or explanations. 1-2 sentences max.';
+  } else if (context.fieldKey.includes('style') || context.fieldKey.includes('look')) {
+    systemPrompt += '\nFor style: Return ONLY the style/look text. Reference specific techniques. No explanations.';
+  } else if (context.fieldKey.includes('dialogue') || context.fieldKey.includes('script')) {
+    systemPrompt += '\nFor dialogue: Return ONLY the improved dialogue. No quotation marks or stage directions unless part of content.';
+  } else {
+    systemPrompt += '\nReturn ONLY the improved field content. No explanations, quotes, or meta-text.';
+  }
+  
+  systemPrompt += '\nIMPORTANT: Return ONLY the content that should replace the field value. No "Consider this:", "Try:", or explanatory text.';
+  
+  const contextFields = context.otherFields ? 
+    Object.entries(context.otherFields)
+      .slice(0, 3)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n') : '';
+  
+  const fullPrompt = validateAndOptimizePrompt([
+    systemPrompt,
+    `Asset Type: ${context.assetType || 'Unknown'}`,
+    contextFields ? `Related Fields:\n${contextFields}` : '',
+    `Current ${context.fieldLabel}: "${context.currentValue || '(empty)'}"`,
+    `Suggest an improved ${context.fieldLabel.toLowerCase()}:`
+  ].filter(Boolean).join('\n\n'));
+
+  try {
+    const { text, usage } = await requestTextWithFallback(fullPrompt);
+    
+    // Post-process to ensure we only get the field value, not explanations
+    let processedText = text
+      .split('\n')
+      .filter(line => line.trim())
+      .slice(0, 2) // Max 2 lines
+      .join(' ')
+      .trim();
+      
+    // Remove common explanatory prefixes
+    const explanatoryPrefixes = [
+      'Consider this:',
+      'Try:',
+      'Suggestion:',
+      'Here\'s a suggestion:',
+      'You might try:',
+      'Consider:',
+      'How about:',
+      'Perhaps:',
+      'Maybe:',
+      'I suggest:',
+      'Recommendation:',
+      'My suggestion:',
+      'A better option:',
+      'Instead, try:'
+    ];
+    
+    for (const prefix of explanatoryPrefixes) {
+      if (processedText.toLowerCase().startsWith(prefix.toLowerCase())) {
+        processedText = processedText.substring(prefix.length).trim();
+        break;
+      }
+    }
+    
+    // Remove quotes if they wrap the entire content
+    if ((processedText.startsWith('"') && processedText.endsWith('"')) ||
+        (processedText.startsWith("'") && processedText.endsWith("'"))) {
+      processedText = processedText.slice(1, -1).trim();
+    }
+    
+    // Truncate if still too long
+    if (processedText.length > 200) {
+      processedText = processedText.substring(0, 200).trim();
+    }
+    
+    return createResult(processedText || text.substring(0, 200), null, false, usage);
+  } catch (error: unknown) {
+    console.warn('Asset field suggestion generation failed:', error);
+    
+    // Better fallback suggestions based on field type
+    let fallback = '';
+    if (context.fieldKey.includes('name')) {
+      fallback = 'Consider a more evocative, specific name that hints at the character or theme.';
+    } else if (context.fieldKey.includes('description')) {
+      fallback = 'Add visual details, emotional tone, or cinematic qualities to strengthen the description.';
+    } else {
+      fallback = 'Enhance with more specific, filmmaking-focused details for stronger impact.';
+    }
+    
+    return createResult(fallback, null, true);
+  }
 };
 
 export const generateDirectorAdvice = async (

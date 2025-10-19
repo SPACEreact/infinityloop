@@ -6,8 +6,6 @@ import { ASSET_TEMPLATES } from '../constants';
 import {
   generateFromWorkspace,
   generateDirectorAdvice,
-  type DirectorAdviceContext,
-  type DirectorAdviceSuggestionPayload,
 } from '../services/geminiService';
 import { TOKEN_DAILY_LIMIT } from '../services/config';
 import { parseScriptScenes } from '../utils/scriptParser';
@@ -284,10 +282,10 @@ const toContentPreview = (value?: string | null, limit: number = 600): string | 
   return `${trimmed.slice(0, limit)}...`;
 };
 
-const mapTimelineBlocksToDirectorEntries = (
+const mapTimelineBlocksToAssets = (
   blocks: TimelineBlock[] | undefined,
   assetsById: Map<string, Asset>,
-): DirectorAdviceContext['primaryTimeline']['story'] => {
+) => {
   if (!blocks?.length) {
     return [];
   }
